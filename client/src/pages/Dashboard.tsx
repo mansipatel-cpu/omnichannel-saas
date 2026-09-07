@@ -42,8 +42,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import {
-  Plus,
+import { 
+  Plus, 
   UserPlus,
   FilePlus,
   Users,
@@ -469,7 +469,7 @@ export default function Dashboard() {
           <p className="font-semibold text-[15px] text-slate-900">Create Calling Campaign</p>
           <p className="text-xs text-slate-500 mt-1">Set up an automated voice calling campaign.</p>
         </button>
-      </div>
+              </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         {stats.map((stat) => (
@@ -479,32 +479,32 @@ export default function Dashboard() {
               <span className={`h-8 w-8 rounded-lg flex items-center justify-center ${stat.iconBg}`}>
                 <stat.icon className="h-4 w-4" />
               </span>
-            </div>
+              </div>
             <p className="text-2xl font-bold text-slate-900 mt-2">{stat.value.toLocaleString()}</p>
             {stat.hint ? <p className={`text-[11px] font-medium mt-1 ${stat.hintClass || "text-slate-500"}`}>{stat.hint}</p> : null}
-          </div>
+              </div>
         ))}
-      </div>
+            </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="rounded-2xl bg-white border border-slate-200 p-4 flex items-center justify-between shadow-sm min-h-[88px]">
-          <div>
+              <div>
             <p className="text-xs text-slate-500">Completed Calls</p>
             <p className="text-2xl font-bold text-slate-900 mt-1">{completedCalls.toLocaleString()}</p>
-          </div>
+              </div>
           <span className="h-10 w-10 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center">
             <PhoneCall className="h-5 w-5" />
-          </span>
-        </div>
+                </span>
+              </div>
         <div className="rounded-2xl bg-white border border-slate-200 p-4 flex items-center justify-between shadow-sm min-h-[88px]">
-          <div>
+            <div>
             <p className="text-xs text-slate-500">Failed Calls</p>
             <p className="text-2xl font-bold text-slate-900 mt-1">{failedCalls.toLocaleString()}</p>
-          </div>
+              </div>
           <span className="h-10 w-10 rounded-lg bg-red-50 text-red-500 flex items-center justify-center">
             <PhoneOff className="h-5 w-5" />
-          </span>
-        </div>
+                </span>
+              </div>
       </div>
 
       <div className="rounded-2xl bg-white border border-slate-200 overflow-hidden shadow-sm">
@@ -512,8 +512,8 @@ export default function Dashboard() {
           <h2 className="font-semibold text-foreground">Campaign Overview</h2>
           <button onClick={() => setLocation("/app/campaigns")} className="text-sm text-[#007BFF] hover:underline">
             View All
-          </button>
-        </div>
+                </button>
+              </div>
         <Table>
           <TableHeader>
             <TableRow className="bg-sky-50/80 hover:bg-sky-50/80">
@@ -550,9 +550,9 @@ export default function Dashboard() {
                     <div className="flex items-center gap-2">
                       <div className="h-1.5 flex-1 rounded-full bg-slate-100 overflow-hidden">
                         <div className="h-full bg-[#007BFF] rounded-full" style={{ width: `${campaign.progress}%` }} />
-                      </div>
+                </div>
                       <span className="text-xs text-muted-foreground w-8">{campaign.progress}%</span>
-                    </div>
+              </div>
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
                     {campaign.created ? new Date(campaign.created).toLocaleDateString() : "—"}
@@ -575,7 +575,7 @@ export default function Dashboard() {
           <button onClick={() => setLocation("/app/contacts")} className="text-sm text-[#007BFF] hover:underline">
             View All
           </button>
-        </div>
+                    </div>
         <Table>
           <TableHeader>
             <TableRow className="bg-sky-50/80 hover:bg-sky-50/80">
@@ -602,7 +602,7 @@ export default function Dashboard() {
                       <div className="flex items-center gap-2">
                         <div className="h-8 w-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-semibold">
                           {contactDisplayName(contact).charAt(0).toUpperCase()}
-                        </div>
+              </div>
                         <span className="font-medium text-foreground">{contactDisplayName(contact)}</span>
                       </div>
                     </TableCell>
@@ -628,7 +628,7 @@ export default function Dashboard() {
           <button onClick={() => setLocation("/app/whatsapp/templates")} className="text-sm text-[#007BFF] hover:underline">
             View All Templates
           </button>
-        </div>
+                    </div>
         <Table>
           <TableHeader>
             <TableRow className="bg-sky-50/80 hover:bg-sky-50/80">
@@ -663,14 +663,14 @@ export default function Dashboard() {
                     <Button variant="outline" size="sm" className="h-8" onClick={() => setLocation(tpl.href)}>
                       <Pencil className="h-3.5 w-3.5 mr-1" />
                       Edit
-                    </Button>
+            </Button>
                   </TableCell>
                 </TableRow>
               ))
             )}
           </TableBody>
         </Table>
-      </div>
+            </div>
 
       <Dialog open={campaignChoiceOpen} onOpenChange={setCampaignChoiceOpen}>
         <DialogContent className="sm:max-w-md">
@@ -699,7 +699,7 @@ export default function Dashboard() {
               <p className="font-semibold text-slate-900">Calling campaign</p>
               <p className="text-sm text-slate-500 mt-1">Set up an automated voice calling campaign.</p>
             </button>
-          </div>
+                      </div>
         </DialogContent>
       </Dialog>
 

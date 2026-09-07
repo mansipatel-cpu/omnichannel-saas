@@ -221,7 +221,7 @@ function AuthDialogContent({ isOpen, onClose, activeTab, setActiveTab, onAuthSuc
         description: `Logged in as ${data.user.name}`,
       });
       
-      const redirectUrl = data.user.role === 'admin' ? "/admin" : "/app";
+      const redirectUrl = data.user.role === 'admin' ? "/admin" : "/dashboard";
       
       if (onAuthSuccess) {
         onAuthSuccess(data.user.name, redirectUrl);
@@ -370,7 +370,7 @@ function AuthDialogContent({ isOpen, onClose, activeTab, setActiveTab, onAuthSuc
         description: `Welcome, ${registerData.user.name}`,
       });
       
-      const redirectUrl = registerData.user.role === 'admin' ? "/admin" : "/app";
+      const redirectUrl = registerData.user.role === 'admin' ? "/admin" : "/dashboard";
       
       if (onAuthSuccess) {
         onAuthSuccess(registerData.user.name, redirectUrl);

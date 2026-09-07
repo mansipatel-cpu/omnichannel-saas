@@ -272,7 +272,7 @@ function AdminRouter() {
 
 function UserRouter() {
   const [location] = useLocation();
-  const isDashboard = location === "/app" || location === "/app/dashboard";
+  const isDashboard = location === "/dashboard" || location === "/app" || location === "/app/dashboard";
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
@@ -328,10 +328,13 @@ function UserRouter() {
             <div className="w-full px-4 md:px-8 lg:px-10 py-6 md:py-8">
               <Switch>
                 <Route path="/">
-                  <Redirect to="/app" />
+                  <Redirect to="/dashboard" />
                 </Route>
-                <Route path="/app" component={Dashboard} />
-                <Route path="/app/dashboard" component={Dashboard} />
+                <Route path="/dashboard" component={Dashboard} />
+                <Route path="/app/dashboard">
+                  <Redirect to="/dashboard" />
+                </Route>
+                <Route path="/app" component={() => <Redirect to="/dashboard" />} />
                 <Route path="/app/campaigns/:id" component={CampaignDetail} />
                 <Route path="/app/campaigns" component={Campaigns} />
                 <Route path="/app/calls/:id" component={CallDetail} />
@@ -385,7 +388,7 @@ function UserRouter() {
 
 function TeamMemberRouter() {
   const [location] = useLocation();
-  const isDashboard = location === "/app" || location === "/app/dashboard";
+  const isDashboard = location === "/dashboard" || location === "/app" || location === "/app/dashboard";
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
@@ -439,10 +442,13 @@ function TeamMemberRouter() {
             <div className="w-full px-4 md:px-8 lg:px-10 py-6 md:py-8">
               <Switch>
                 <Route path="/">
-                  <Redirect to="/app" />
+                  <Redirect to="/dashboard" />
                 </Route>
-                <Route path="/app" component={Dashboard} />
-                <Route path="/app/dashboard" component={Dashboard} />
+                <Route path="/dashboard" component={Dashboard} />
+                <Route path="/app/dashboard">
+                  <Redirect to="/dashboard" />
+                </Route>
+                <Route path="/app" component={() => <Redirect to="/dashboard" />} />
                 <Route path="/app/campaigns/:id" component={CampaignDetail} />
                 <Route path="/app/campaigns" component={Campaigns} />
                 <Route path="/app/calls/:id" component={CallDetail} />
@@ -585,8 +591,8 @@ function AdminGuard({ children }: { children: React.ReactNode }) {
   
   // If user doesn't have admin access, redirect to user panel
   if (!hasAdminAccess) {
-    console.log("AdminGuard - User is not authorized for admin panel, redirecting to /app");
-    return <Redirect to="/app" />;
+    console.log("AdminGuard - User is not authorized for admin panel, redirecting to /dashboard");
+    return <Redirect to="/dashboard" />;
   }
 
   console.log("AdminGuard - User has admin access, rendering admin panel");
@@ -753,6 +759,7 @@ function Router() {
     console.log("Router - isAuthenticated:", isAuthenticated);
     console.log("Router - location.startsWith('/admin'):", location.startsWith('/admin'));
     console.log("Router - location.startsWith('/app'):", location.startsWith('/app'));
+    console.log("Router - location === '/dashboard':", location === '/dashboard');
   }, [location, isAuthenticated]);
 
   if (isChecking) {
@@ -791,19 +798,19 @@ function Router() {
     }
     // User team members go to /app
     if (isTeamMember) {
-      console.log("Router - Authenticated team member on auth page, redirecting to /app");
-      return <Redirect to="/app" />;
+      console.log("Router - Authenticated team member on auth page, redirecting to /dashboard");
+      return <Redirect to="/dashboard" />;
     }
     const user = AuthStorage.getUser();
     const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
-    const redirectTo = isAdmin ? '/admin' : '/app';
+    const redirectTo = isAdmin ? '/admin' : '/dashboard';
     console.log("Router - Authenticated user on auth page, redirecting to", redirectTo);
     return <Redirect to={redirectTo} />;
   }
 
   // Redirect authenticated team members away from team login page
   if (isTeamMember && location === '/team/login') {
-    const redirectTo = isAdminTeamMember ? '/admin' : '/app';
+    const redirectTo = isAdminTeamMember ? '/admin' : '/dashboard';
     console.log("Router - Authenticated team member on team login page, redirecting to", redirectTo);
     return <Redirect to={redirectTo} />;
   }
@@ -836,7 +843,7 @@ function Router() {
 
   // User routes (/app) - protected by server-side validation
   // Check this BEFORE public routes to prevent flash during login transition
-  if (location.startsWith('/app')) {
+  if (location.startsWith('/app') || location === '/dashboard' || location.startsWith('/dashboard/')) {
     // Team members get the TeamMemberRouter with permission-based sidebar
     if (isTeamMember) {
       console.log("Router - Rendering UserGuard + TeamMemberRouter (team member)");

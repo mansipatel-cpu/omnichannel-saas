@@ -60,7 +60,7 @@ export default function TeamMemberLogin() {
         description: `Logged in as ${result.member?.name || result.member?.email}` 
       });
 
-      setLocation("/app");
+      setLocation("/dashboard");
     } catch (error: any) {
       toast({ 
         title: "Login failed", 

@@ -75,7 +75,7 @@ interface TeamAuthResponse {
 // User section mappings to routes
 const USER_SECTION_ROUTES: Record<string, { url: string; icon: any; label: string; group: string; iconColor?: string }[]> = {
   dashboard: [
-    { url: "/app", icon: Home, label: "Home", group: "build", iconColor: "text-blue-500" },
+    { url: "/dashboard", icon: Home, label: "Dashboard", group: "build", iconColor: "text-blue-500" },
   ],
   campaigns: [
     { url: "/app/campaigns", icon: Target, label: "Campaigns", group: "build", iconColor: "text-orange-500" },

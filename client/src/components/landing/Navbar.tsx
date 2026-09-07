@@ -166,7 +166,7 @@ export function Navbar() {
   const handleSignIn = () => {
     setIsMobileMenuOpen(false);
     if (isAuthenticated) {
-      window.location.href = isAdmin ? "/admin" : "/app";
+      window.location.href = isAdmin ? "/admin" : "/dashboard";
     } else {
       setLocation("/login");
     }
@@ -175,7 +175,7 @@ export function Navbar() {
   const handleGetStarted = () => {
     setIsMobileMenuOpen(false);
     if (isAuthenticated) {
-      window.location.href = isAdmin ? "/admin" : "/app";
+      window.location.href = isAdmin ? "/admin" : "/dashboard";
     } else {
       setLocation("/login");
     }

@@ -139,7 +139,7 @@ export default function LoginPage() {
 
       toast({ title: t("loginPage.toasts.welcomeBack"), description: t("loginPage.toasts.loginSuccess") });
 
-      const redirectPath = (result.user.role === 'admin' || result.user.role === 'super_admin') ? "/admin" : "/app";
+      const redirectPath = (result.user.role === 'admin' || result.user.role === 'super_admin') ? "/admin" : "/dashboard";
       setLocation(redirectPath);
     } catch (error: any) {
       const raw = (error?.message || "").toLowerCase();
@@ -287,7 +287,7 @@ export default function LoginPage() {
         description: t("loginPage.toasts.welcomeUser", { name: result.user.name }),
       });
 
-      const redirectPath = result.user.role === 'admin' ? "/admin" : "/app";
+      const redirectPath = result.user.role === 'admin' ? "/admin" : "/dashboard";
       setLocation(redirectPath);
     } catch (error: any) {
       toast({

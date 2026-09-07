@@ -99,7 +99,9 @@ const autoCallingItems = [
 ];
 
 function pathMatches(location: string, url: string) {
-  if (url === "/app") return location === "/app" || location === "/app/dashboard";
+  if (url === "/dashboard") {
+    return location === "/dashboard" || location === "/app" || location === "/app/dashboard";
+  }
   if (url === "/app/campaigns") {
     return location === "/app/campaigns" || location.startsWith("/app/campaigns/") || location.startsWith("/app/whatsapp/campaigns");
   }
@@ -195,8 +197,8 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu className="gap-0.5">
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathMatches(location, "/app")} tooltip="Dashboard" className={itemClass(pathMatches(location, "/app"))} data-testid="link-dashboard">
-                  <Link href="/app" onClick={handleNavClick}>
+                <SidebarMenuButton asChild isActive={pathMatches(location, "/dashboard")} tooltip="Dashboard" className={itemClass(pathMatches(location, "/dashboard"))} data-testid="link-dashboard">
+                  <Link href="/dashboard" onClick={handleNavClick}>
                     <LayoutGrid className="h-4 w-4" />
                     <span>Dashboard</span>
                   </Link>

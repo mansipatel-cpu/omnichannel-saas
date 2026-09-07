@@ -25,7 +25,7 @@ interface AnalyticsScriptsProps {
 
 // Check if a given path is an internal page (admin or user dashboard)
 function isInternalPath(path: string): boolean {
-  return path.startsWith('/admin') || path.startsWith('/app');
+  return path.startsWith('/admin') || path.startsWith('/app') || path === '/dashboard' || path.startsWith('/dashboard/');
 }
 
 // Storage key for persisting hidden script IDs across sessions

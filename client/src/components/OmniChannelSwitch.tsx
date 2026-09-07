@@ -14,7 +14,7 @@ const ROUTES: Record<OmniSection, { voice: string; whatsapp: string }> = {
     whatsapp: "/app/whatsapp/campaigns",
   },
   dashboard: {
-    voice: "/app",
+    voice: "/dashboard",
     whatsapp: "/app/whatsapp/dashboard",
   },
   analytics: {

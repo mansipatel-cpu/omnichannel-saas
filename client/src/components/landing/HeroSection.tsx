@@ -168,7 +168,7 @@ export function HeroSection() {
 
   const getDashboardLink = () => {
     if (isAuthenticated) {
-      return isAdmin ? "/admin" : "/app";
+      return isAdmin ? "/admin" : "/dashboard";
     }
     return "/login";
   };

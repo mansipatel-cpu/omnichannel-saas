@@ -93,7 +93,7 @@ export default function Login() {
       if (data.user.role === 'admin') {
         window.location.href = "/admin";
       } else {
-        window.location.href = "/app";
+        window.location.href = "/dashboard";
       }
     } catch (error: any) {
       toast({
@@ -228,7 +228,7 @@ export default function Login() {
       if (registerData.user.role === 'admin') {
         window.location.href = "/admin";
       } else {
-        window.location.href = "/app";
+        window.location.href = "/dashboard";
       }
     } catch (error: any) {
       toast({
