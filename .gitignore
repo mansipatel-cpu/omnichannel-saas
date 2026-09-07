@@ -1,0 +1,59 @@
+# ============================
+# Node / Package Managers
+# ============================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ============================
+# OS / Editor
+# ============================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ============================
+# Environment Files & Secrets
+# ============================
+.env
+.env.*
+*.env
+*.pem
+*.key
+*-secret
+.appointment-webhook-secret
+.rag-webhook-secret
+
+# Allow example env files
+!.env.example
+!*.env.example
+
+# ============================
+# Build & Cache
+# ============================
+dist/
+build/
+coverage/
+*.log
+*.tar.gz
+
+# ============================
+# Runtime Directories
+# ============================
+data/*
+kyc/*
+logs/*
+export/*
+exports/*
+
+# Keep folders
+!data/.gitkeep
+!kyc/.gitkeep
+!logs/.gitkeep
+!export/.gitkeep
+!exports/.gitkeep
+
+AGENTS.md

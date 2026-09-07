@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: omnichannel-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PGUSER:-agentlabs}
+      POSTGRES_PASSWORD: ${PGPASSWORD}
+      POSTGRES_DB: ${PGDATABASE:-agentlabs}
+    ports:
+      - "${PGPORT:-5433}:5432"
+    volumes:
+      - omnichannel_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER:-agentlabs} -d ${PGDATABASE:-agentlabs}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  omnichannel_pgdata:
