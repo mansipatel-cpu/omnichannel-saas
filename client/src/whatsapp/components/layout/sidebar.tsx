@@ -129,7 +129,7 @@ function getNavItems(role: string): NavItem[] {
                 allowedRoles: ["superadmin", "admin"],
             },
             {
-                href: "/templates",
+                href: "~/templates",
                 icon: FileText,
                 labelKey: "navigation.templates",
                 color: "text-purple-600",
@@ -248,7 +248,7 @@ function getNavItems(role: string): NavItem[] {
                 allowedRoles: ["team"],
             },
             {
-                href: "/templates",
+                href: "~/templates",
                 icon: FileText,
                 labelKey: "navigation.templates",
                 color: "text-purple-600",
@@ -344,7 +344,7 @@ const sidebarItemsCategories = [
     {
         name: "navigation.master_templates",
         icon: FileText,
-        path: "/templates",
+        path: "~/templates",
         badge: "",
         color: "text-purple-600",
     },

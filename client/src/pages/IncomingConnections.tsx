@@ -1052,7 +1052,7 @@ export default function IncomingConnectionsPage() {
                         <Button
                           size="sm"
                           className="w-full"
-                          onClick={() => setLocation("/app/billing?tab=plans")}
+                          onClick={() => setLocation("/billing?tab=plans")}
                           data-testid="button-upgrade-for-phone"
                         >
                           {t("incomingConnections.form.upgradeNow")}

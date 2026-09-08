@@ -14,25 +14,15 @@
  * Respect the author's rights and Envato licensing terms.
  * ============================================================
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useTranslation } from "react-i18next";
 import { AuthStorage } from "@/lib/auth-storage";
 import { CreateCampaignDialog } from "@/components/CreateCampaignDialog";
 import { useDemoMode } from "@/components/DemoModeBanner";
-import { NotificationBell } from "@/components/NotificationBell";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { LanguageSelector } from "@/components/LanguageSelector";
+import { useAppHeader } from "@/components/AppPageHeader";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -54,14 +44,9 @@ import {
   CircleAlert,
   PhoneCall,
   PhoneOff,
-  Search,
   Play,
   Pencil,
   Loader2,
-  ChevronDown,
-  LogOut,
-  CreditCard,
-  Settings,
 } from "lucide-react";
 
 interface DashboardData {
@@ -139,12 +124,6 @@ interface WaStats {
   messagesDelivered?: number;
 }
 
-interface MeUser {
-  name?: string;
-  email?: string;
-  role?: string;
-}
-
 async function authFetch(url: string) {
   const headers: Record<string, string> = {};
   const authHeader = AuthStorage.getAuthHeader();
@@ -213,16 +192,26 @@ export default function Dashboard() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [campaignChoiceOpen, setCampaignChoiceOpen] = useState(false);
   const [isVideoOpen, setIsVideoOpen] = useState(false);
-  const [search, setSearch] = useState("");
+  const { search, setActions } = useAppHeader();
 
   const { data: dashboard, isLoading } = useQuery<DashboardData>({
     queryKey: ["/api/dashboard"],
     queryFn: () => authFetch("/api/dashboard"),
   });
 
-  const { data: me } = useQuery<MeUser>({
-    queryKey: ["/api/auth/me"],
-  });
+  useEffect(() => {
+    if (!isDemoMode) {
+      setActions(null);
+      return;
+    }
+    setActions(
+      <Button variant="outline" size="sm" onClick={() => setIsVideoOpen(true)} className="hidden sm:flex">
+        <Play className="h-4 w-4 mr-1 fill-current" />
+        Demo
+      </Button>
+    );
+    return () => setActions(null);
+  }, [isDemoMode, setActions]);
 
   const { data: contacts = [] } = useQuery<DeduplicatedContact[]>({
     queryKey: ["/api/contacts/deduplicated"],
@@ -304,7 +293,7 @@ export default function Dashboard() {
       audience: c.totalContacts || 0,
       progress: c.totalContacts ? Math.min(100, Math.round(((c.completedCalls || 0) / c.totalContacts) * 100)) : 0,
       created: c.createdAt,
-      href: `/app/campaigns/${c.id}`,
+      href: `/campaigns/${c.id}`,
     })),
     ...waCampaigns.map((c) => ({
       id: c.id,
@@ -316,7 +305,7 @@ export default function Dashboard() {
         ? Math.min(100, Math.round(((c.sentCount || 0) / (c.recipientCount || c.totalRecipients || 1)) * 100))
         : 0,
       created: c.createdAt,
-      href: "/app/whatsapp/campaigns",
+      href: "/whatsapp/campaigns",
     })),
   ]
     .filter((c) => !search || c.name.toLowerCase().includes(search.toLowerCase()))
@@ -328,8 +317,6 @@ export default function Dashboard() {
     waCampaigns.filter((c) => ["active", "sending", "scheduled"].includes(c.status || "")).length;
 
   const recentContacts = contacts.slice(0, 5);
-  const displayName = me?.name || dashboard?.userName || "Admin User";
-  const roleLabel = me?.role === "super_admin" ? "Super Admin" : me?.role === "admin" ? "Admin" : "User";
 
   const templateRows = [
     ...waTemplates.map((tpl) => ({
@@ -340,7 +327,7 @@ export default function Dashboard() {
       status: formatStatus((tpl.status || "draft").toLowerCase()) === "Ongoing"
         ? "Active"
         : formatStatus((tpl.status || "draft").toLowerCase()),
-      href: "/app/whatsapp/templates",
+      href: "/templates",
     })),
     ...promptTemplates.map((tpl) => ({
       id: `call-${tpl.id}`,
@@ -348,7 +335,7 @@ export default function Dashboard() {
       channel: "Calling" as const,
       preview: tpl.firstMessage || tpl.description || tpl.systemPrompt || "—",
       status: "Active",
-      href: "/app/prompt-templates",
+      href: "/templates",
     })),
   ].slice(0, 6);
 
@@ -365,76 +352,8 @@ export default function Dashboard() {
     { label: "Failed Messages", value: waStats?.messagesFailed ?? 0, hint: null, icon: CircleAlert, iconBg: "bg-red-50 text-red-500" },
   ];
 
-  const handleLogout = () => {
-    fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
-    AuthStorage.clearAuth();
-    window.location.href = "/";
-  };
-
   return (
     <div className="space-y-5 pb-8">
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-[28px] font-bold tracking-tight text-slate-900" data-testid="text-dashboard-title">
-            Dashboard
-          </h1>
-          <p className="text-sm text-slate-500 mt-0.5">Overview of your communication automation.</p>
-        </div>
-        <div className="flex items-center gap-3">
-          {isDemoMode && (
-            <Button variant="outline" size="sm" onClick={() => setIsVideoOpen(true)} className="hidden sm:flex">
-              <Play className="h-4 w-4 mr-1 fill-current" />
-              Demo
-            </Button>
-          )}
-          <div className="relative hidden md:block">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search..."
-              className="h-10 w-56 pl-10 rounded-md bg-white border-slate-200 shadow-sm"
-            />
-          </div>
-          <div className="h-10 w-10 rounded-md bg-white border border-slate-200 shadow-sm flex items-center justify-center">
-            <NotificationBell />
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="hidden sm:flex items-center gap-2.5 rounded-full hover:bg-white py-1 pl-1 pr-2">
-                <div className="h-9 w-9 rounded-md bg-[#007BFF] text-white flex items-center justify-center text-sm font-semibold">
-                  {displayName.charAt(0).toUpperCase()}
-                </div>
-                <div className="leading-tight text-left">
-                  <p className="text-sm font-semibold text-slate-900">{displayName}</p>
-                  <p className="text-[11px] text-slate-500">{roleLabel}</p>
-                </div>
-                <ChevronDown className="h-4 w-4 text-slate-400" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem onClick={() => setLocation("/app/settings")} className="cursor-pointer">
-                <Settings className="mr-2 h-4 w-4" />
-                Settings
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setLocation("/app/billing")} className="cursor-pointer">
-                <CreditCard className="mr-2 h-4 w-4" />
-                Billing & Credits
-              </DropdownMenuItem>
-              <div className="flex items-center justify-between px-2 py-1.5">
-                <LanguageSelector variant="compact" />
-                <ThemeToggle />
-              </div>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive focus:text-destructive">
-                <LogOut className="mr-2 h-4 w-4" />
-                Log out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
-
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <button
           onClick={() => setCampaignChoiceOpen(true)}
@@ -446,21 +365,21 @@ export default function Dashboard() {
           <p className="text-xs text-white/80 mt-1">Start a new WhatsApp or calling campaign.</p>
         </button>
         <button
-          onClick={() => setLocation("/app/contacts")}
+          onClick={() => setLocation("/contacts")}
           className="rounded-2xl bg-white border border-slate-200 p-5 text-left min-h-[132px] hover:border-[#007BFF]/40 transition-colors shadow-sm"
         >
           <UserPlus className="h-7 w-7 text-[#007BFF] mb-5" />
           <p className="font-semibold text-[15px] text-slate-900">Add Contact</p>
           <p className="text-xs text-slate-500 mt-1">Add the new contact list.</p>
         </button>
-        <button
-          onClick={() => setLocation("/app/whatsapp/templates")}
+        <Link
+          href="~/templates/new"
           className="rounded-2xl bg-white border border-slate-200 p-5 text-left min-h-[132px] hover:border-[#007BFF]/40 transition-colors shadow-sm"
         >
           <FilePlus className="h-7 w-7 text-[#007BFF] mb-5" />
           <p className="font-semibold text-[15px] text-slate-900">Create Template</p>
           <p className="text-xs text-slate-500 mt-1">Build a reusable message template.</p>
-        </button>
+        </Link>
         <button
           onClick={() => setCreateDialogOpen(true)}
           className="rounded-2xl bg-white border border-slate-200 p-5 text-left min-h-[132px] hover:border-[#007BFF]/40 transition-colors shadow-sm"
@@ -510,7 +429,7 @@ export default function Dashboard() {
       <div className="rounded-2xl bg-white border border-slate-200 overflow-hidden shadow-sm">
         <div className="flex items-center justify-between px-5 py-4">
           <h2 className="font-semibold text-foreground">Campaign Overview</h2>
-          <button onClick={() => setLocation("/app/campaigns")} className="text-sm text-[#007BFF] hover:underline">
+          <button onClick={() => setLocation("/campaigns")} className="text-sm text-[#007BFF] hover:underline">
             View All
                 </button>
               </div>
@@ -572,7 +491,7 @@ export default function Dashboard() {
       <div className="rounded-2xl bg-white border border-slate-200 overflow-hidden shadow-sm">
         <div className="flex items-center justify-between px-5 py-4">
           <h2 className="font-semibold text-foreground">Recent Users</h2>
-          <button onClick={() => setLocation("/app/contacts")} className="text-sm text-[#007BFF] hover:underline">
+          <button onClick={() => setLocation("/contacts")} className="text-sm text-[#007BFF] hover:underline">
             View All
           </button>
                     </div>
@@ -625,7 +544,7 @@ export default function Dashboard() {
       <div className="rounded-2xl bg-white border border-slate-200 overflow-hidden shadow-sm">
         <div className="flex items-center justify-between px-5 py-4">
           <h2 className="font-semibold text-foreground">Default Messages / Templates</h2>
-          <button onClick={() => setLocation("/app/whatsapp/templates")} className="text-sm text-[#007BFF] hover:underline">
+          <button onClick={() => setLocation("/templates")} className="text-sm text-[#007BFF] hover:underline">
             View All Templates
           </button>
                     </div>
@@ -683,7 +602,7 @@ export default function Dashboard() {
               className="rounded-xl border border-slate-200 p-4 text-left hover:border-[#007BFF] hover:bg-sky-50/60 transition-colors"
               onClick={() => {
                 setCampaignChoiceOpen(false);
-                setLocation("/app/whatsapp/campaigns");
+                setLocation("/whatsapp/campaigns");
               }}
             >
               <p className="font-semibold text-slate-900">WhatsApp campaign</p>

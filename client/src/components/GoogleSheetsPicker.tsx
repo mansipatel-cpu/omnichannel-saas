@@ -98,7 +98,7 @@ export function GoogleSheetsPicker({
                 variant="ghost"
                 size="sm"
                 className="h-auto p-0 text-xs"
-                onClick={() => setLocation("/app/tools")}
+                onClick={() => setLocation("/tools")}
               >
                 Connect in Tools
                 <ExternalLink className="w-3 h-3 ml-1" />

@@ -505,7 +505,7 @@ export default function Calls() {
     <div 
       key={call.id}
       className="group bg-card border rounded-lg overflow-hidden hover:shadow-lg transition-all duration-200 cursor-pointer"
-      onClick={() => setLocation(`/app/calls/${call.id}`)}
+      onClick={() => setLocation(`/calls/${call.id}`)}
       data-testid={`card-call-${testIdPrefix}${call.id}`}
     >
       <div className="flex">
@@ -668,7 +668,7 @@ export default function Calls() {
               size="sm"
               onClick={(e) => {
                 e.stopPropagation();
-                setLocation(`/app/calls/${call.id}`);
+                setLocation(`/calls/${call.id}`);
               }}
               data-testid={`button-view-details-${testIdPrefix}${call.id}`}
             >

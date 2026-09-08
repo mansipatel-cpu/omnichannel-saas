@@ -1,7 +1,8 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OmniChannelSwitch, type OmniSection } from "@/components/OmniChannelSwitch";
+import { useAppHeaderOptional } from "@/components/AppPageHeader";
 
 const THEMES = {
   brand: {
@@ -42,6 +43,14 @@ export function OmniPageHero({
   titleTestId?: string;
 }) {
   const palette = THEMES[theme];
+  const appHeader = useAppHeaderOptional();
+  const setPageMeta = appHeader?.setPageMeta;
+
+  useEffect(() => {
+    if (!setPageMeta) return;
+    setPageMeta({ title, subtitle: description });
+    return () => setPageMeta(null);
+  }, [title, description, setPageMeta]);
 
   return (
     <div
@@ -62,17 +71,21 @@ export function OmniPageHero({
             <Icon className="h-7 w-7 text-white" />
           </div>
           <div>
-            <h1
-              className="text-2xl md:text-3xl font-bold text-foreground"
-              data-testid={titleTestId}
-            >
-              {title}
-            </h1>
-            {description && (
-              <p className="text-muted-foreground mt-0.5">{description}</p>
-            )}
+            {!appHeader ? (
+              <>
+                <h1
+                  className="text-2xl md:text-3xl font-bold text-foreground"
+                  data-testid={titleTestId}
+                >
+                  {title}
+                </h1>
+                {description && (
+                  <p className="text-muted-foreground mt-0.5">{description}</p>
+                )}
+              </>
+            ) : null}
             {section && (
-              <div className="mt-3">
+              <div className={appHeader ? "" : "mt-3"}>
                 <OmniChannelSwitch section={section} />
               </div>
             )}

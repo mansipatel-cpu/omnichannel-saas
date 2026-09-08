@@ -16,7 +16,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { Switch, Route, useLocation } from "wouter";
+import { Switch, Route, useLocation, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@wa/components/ui/toaster";
@@ -31,7 +31,6 @@ import LoginPage from "@wa/pages/login";
 import Dashboard from "@wa/pages/dashboard";
 import Contacts from "@wa/pages/contacts";
 import Campaigns from "@wa/pages/campaigns";
-import Templates from "@wa/pages/templates";
 import Inbox from "@wa/pages/inbox";
 import Automations from "@wa/pages/automations";
 import Analytics from "@wa/pages/analytics";
@@ -355,11 +354,14 @@ function ProtectedRoutes() {
               requiredPermission="campaigns:view"
             />
           </Route>
+          <Route path="/templates/agentlab/new">
+            {() => <Redirect to="~/templates/agentlab/new" />}
+          </Route>
+          <Route path="/templates/new">
+            {() => <Redirect to="~/templates/new" />}
+          </Route>
           <Route path="/templates">
-            <PermissionRoute
-              component={Templates}
-              requiredPermission="templates:view"
-            />
+            {() => <Redirect to="~/templates" />}
           </Route>
           <Route path="/inbox">
             <PermissionRoute

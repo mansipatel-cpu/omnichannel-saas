@@ -62,9 +62,9 @@ export default function FlowsPage() {
   const handleTabChange = (value: string) => {
     setActiveTab(value);
     if (value === "flows") {
-      setLocation("/app/flows");
+      setLocation("/flows");
     } else {
-      setLocation(`/app/flows?tab=${value}`);
+      setLocation(`/flows?tab=${value}`);
     }
   };
 
@@ -153,7 +153,7 @@ export default function FlowsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/flow-automation/flows"] });
       queryClient.invalidateQueries({ queryKey: ["/api/usage"] });
       if (data?.id) {
-        setLocation(`/app/flows/${data.id}`);
+        setLocation(`/flows/${data.id}`);
       }
     },
     onError: (error: any) => {
@@ -295,7 +295,7 @@ export default function FlowsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/flow-automation/flows"] });
       queryClient.invalidateQueries({ queryKey: ["/api/usage"] });
       if (data?.id) {
-        setLocation(`/app/flows/${data.id}`);
+        setLocation(`/flows/${data.id}`);
       }
     },
     onError: (error: any) => {
@@ -486,7 +486,7 @@ export default function FlowsPage() {
                     variant="outline"
                     size="sm"
                     className="flex-1"
-                    onClick={() => setLocation(`/app/flows/${flow.id}`)}
+                    onClick={() => setLocation(`/flows/${flow.id}`)}
                     data-testid={`button-edit-flow-${flow.id}`}
                   >
                     <Edit className="w-4 h-4 mr-2" />

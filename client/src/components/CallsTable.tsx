@@ -85,7 +85,7 @@ export function CallsTable({ calls, onViewTranscript, onDownloadRecording }: Cal
                 key={call.id} 
                 data-testid={`row-call-${call.id}`}
                 className="cursor-pointer hover-elevate"
-                onClick={() => setLocation(`/app/calls/${call.id}`)}
+                onClick={() => setLocation(`/calls/${call.id}`)}
               >
                 <TableCell className="text-sm font-medium text-muted-foreground">
                   {call.serial || index + 1}

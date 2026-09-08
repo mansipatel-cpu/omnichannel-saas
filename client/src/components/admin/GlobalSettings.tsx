@@ -771,13 +771,13 @@ export default function GlobalSettings({ onSwitchTab }: GlobalSettingsProps) {
             </ol>
             <div className="flex items-center gap-2 mt-1">
               <code className="flex-1 text-xs bg-background border rounded px-2 py-1 font-mono text-foreground truncate" data-testid="text-redirect-uri">
-                {typeof window !== "undefined" ? `${window.location.origin}/app/google-callback` : "/app/google-callback"}
+                {typeof window !== "undefined" ? `${window.location.origin}/google-callback` : "/google-callback"}
               </code>
               <Button
                 size="icon"
                 variant="ghost"
                 onClick={() => {
-                  const uri = `${window.location.origin}/app/google-callback`;
+                  const uri = `${window.location.origin}/google-callback`;
                   navigator.clipboard.writeText(uri).then(() =>
                     toast({ title: t("admin.settings.googleOAuth.copyRedirectUri") })
                   );

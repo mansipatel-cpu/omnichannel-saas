@@ -17,7 +17,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import Header from "@wa/components/layout/header";
 import { EmptyState } from "@wa/components/ui/empty-state";
 import { MessageCircle } from "lucide-react";
@@ -1200,26 +1200,40 @@ useEffect(() => {
 
   if (!activeChannel) {
     return (
-      <div className="h-screen flex flex-col">
+      <div>
         <Header title={t("inbox.title")} />
-        <div className="flex-1 flex items-center justify-center">
-          <EmptyState
-            icon={MessageCircle}
-            title="No Active Channel"
-            description="Please select a channel from the channel switcher to view conversations."
-          />
+        <div className="flex flex-col gap-4 h-[calc(100dvh-11.5rem)] min-h-[560px]">
+          <div className="flex items-center gap-2 text-[13px] text-slate-400 shrink-0">
+            <Link href="~/dashboard" className="hover:text-slate-600">Home</Link>
+            <span>&gt;</span>
+            <span>Messages</span>
+            <span>&gt;</span>
+            <span className="text-slate-600">Team Inbox</span>
+          </div>
+          <div className="flex-1 flex items-center justify-center overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-sm">
+            <EmptyState
+              icon={MessageCircle}
+              title="No Active Channel"
+              description="Please select a channel from the channel switcher to view conversations."
+            />
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen flex flex-col">
-     <Header
-  title={t("inbox.title")}
-/>
-
-      <div className="flex-1 flex bg-gray-50 overflow-hidden">
+    <div>
+      <Header title={t("inbox.title")} />
+      <div className="flex flex-col gap-4 h-[calc(100dvh-11.5rem)] min-h-[560px]">
+        <div className="flex items-center gap-2 text-[13px] text-slate-400 shrink-0">
+          <Link href="~/dashboard" className="hover:text-slate-600">Home</Link>
+          <span>&gt;</span>
+          <span>Messages</span>
+          <span>&gt;</span>
+          <span className="text-slate-600">Team Inbox</span>
+        </div>
+        <div className="flex-1 flex overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-sm">
         <ConversationList
           conversations={filteredConversations}
           conversationsLoading={conversationsLoading}
@@ -1267,19 +1281,22 @@ useEffect(() => {
             isPinned={pinnedIds.has(selectedConversation.id)}
             onTogglePin={handleTogglePin}
           />
-        ) : (
-          <div className="hidden md:flex flex-1 items-center justify-center bg-gray-50">
-            <div className="text-center">
-              <MessageCircle className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Select a conversation
-              </h3>
-              <p className="text-gray-500">
-                Choose a conversation from the list to start messaging
-              </p>
+          ) : (
+            <div className="hidden md:flex flex-1 items-center justify-center bg-[#F8F9FB]">
+              <div className="text-center px-6">
+                <div className="h-16 w-16 rounded-2xl bg-blue-50 text-[#007BFF] flex items-center justify-center mx-auto mb-4">
+                  <MessageCircle className="h-8 w-8" />
+                </div>
+                <h3 className="text-[15px] font-semibold text-slate-900 mb-1">
+                  Select a conversation
+                </h3>
+                <p className="text-sm text-slate-500">
+                  Choose a conversation from the list to start messaging
+                </p>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
 
@@ -1306,18 +1323,7 @@ useEffect(() => {
   onChange={(e) => setMediaCaption(e.target.value)}
   placeholder="Add a caption..."
   rows={3}
-  className="
-    w-full
-    border
-    border-gray-300
-    rounded-xl
-    p-3
-    mt-4
-    resize-none
-    focus:outline-none
-    focus:ring-2
-    focus:ring-green-500
-  "
+          className="w-full border border-slate-200 rounded-xl p-3 mt-4 resize-none focus:outline-none focus:ring-2 focus:ring-[#007BFF]"
 />
 
       <div className="flex justify-end gap-2 mt-4">
@@ -1335,15 +1341,7 @@ useEffect(() => {
        <button
   onClick={handleSendMediaMessage}
   disabled={sendingMedia}
-  className="
-    px-5
-    py-2
-    bg-green-600
-    hover:bg-green-700
-    text-white
-    rounded-xl
-    disabled:opacity-50
-  "
+          className="px-5 py-2 bg-[#007BFF] hover:bg-[#0069d9] text-white rounded-xl disabled:opacity-50 border-transparent"
 >
   {sendingMedia ? "Sending..." : "Send"}
 </button>

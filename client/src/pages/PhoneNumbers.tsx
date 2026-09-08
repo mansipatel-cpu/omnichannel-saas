@@ -619,7 +619,7 @@ export default function PhoneNumbers() {
             )}
             <Button 
               variant="outline" 
-              onClick={() => setLocation("/app/incoming-connections")}
+              onClick={() => setLocation("/incoming-connections")}
               className="bg-white/80 dark:bg-white/10 border-emerald-200 dark:border-emerald-800"
               data-testid="button-manage-connections"
             >
@@ -746,7 +746,7 @@ export default function PhoneNumbers() {
                                 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
                                 : 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 hover:bg-red-500/20'
                             }`}
-                            onClick={() => setLocation('/app/settings')}
+                            onClick={() => setLocation('/settings')}
                             data-testid={`badge-kyc-status-twilio-${number.id}`}
                           >
                             <Shield className="h-3 w-3 mr-1" />
@@ -901,7 +901,7 @@ export default function PhoneNumbers() {
                                     ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
                                     : 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 hover:bg-red-500/20'
                                 }`}
-                                onClick={() => setLocation('/app/settings')}
+                                onClick={() => setLocation('/settings')}
                                 data-testid={`badge-kyc-status-plivo-${number.id}`}
                               >
                                 <Shield className="h-3 w-3 mr-1" />
@@ -1511,7 +1511,7 @@ export default function PhoneNumbers() {
             </Button>
             <Button onClick={() => {
               setKycRequiredDialogOpen(false);
-              setLocation('/app/settings?tab=kyc');
+              setLocation('/settings?tab=kyc');
             }}>
               <Shield className="h-4 w-4 mr-2" />
               Complete KYC Verification
@@ -1559,7 +1559,7 @@ export default function PhoneNumbers() {
             <Button onClick={() => {
               setAddressRequiredDialogOpen(false);
               setBuyDialogOpen(false);
-              setLocation('/app/settings?tab=addresses');
+              setLocation('/settings?tab=addresses');
             }} data-testid="button-go-to-addresses">
               <MapPin className="h-4 w-4 mr-2" />
               Add Address

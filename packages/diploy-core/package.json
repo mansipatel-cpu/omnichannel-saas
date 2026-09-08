@@ -4,6 +4,7 @@
   "description": "Core utilities for AgentLabs - Diploy Technologies",
   "main": "index.ts",
   "types": "index.ts",
+  "type": "module",
   "author": "BTPL Engineering Team <cs@diploy.in>",
   "license": "SEE LICENSE IN LICENSE.md",
   "homepage": "https://diploy.in",

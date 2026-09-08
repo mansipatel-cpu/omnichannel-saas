@@ -51,7 +51,7 @@ export function PhoneConflictDialog({
 
   const handleBuyNewNumber = () => {
     onClose();
-    setLocation("/app/phone-numbers");
+    setLocation("/phone-numbers");
   };
 
   const dialogTitle = title || t("phoneConflict.title", "Phone Number Conflict");

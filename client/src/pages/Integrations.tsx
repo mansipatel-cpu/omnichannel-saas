@@ -403,7 +403,7 @@ export default function Integrations() {
               <Button 
                 size="lg" 
                 className="gap-2"
-                onClick={() => setLocation('/app/upgrade')}
+                onClick={() => setLocation('/upgrade')}
                 data-testid="button-upgrade-to-pro"
               >
                 <Crown className="w-5 h-5" />

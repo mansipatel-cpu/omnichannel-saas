@@ -443,7 +443,7 @@ export function UpgradePlansContent() {
                 title: t('upgradePage.subscriptionActive', 'Subscription Active'),
                 description: t('upgradePage.subscriptionSuccess', 'Your subscription has been activated successfully!'),
               });
-              window.location.href = "/app/billing?success=true";
+              window.location.href = "/billing?success=true";
             } else {
               const error = await verifyResponse.json();
               throw new Error(error.error || t('upgradePage.verificationFailed', 'Verification failed'));

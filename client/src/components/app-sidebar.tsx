@@ -79,37 +79,40 @@ const sidebarVars = {
 } as CSSProperties;
 
 const messagesItems = [
-  { title: "Team Inbox", url: "/app/whatsapp/inbox", icon: Inbox },
-  { title: "API Documentation", url: "/app/whatsapp/api-docs", icon: FileText },
-  { title: "Channels", url: "/app/whatsapp/waba-connection", icon: AudioLines },
+  { title: "Team Inbox", url: "/whatsapp/inbox", icon: Inbox },
+  { title: "API Documentation", url: "/whatsapp/api-docs", icon: FileText },
+  { title: "Channels", url: "/whatsapp/waba-connection", icon: AudioLines },
 ];
 
 const autoCallingItems = [
-  { title: "Agents", url: "/app/agents", icon: Headset },
-  { title: "Knowledge Base", url: "/app/knowledge-base", icon: BookOpen },
-  { title: "Voice", url: "/app/voices", icon: AudioLines },
-  { title: "Calls", url: "/app/calls", icon: Phone },
-  { title: "Quick CRM", url: "/app/crm", icon: ContactRound },
-  { title: "Phone Numbers", url: "/app/phone-numbers", icon: Grid3x3 },
-  { title: "Incoming Connections", url: "/app/incoming-connections", icon: LinkIcon },
-  { title: "Flow Builder", url: "/app/flows", icon: Workflow },
-  { title: "Execution Logs", url: "/app/flows/execution", icon: ClipboardList },
-  { title: "Forms", url: "/app/flows/forms", icon: FileText },
-  { title: "Appointments", url: "/app/flows/appointments", icon: Calendar },
+  { title: "Agents", url: "/agents", icon: Headset },
+  { title: "Knowledge Base", url: "/knowledge-base", icon: BookOpen },
+  { title: "Voice", url: "/voices", icon: AudioLines },
+  { title: "Calls", url: "/calls", icon: Phone },
+  { title: "Quick CRM", url: "/crm", icon: ContactRound },
+  { title: "Phone Numbers", url: "/phone-numbers", icon: Grid3x3 },
+  { title: "Incoming Connections", url: "/incoming-connections", icon: LinkIcon },
+  { title: "Flow Builder", url: "/flows", icon: Workflow },
+  { title: "Execution Logs", url: "/flows/execution", icon: ClipboardList },
+  { title: "Forms", url: "/flows/forms", icon: FileText },
+  { title: "Appointments", url: "/flows/appointments", icon: Calendar },
 ];
 
 function pathMatches(location: string, url: string) {
   if (url === "/dashboard") {
-    return location === "/dashboard" || location === "/app" || location === "/app/dashboard";
+    return location === "/dashboard" || location === "/app" || location === "/dashboard";
   }
-  if (url === "/app/campaigns") {
-    return location === "/app/campaigns" || location.startsWith("/app/campaigns/") || location.startsWith("/app/whatsapp/campaigns");
+  if (url === "/campaigns") {
+    return location === "/campaigns" || location.startsWith("/campaigns/") || location.startsWith("/whatsapp/campaigns");
   }
-  if (url === "/app/contacts") {
-    return location === "/app/contacts" || location.startsWith("/app/contacts/");
+  if (url === "/contacts") {
+    return location === "/contacts" || location.startsWith("/contacts/");
   }
-  if (url === "/app/flows") {
-    return location === "/app/flows" || (location.startsWith("/app/flows/") && !location.startsWith("/app/flows/execution") && !location.startsWith("/app/flows/forms") && !location.startsWith("/app/flows/appointments"));
+  if (url === "/templates") {
+    return location === "/templates" || location.startsWith("/templates/") || location.startsWith("/whatsapp/templates") || location === "/prompt-templates";
+  }
+  if (url === "/flows") {
+    return location === "/flows" || (location.startsWith("/flows/") && !location.startsWith("/flows/execution") && !location.startsWith("/flows/forms") && !location.startsWith("/flows/appointments"));
   }
   return location === url || location.startsWith(url + "/");
 }
@@ -206,8 +209,8 @@ export function AppSidebar() {
               </SidebarMenuItem>
 
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathMatches(location, "/app/campaigns")} tooltip="Campaigns" className={itemClass(pathMatches(location, "/app/campaigns"))} data-testid="link-campaigns">
-                  <Link href="/app/campaigns" onClick={handleNavClick}>
+                <SidebarMenuButton asChild isActive={pathMatches(location, "/campaigns")} tooltip="Campaigns" className={itemClass(pathMatches(location, "/campaigns"))} data-testid="link-campaigns">
+                  <Link href="/campaigns" onClick={handleNavClick}>
                     <Megaphone className="h-4 w-4" />
                     <span>Campaigns</span>
                   </Link>
@@ -215,8 +218,8 @@ export function AppSidebar() {
               </SidebarMenuItem>
 
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathMatches(location, "/app/contacts")} tooltip="Contacts" className={itemClass(pathMatches(location, "/app/contacts"))} data-testid="link-contacts">
-                  <Link href="/app/contacts" onClick={handleNavClick}>
+                <SidebarMenuButton asChild isActive={pathMatches(location, "/contacts")} tooltip="Contacts" className={itemClass(pathMatches(location, "/contacts"))} data-testid="link-contacts">
+                  <Link href="/contacts" onClick={handleNavClick}>
                     <Users className="h-4 w-4" />
                     <span>Contacts</span>
                   </Link>
@@ -290,8 +293,8 @@ export function AppSidebar() {
               </Collapsible>
 
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathMatches(location, "/app/whatsapp/templates")} tooltip="Templates" className={itemClass(pathMatches(location, "/app/whatsapp/templates"))} data-testid="link-templates">
-                  <Link href="/app/whatsapp/templates" onClick={handleNavClick}>
+                <SidebarMenuButton asChild isActive={pathMatches(location, "/templates")} tooltip="Templates" className={itemClass(pathMatches(location, "/templates"))} data-testid="link-templates">
+                  <Link href="/templates" onClick={handleNavClick}>
                     <FileText className="h-4 w-4" />
                     <span>Templates</span>
                   </Link>
@@ -299,8 +302,8 @@ export function AppSidebar() {
               </SidebarMenuItem>
 
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathMatches(location, "/app/analytics")} tooltip="Reports" className={itemClass(pathMatches(location, "/app/analytics"))} data-testid="link-reports">
-                  <Link href="/app/analytics" onClick={handleNavClick}>
+                <SidebarMenuButton asChild isActive={pathMatches(location, "/analytics")} tooltip="Reports" className={itemClass(pathMatches(location, "/analytics"))} data-testid="link-reports">
+                  <Link href="/analytics" onClick={handleNavClick}>
                     <BarChart3 className="h-4 w-4" />
                     <span>Reports</span>
                   </Link>
@@ -324,8 +327,8 @@ export function AppSidebar() {
             </SidebarMenuItem>
           )}
           <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={location === "/app/settings"} tooltip="Settings" className={itemClass(location === "/app/settings")} data-testid="link-settings">
-              <Link href="/app/settings" onClick={handleNavClick}>
+            <SidebarMenuButton asChild isActive={location === "/settings"} tooltip="Settings" className={itemClass(location === "/settings")} data-testid="link-settings">
+              <Link href="/settings" onClick={handleNavClick}>
                 <Settings className="h-4 w-4" />
                 <span>Settings</span>
               </Link>
@@ -333,7 +336,7 @@ export function AppSidebar() {
           </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton asChild tooltip="Help & Support" className={itemClass(false)} data-testid="link-help-support">
-              <Link href="/app/settings" onClick={handleNavClick}>
+              <Link href="/settings" onClick={handleNavClick}>
                 <Headphones className="h-4 w-4" />
                 <span>Help & Support</span>
               </Link>

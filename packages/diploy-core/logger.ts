@@ -35,23 +35,35 @@ function formatMessage(level: LogLevel, message: string, context?: LogContext): 
   return `${prefix} ${message}`;
 }
 
+function toLogContext(context?: LogContext | Error): LogContext | undefined {
+  if (!context) return undefined;
+  if (context instanceof Error) {
+    return { name: context.name, message: context.message, stack: context.stack };
+  }
+  return context;
+}
+
 export const diployLogger = {
-  debug(message: string, context?: LogContext): void {
+  debug(message: string, context?: LogContext | Error): void {
     if (process.env.NODE_ENV === 'development') {
-      console.debug(formatMessage('debug', message, context));
+      console.debug(formatMessage('debug', message, toLogContext(context)));
     }
   },
 
-  info(message: string, context?: LogContext): void {
-    console.info(formatMessage('info', message, context));
+  info(message: string, context?: LogContext | Error): void {
+    console.info(formatMessage('info', message, toLogContext(context)));
   },
 
-  warn(message: string, context?: LogContext): void {
-    console.warn(formatMessage('warn', message, context));
+  warn(message: string, context?: LogContext | Error): void {
+    console.warn(formatMessage('warn', message, toLogContext(context)));
   },
 
-  error(message: string, context?: LogContext): void {
-    console.error(formatMessage('error', message, context));
+  error(message: string, context?: LogContext | Error): void {
+    console.error(formatMessage('error', message, toLogContext(context)));
+  },
+
+  success(message: string, context?: LogContext | Error): void {
+    console.info(formatMessage('info', message, toLogContext(context)));
   },
 
   service(serviceName: string) {

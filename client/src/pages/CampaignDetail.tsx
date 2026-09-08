@@ -287,7 +287,7 @@ export default function CampaignDetail() {
   if (!campaign) {
     return (
       <div className="space-y-4">
-        <Button variant="ghost" onClick={() => setLocation("/app/campaigns")} data-testid="button-back">
+        <Button variant="ghost" onClick={() => setLocation("/campaigns")} data-testid="button-back">
           <ArrowLeft className="h-4 w-4 mr-2" />
           {t('campaignDetail.backToCampaigns')}
         </Button>
@@ -374,7 +374,7 @@ export default function CampaignDetail() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <Button variant="ghost" onClick={() => setLocation("/app/campaigns")} data-testid="button-back">
+        <Button variant="ghost" onClick={() => setLocation("/campaigns")} data-testid="button-back">
           <ArrowLeft className="h-4 w-4 mr-2" />
           {t('campaignDetail.backToCampaigns')}
         </Button>
@@ -1003,7 +1003,7 @@ export default function CampaignDetail() {
                             <Button 
                               variant="ghost" 
                               size="sm"
-                              onClick={() => setLocation(`/app/calls/${call.id}`)}
+                              onClick={() => setLocation(`/calls/${call.id}`)}
                               data-testid={`button-view-call-${contact.id}`}
                             >
                               <PhoneCall className="h-4 w-4 mr-2" />
@@ -1144,7 +1144,7 @@ export default function CampaignDetail() {
                             <Button 
                               variant="ghost" 
                               size="sm"
-                              onClick={() => setLocation(`/app/calls/${call.id}`)}
+                              onClick={() => setLocation(`/calls/${call.id}`)}
                               data-testid={`button-view-lead-call-${call.id}`}
                             >
                               <PhoneCall className="h-4 w-4 mr-2" />

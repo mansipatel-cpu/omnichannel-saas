@@ -39,8 +39,8 @@ export default function GoogleCallbackPage() {
       setStatus("error");
       setErrorMessage(errorCode === "access_denied" ? "Access was denied by Google." : `Google returned an error: ${errorCode}`);
       const redirectBase = resolvedType === "calendar"
-        ? "/app/flows/appointments"
-        : "/app/tools";
+        ? "/flows/appointments"
+        : "/tools";
       setTimeout(() => navigate(`${redirectBase}?google_error=${encodeURIComponent(errorCode)}`), 2500);
       return;
     }
@@ -58,15 +58,15 @@ export default function GoogleCallbackPage() {
           setErrorMessage(msg);
           const errCode = body?.errorCode || "server_error";
           const redirectBase = resolvedType === "calendar"
-            ? "/app/flows/appointments"
-            : "/app/tools";
+            ? "/flows/appointments"
+            : "/tools";
           setTimeout(() => navigate(`${redirectBase}?google_error=${encodeURIComponent(errCode)}`), 2500);
         } else {
           setStatus("success");
           if (resolvedType === "calendar") {
-            setTimeout(() => navigate("/app/flows/appointments?google_calendar_connected=true"), 1500);
+            setTimeout(() => navigate("/flows/appointments?google_calendar_connected=true"), 1500);
           } else {
-            setTimeout(() => navigate("/app/tools?google_connected=true"), 1500);
+            setTimeout(() => navigate("/tools?google_connected=true"), 1500);
           }
         }
       })
@@ -74,8 +74,8 @@ export default function GoogleCallbackPage() {
         setStatus("error");
         setErrorMessage("A network error occurred. Please try again.");
         const redirectBase = resolvedType === "calendar"
-          ? "/app/flows/appointments"
-          : "/app/tools";
+          ? "/flows/appointments"
+          : "/tools";
         setTimeout(() => navigate(`${redirectBase}?google_error=server_error`), 2500);
       });
   }, [navigate]);

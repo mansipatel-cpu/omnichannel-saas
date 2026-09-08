@@ -223,7 +223,7 @@ export default function FlowExecutionLogsPage() {
                     </CardDescription>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Link href={`/app/calls/${execution.callId}`}>
+                    <Link href={`/calls/${execution.callId}`}>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -379,7 +379,7 @@ export default function FlowExecutionLogsPage() {
 
               {/* Link to Call */}
               <div className="flex gap-2">
-                <Link href={`/app/calls/${selectedExecution.callId}`}>
+                <Link href={`/calls/${selectedExecution.callId}`}>
                   <Button variant="outline" size="sm" data-testid="button-detail-view-call">
                     <ExternalLink className="h-4 w-4 mr-2" />
                     View Full Call Details

@@ -6,7 +6,6 @@ import { SidebarProvider } from "@wa/contexts/sidebar-context";
 import Inbox from "@wa/pages/inbox";
 import Contacts from "@wa/pages/contacts/Contacts";
 import Campaigns from "@wa/pages/campaigns";
-import Templates from "@wa/pages/templates";
 import Automations from "@wa/pages/automations";
 import Analytics from "@wa/pages/analytics";
 import Dashboard from "@wa/pages/dashboard";
@@ -44,7 +43,9 @@ function WhatsAppRoutes() {
       <Route path="/inbox" component={Inbox} />
       <Route path="/contacts" component={Contacts} />
       <Route path="/campaigns" component={Campaigns} />
-      <Route path="/templates" component={Templates} />
+      <Route path="/templates/agentlab/new">{() => <Redirect to="~/templates/agentlab/new" />}</Route>
+      <Route path="/templates/new">{() => <Redirect to="~/templates/new" />}</Route>
+      <Route path="/templates">{() => <Redirect to="~/templates" />}</Route>
       <Route path="/automation" component={Automations} />
       <Route path="/analytics/campaign/:campaignId" component={CampaignAnalytics} />
       <Route path="/analytics" component={Analytics} />
@@ -82,7 +83,7 @@ export default function WhatsAppApp() {
       <ChannelProvider>
         <SocketProvider>
           <SidebarProvider>
-            <Router base="/app/whatsapp">
+            <Router base="/whatsapp">
               <WhatsAppRoutes />
             </Router>
           </SidebarProvider>

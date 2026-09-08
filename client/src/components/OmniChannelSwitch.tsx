@@ -6,32 +6,32 @@ export type OmniSection = "contacts" | "campaigns" | "dashboard" | "analytics";
 
 const ROUTES: Record<OmniSection, { voice: string; whatsapp: string }> = {
   contacts: {
-    voice: "/app/contacts",
-    whatsapp: "/app/whatsapp/contacts",
+    voice: "/contacts",
+    whatsapp: "/whatsapp/contacts",
   },
   campaigns: {
-    voice: "/app/campaigns",
-    whatsapp: "/app/whatsapp/campaigns",
+    voice: "/campaigns",
+    whatsapp: "/whatsapp/campaigns",
   },
   dashboard: {
     voice: "/dashboard",
-    whatsapp: "/app/whatsapp/dashboard",
+    whatsapp: "/whatsapp/dashboard",
   },
   analytics: {
-    voice: "/app/analytics",
-    whatsapp: "/app/whatsapp/analytics",
+    voice: "/analytics",
+    whatsapp: "/whatsapp/analytics",
   },
 };
 
 export function isOmniEmbedded(): boolean {
   if (typeof window === "undefined") return false;
-  return window.location.pathname.startsWith("/app/whatsapp");
+  return window.location.pathname.startsWith("/whatsapp");
 }
 
 function useAppPath() {
   const [location] = useLocation();
-  if (location.startsWith("/app")) return location;
-  return `/app/whatsapp${location.startsWith("/") ? location : `/${location}`}`;
+  if (location.startsWith("/whatsapp") || location.startsWith("/app")) return location;
+  return `/whatsapp${location.startsWith("/") ? location : `/${location}`}`;
 }
 
 const switchClass =
@@ -89,7 +89,7 @@ export function ChannelToggle({
 export function OmniChannelSwitch({ section }: { section: OmniSection }) {
   const path = useAppPath();
   const routes = ROUTES[section];
-  const isWhatsApp = path.startsWith("/app/whatsapp");
+  const isWhatsApp = path.startsWith("/whatsapp");
 
   return (
     <div className={switchClass} data-testid={`omni-channel-switch-${section}`}>

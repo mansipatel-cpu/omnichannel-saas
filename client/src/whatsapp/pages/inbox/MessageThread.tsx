@@ -78,7 +78,7 @@ const TeamAssignDropdown = ({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
+        <Button variant="outline" size="sm" className="gap-2 h-9 bg-white border-slate-200 text-slate-700">
           <UserPlus className="w-4 h-4" />
           {currentAssignee ? `Reassign (${currentAssigneeName})` : "Assign"}
         </Button>
@@ -196,8 +196,8 @@ const MessageThread = ({
     : ((selectedConversation as any)?.contact?.phone || selectedConversation?.contactPhone || "");
 
   return (
-    <div className="flex-1 flex flex-col bg-gray-50">
-      <div className="bg-white border-b border-gray-100 px-4 md:px-6 py-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+    <div className="flex-1 flex flex-col bg-[#F8F9FB] min-w-0">
+      <div className="bg-white border-b border-slate-100 px-4 md:px-5 py-3.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button
@@ -210,7 +210,7 @@ const MessageThread = ({
               <X className="h-4 w-4" />
             </Button>
             <Avatar className="h-10 w-10">
-              <AvatarFallback className="bg-emerald-500 text-white font-semibold text-sm">
+              <AvatarFallback className="bg-[#007BFF] text-white font-semibold text-sm">
                 {demo ? "*" : ((selectedConversation as any).contactName?.[0]?.toUpperCase() || "?")}
               </AvatarFallback>
             </Avatar>
@@ -232,8 +232,8 @@ const MessageThread = ({
                   className={cn(
                     "text-[10px] font-medium px-2 py-0 h-5 rounded-full",
                     selectedConversation.status === "resolved"
-                      ? "bg-gray-100 text-gray-600"
-                      : "bg-green-50 text-green-700 border border-green-200"
+                      ? "bg-slate-100 text-slate-600"
+                      : "bg-blue-50 text-[#007BFF] border border-blue-100"
                   )}
                 >
                   {selectedConversation.status || "open"}
@@ -334,7 +334,7 @@ const MessageThread = ({
         </div>
       </div>
 
-      <ScrollArea className="flex-1 p-4 md:p-6 bg-[#f0f2f5]">
+      <ScrollArea className="flex-1 p-4 md:p-6 bg-[#F8F9FB]">
         <div className="min-h-full">
           {messagesLoading ? (
             <div className="flex items-center justify-center py-8">

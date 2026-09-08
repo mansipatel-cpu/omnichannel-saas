@@ -34,6 +34,7 @@ import { LanguageSelector } from "../language-selector";
 import { useTranslation } from "@wa/lib/i18n";
 import NotificationBell from "@wa/components/notification/NotificationBell";
 import { isOmniEmbedded } from "@/components/OmniChannelSwitch";
+import { useAppHeaderOptional } from "@/components/AppPageHeader";
 
 interface HeaderProps {
   title: string;
@@ -74,27 +75,26 @@ export default function Header({
 
   const { toggle } = useSidebar();
   const embedded = isOmniEmbedded();
+  const appHeader = useAppHeaderOptional();
+  const setPageMeta = appHeader?.setPageMeta;
+
+  useEffect(() => {
+    if (!setPageMeta) return;
+    setPageMeta({ title, subtitle });
+    return () => setPageMeta(null);
+  }, [title, subtitle, setPageMeta]);
 
   if (embedded) {
+    if (!action) return null;
     return (
-      <div className="px-4 sm:px-6 pt-2 pb-1">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-foreground">{title}</h1>
-            {subtitle && (
-              <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>
-            )}
-          </div>
-          {action && (
-            <Button
-              onClick={action.onClick}
-              className="bg-primary text-primary-foreground px-3 py-1 flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              <span>{action.label}</span>
-            </Button>
-          )}
-        </div>
+      <div className="flex justify-end px-1 pb-3">
+        <Button
+          onClick={action.onClick}
+          className="bg-primary text-primary-foreground px-3 py-1 flex items-center gap-2"
+        >
+          <Plus className="w-4 h-4" />
+          <span>{action.label}</span>
+        </Button>
       </div>
     );
   }

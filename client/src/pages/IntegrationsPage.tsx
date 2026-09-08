@@ -336,7 +336,7 @@ export default function IntegrationsPage() {
                     <p className="text-xs text-muted-foreground">You are authenticated. We've loaded the active connection status for your 3rd-party services.</p>
                   </div>
                 </div>
-                <Link href="/app/tools">
+                <Link href="/tools">
                   <Button size="sm" className="shrink-0 gap-1.5">
                     Configure Connections <ArrowRight className="w-3.5 h-3.5" />
                   </Button>

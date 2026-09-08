@@ -279,7 +279,7 @@ export default function TransactionHistory({ embedded = false }: TransactionHist
             </div>
           </div>
           {!embedded && (
-            <Link href="/app/billing">
+            <Link href="/billing">
               <Button variant="outline" data-testid="button-back-to-billing">
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 {t('transactionHistory.backToBilling')}
@@ -328,7 +328,7 @@ export default function TransactionHistory({ embedded = false }: TransactionHist
               <p className="text-sm text-muted-foreground text-center max-w-sm mb-4">
                 {t('transactionHistory.emptyDescription')}
               </p>
-              <Link href="/app/billing">
+              <Link href="/billing">
                 <Button data-testid="button-view-plans">
                   {t('transactionHistory.viewPlans')}
                 </Button>

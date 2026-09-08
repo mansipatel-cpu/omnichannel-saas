@@ -905,7 +905,7 @@ export default function FormsPage() {
                               size="sm"
                               data-testid={`button-view-call-${submission.id}`}
                             >
-                              <Link href={`/app/calls/${submission.callId}`}>
+                              <Link href={`/calls/${submission.callId}`}>
                                 <ExternalLink className="h-3 w-3 mr-1" />
                                 {t("forms.viewCall")}
                               </Link>

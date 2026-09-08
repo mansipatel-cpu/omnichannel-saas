@@ -314,13 +314,13 @@ const MessageItem = ({
           <div
             className={cn(
               "flex items-center space-x-3 p-3 rounded-lg min-w-[200px]",
-              isOutbound ? "bg-[#c5e8b0]" : "bg-gray-100"
+              isOutbound ? "bg-[#D6E8FF]" : "bg-gray-100"
             )}
           >
             <div
               className={cn(
                 "p-2 rounded-full",
-                isOutbound ? "bg-[#a8d98a]" : "bg-gray-200"
+                isOutbound ? "bg-[#BFDBFE]" : "bg-gray-200"
               )}
             >
               <Volume2
@@ -345,7 +345,7 @@ const MessageItem = ({
                 onClick={(e) => e.stopPropagation()}
                 className={cn(
                   "p-1.5 rounded-full transition-colors",
-                  isOutbound ? "hover:bg-[#a8d98a]" : "hover:bg-gray-200"
+                  isOutbound ? "hover:bg-[#BFDBFE]" : "hover:bg-gray-200"
                 )}
                 title="Download audio"
               >
@@ -381,14 +381,14 @@ const MessageItem = ({
               className={cn(
                 "flex items-center space-x-3 p-3 rounded-lg border",
                 isOutbound
-                  ? "bg-[#c5e8b0] border-[#a8d98a]"
+                  ? "bg-[#D6E8FF] border-[#93C5FD]"
                   : "bg-white border-gray-200"
               )}
             >
               <div
                 className={cn(
                   "p-2 rounded-full",
-                  isOutbound ? "bg-[#a8d98a]" : "bg-blue-100"
+                  isOutbound ? "bg-[#BFDBFE]" : "bg-blue-100"
                 )}
               >
                 <FileText
@@ -436,7 +436,7 @@ const MessageItem = ({
                   download={fileName}
                   className={cn(
                     "p-1.5 rounded-full hover:bg-opacity-80 transition-colors",
-                    isOutbound ? "hover:bg-[#a8d98a]" : "hover:bg-gray-100"
+                    isOutbound ? "hover:bg-[#BFDBFE]" : "hover:bg-gray-100"
                   )}
                   onClick={(e) => e.stopPropagation()}
                   title="Download file"
@@ -484,7 +484,7 @@ const MessageItem = ({
                       className={cn(
                         "w-full text-left px-3 py-2 rounded-lg border text-sm transition-colors",
                         isOutbound
-                          ? "border-[#a8d98a] text-gray-700 hover:bg-[#c5e8b0]"
+                          ? "border-[#93C5FD] text-gray-700 hover:bg-[#D6E8FF]"
                           : "border-gray-300 text-gray-700 hover:bg-gray-50"
                       )}
                       onClick={() => {
@@ -519,7 +519,7 @@ const MessageItem = ({
             className={cn(
               "flex items-start space-x-2 p-3 rounded border-l-4",
               isOutbound
-                ? "border-[#a8d98a] bg-[#c5e8b0]"
+                ? "border-[#93C5FD] bg-[#D6E8FF]"
                 : "border-blue-400 bg-blue-50"
             )}
           >
@@ -600,13 +600,13 @@ const MessageItem = ({
                 rel="noopener noreferrer"
                 className={cn(
                   "block rounded-lg border p-3",
-                  isOutbound ? "bg-[#c5e8b0] border-[#a8d98a]" : "bg-white border-gray-200"
+                  isOutbound ? "bg-[#D6E8FF] border-[#93C5FD]" : "bg-white border-gray-200"
                 )}
               >
                 <div className="flex items-start gap-2">
                   <div className={cn(
                     "p-1.5 rounded-full mt-0.5",
-                    isOutbound ? "bg-[#a8d98a]" : "bg-red-100"
+                    isOutbound ? "bg-[#BFDBFE]" : "bg-red-100"
                   )}>
                     <MapPin className={cn("w-4 h-4", isOutbound ? "text-gray-700" : "text-red-500")} />
                   </div>
@@ -654,13 +654,13 @@ const MessageItem = ({
                 key={idx}
                 className={cn(
                   "rounded-lg border p-3",
-                  isOutbound ? "bg-[#c5e8b0] border-[#a8d98a]" : "bg-white border-gray-200"
+                  isOutbound ? "bg-[#D6E8FF] border-[#93C5FD]" : "bg-white border-gray-200"
                 )}
               >
                 <div className="flex items-center gap-2 mb-2">
                   <div className={cn(
                     "p-1.5 rounded-full",
-                    isOutbound ? "bg-[#a8d98a]" : "bg-blue-100"
+                    isOutbound ? "bg-[#BFDBFE]" : "bg-blue-100"
                   )}>
                     <User className={cn("w-4 h-4", isOutbound ? "text-gray-700" : "text-blue-600")} />
                   </div>
@@ -704,7 +704,7 @@ const MessageItem = ({
         return (
           <div className={cn(
             "flex items-center gap-2 p-2 rounded-lg text-sm",
-            isOutbound ? "bg-[#c5e8b0]" : "bg-gray-50 border border-gray-200"
+            isOutbound ? "bg-[#D6E8FF]" : "bg-gray-50 border border-gray-200"
           )}>
             <span className="text-base">🔘</span>
             <span>{demo ? maskContent(buttonText) : buttonText}</span>
@@ -717,7 +717,7 @@ const MessageItem = ({
         return (
           <div className={cn(
             "rounded-lg border p-3 min-w-[200px]",
-            isOutbound ? "bg-[#c5e8b0] border-[#a8d98a]" : "bg-white border-gray-200"
+            isOutbound ? "bg-[#D6E8FF] border-[#93C5FD]" : "bg-white border-gray-200"
           )}>
             <div className="flex items-center gap-2 mb-1">
               <span className="text-base">🛒</span>
@@ -751,7 +751,7 @@ const MessageItem = ({
           <div className="space-y-1">
             <div className={cn(
               "flex items-center gap-1.5 text-xs",
-              isOutbound ? "text-gray-600" : "text-green-700"
+              isOutbound ? "text-slate-600" : "text-[#007BFF]"
             )}>
               <span>📢</span>
               <span className="font-medium">Via Referral</span>
@@ -769,7 +769,7 @@ const MessageItem = ({
         return (
           <div className={cn(
             "flex items-center gap-2 p-2 rounded-lg text-sm",
-            isOutbound ? "bg-[#c5e8b0]" : "bg-gray-50 border border-gray-200"
+            isOutbound ? "bg-[#D6E8FF]" : "bg-gray-50 border border-gray-200"
           )}>
             <MapPin className="w-4 h-4 text-gray-500 flex-shrink-0" />
             <span>{demo ? maskContent(message.content || "") : (message.content || "Address shared")}</span>
@@ -781,7 +781,7 @@ const MessageItem = ({
         return (
           <div className={cn(
             "flex items-center gap-2 p-2 rounded-lg text-sm",
-            isOutbound ? "bg-[#c5e8b0]" : "bg-gray-50 border border-gray-200"
+            isOutbound ? "bg-[#D6E8FF]" : "bg-gray-50 border border-gray-200"
           )}>
             <MapPin className="w-4 h-4 text-blue-500 flex-shrink-0" />
             <span className="text-gray-600">Location requested</span>
@@ -799,7 +799,7 @@ const MessageItem = ({
         return (
           <div className={cn(
             "flex flex-col gap-1 p-2 rounded-lg text-sm",
-            isOutbound ? "bg-[#c5e8b0]" : "bg-gray-50"
+            isOutbound ? "bg-[#D6E8FF]" : "bg-gray-50"
           )}>
             <div className="flex items-center gap-2">
               <HelpCircle className="w-4 h-4 text-gray-400 flex-shrink-0" />
@@ -901,7 +901,7 @@ const MessageItem = ({
 
       {showDate && (
         <div className="flex items-center justify-center my-4">
-          <div className="bg-gray-100 px-3 py-1 rounded-full text-xs text-gray-600">
+          <div className="bg-slate-100 px-3 py-1 rounded-full text-xs text-slate-500">
             {formatMessageDateLocal(message.createdAt)}
           </div>
         </div>
@@ -926,7 +926,7 @@ const MessageItem = ({
             isOutbound
               ? message.status === "failed"
                 ? "bg-red-50 text-red-900 border border-red-200 rounded-br-sm"
-                : "bg-[#dcf8c6] text-gray-900 rounded-br-sm"
+                : "bg-[#E8F1FF] text-slate-900 rounded-br-sm"
               : "bg-white text-gray-900 border border-gray-100 shadow-sm rounded-bl-sm"
           )}
         >

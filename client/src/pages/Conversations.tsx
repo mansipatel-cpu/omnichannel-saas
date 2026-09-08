@@ -212,7 +212,7 @@ export default function Conversations() {
                 <Card 
                   key={call.id} 
                   className="p-6 hover:shadow-md transition-shadow cursor-pointer hover-elevate"
-                  onClick={() => setLocation(`/app/calls/${call.id}`)}
+                  onClick={() => setLocation(`/calls/${call.id}`)}
                   data-testid={`card-conversation-${call.id}`}
                 >
                   <div className="space-y-4">
@@ -282,7 +282,7 @@ export default function Conversations() {
                 <Card 
                   key={call.id} 
                   className="p-6 hover:shadow-md transition-shadow cursor-pointer hover-elevate"
-                  onClick={() => setLocation(`/app/calls/${call.id}`)}
+                  onClick={() => setLocation(`/calls/${call.id}`)}
                   data-testid={`card-transcribed-${call.id}`}
                 >
                   <div className="space-y-4">
@@ -344,7 +344,7 @@ export default function Conversations() {
                 <Card 
                   key={call.id} 
                   className="p-6 hover:shadow-md transition-shadow cursor-pointer hover-elevate"
-                  onClick={() => setLocation(`/app/calls/${call.id}`)}
+                  onClick={() => setLocation(`/calls/${call.id}`)}
                   data-testid={`card-pending-${call.id}`}
                 >
                   <div className="space-y-3">

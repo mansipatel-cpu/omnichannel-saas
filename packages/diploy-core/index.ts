@@ -21,3 +21,4 @@ export * from './response';
 export * from './logger';
 export * from './format';
 export * from './constants';
+export * from './async-handler';

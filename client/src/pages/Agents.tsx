@@ -32,7 +32,6 @@ import { AuthStorage } from "@/lib/auth-storage";
 import { useDemoMode } from "@/components/DemoModeBanner";
 import PromptTemplatesLibrary from "@/components/PromptTemplatesLibrary";
 import Voices from "@/pages/Voices";
-import PromptTemplates from "@/pages/PromptTemplates";
 import AgentVersionHistory from "@/components/AgentVersionHistory";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -1207,8 +1206,14 @@ export default function Agents() {
         </TabsList>
 
         {/* Prompt Templates Tab */}
-        <TabsContent value="templates" className="mt-0">
-          <PromptTemplates />
+        <TabsContent value="templates" className="mt-0 space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">Pick a prompt for an agent, or manage all templates in one place.</p>
+            <Button variant="outline" onClick={() => setLocation("/templates")}>
+              Manage templates
+            </Button>
+          </div>
+          <PromptTemplatesLibrary mode="browse" />
         </TabsContent>
 
         {/* Voices Tab */}

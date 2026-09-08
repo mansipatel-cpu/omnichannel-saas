@@ -1254,14 +1254,14 @@ export default function PaymentsSettings() {
               <Label className="text-xs font-medium text-muted-foreground">{t("adminDashboard.payments.redirectUrls.successLabel")}</Label>
               <div className="flex items-center gap-2">
                 <code className="flex-1 text-sm font-mono text-foreground truncate bg-background px-2 py-1 rounded border">
-                  {window.location.origin}/app/billing?success=true
+                  {window.location.origin}/billing?success=true
                 </code>
                 <Button
                   type="button"
                   variant="outline"
                   size="icon"
                   onClick={() => {
-                    navigator.clipboard.writeText(`${window.location.origin}/app/billing?success=true`);
+                    navigator.clipboard.writeText(`${window.location.origin}/billing?success=true`);
                     toast({ title: t("adminDashboard.payments.redirectUrls.copied"), description: t("adminDashboard.payments.redirectUrls.successUrlCopied") });
                   }}
                   data-testid="button-copy-success-url"
@@ -1275,14 +1275,14 @@ export default function PaymentsSettings() {
               <Label className="text-xs font-medium text-muted-foreground">{t("adminDashboard.payments.redirectUrls.cancelLabel")}</Label>
               <div className="flex items-center gap-2">
                 <code className="flex-1 text-sm font-mono text-foreground truncate bg-background px-2 py-1 rounded border">
-                  {window.location.origin}/app/billing?cancelled=true
+                  {window.location.origin}/billing?cancelled=true
                 </code>
                 <Button
                   type="button"
                   variant="outline"
                   size="icon"
                   onClick={() => {
-                    navigator.clipboard.writeText(`${window.location.origin}/app/billing?cancelled=true`);
+                    navigator.clipboard.writeText(`${window.location.origin}/billing?cancelled=true`);
                     toast({ title: t("adminDashboard.payments.redirectUrls.copied"), description: t("adminDashboard.payments.redirectUrls.cancelUrlCopied") });
                   }}
                   data-testid="button-copy-cancel-url"

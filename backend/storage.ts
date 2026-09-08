@@ -971,6 +971,7 @@ export class DbStorage implements IStorage {
       allStatuses: Array.from(group.statuses),
       source: group.source,
       callCount: group.callCount,
+      createdAt: group.latestCreatedAt,
     }));
   }
 

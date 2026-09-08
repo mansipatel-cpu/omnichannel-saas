@@ -132,7 +132,7 @@ export default function ToolsPage() {
       icon: ClipboardList,
       iconColor: "text-cyan-600 dark:text-cyan-400",
       iconBg: "bg-cyan-500/10 dark:bg-cyan-500/20",
-      url: "/app/flows/forms",
+      url: "/flows/forms",
     },
     {
       id: "appointments",
@@ -141,7 +141,7 @@ export default function ToolsPage() {
       icon: Calendar,
       iconColor: "text-rose-600 dark:text-rose-400",
       iconBg: "bg-rose-500/10 dark:bg-rose-500/20",
-      url: "/app/flows/appointments",
+      url: "/flows/appointments",
     },
     {
       id: "webhooks",
@@ -150,7 +150,7 @@ export default function ToolsPage() {
       icon: Webhook,
       iconColor: "text-violet-600 dark:text-violet-400",
       iconBg: "bg-violet-500/10 dark:bg-violet-500/20",
-      url: "/app/flows/webhooks",
+      url: "/flows/webhooks",
     },
     {
       id: "widget",
@@ -159,7 +159,7 @@ export default function ToolsPage() {
       icon: Globe,
       iconColor: "text-sky-600 dark:text-sky-400",
       iconBg: "bg-sky-500/10 dark:bg-sky-500/20",
-      url: "/app/tools/widgets",
+      url: "/tools/widgets",
     },
     {
       id: "crm",
@@ -168,7 +168,7 @@ export default function ToolsPage() {
       icon: ContactRound,
       iconColor: "text-cyan-600 dark:text-cyan-400",
       iconBg: "bg-cyan-500/10 dark:bg-cyan-500/20",
-      url: "/app/crm",
+      url: "/crm",
     },
     {
       id: "incoming-connections",
@@ -177,7 +177,7 @@ export default function ToolsPage() {
       icon: LinkIcon,
       iconColor: "text-amber-600 dark:text-amber-400",
       iconBg: "bg-amber-500/10 dark:bg-amber-500/20",
-      url: "/app/incoming-connections",
+      url: "/incoming-connections",
     },
     {
       id: "developer",
@@ -186,7 +186,7 @@ export default function ToolsPage() {
       icon: Key,
       iconColor: "text-amber-600 dark:text-amber-400",
       iconBg: "bg-amber-500/10 dark:bg-amber-500/20",
-      url: "/app/settings?tab=developer",
+      url: "/settings?tab=developer",
       pluginRequired: "rest-api",
     },
     {
@@ -196,7 +196,7 @@ export default function ToolsPage() {
       icon: Users,
       iconColor: "text-blue-600 dark:text-blue-400",
       iconBg: "bg-blue-500/10 dark:bg-blue-500/20",
-      url: "/app/settings?tab=team",
+      url: "/settings?tab=team",
       pluginRequired: "team-management",
     },
     {
@@ -206,7 +206,7 @@ export default function ToolsPage() {
       icon: Mail,
       iconColor: "text-emerald-600 dark:text-emerald-400",
       iconBg: "bg-emerald-500/10 dark:bg-emerald-500/20",
-      url: "/app/settings?tab=messaging",
+      url: "/settings?tab=messaging",
       pluginRequired: "messaging",
     },
     {
@@ -216,7 +216,7 @@ export default function ToolsPage() {
       icon: TableProperties,
       iconColor: "text-green-600 dark:text-green-400",
       iconBg: "bg-green-500/10 dark:bg-green-500/20",
-      url: "/app/tools",
+      url: "/tools",
     },
   ], [t]);
 
@@ -227,7 +227,7 @@ export default function ToolsPage() {
     if (googleConnected === "true") {
       queryClient.invalidateQueries({ queryKey: ["/api/integrations/google/status"] });
       toast({ title: t('toolsPage.googleAccountConnected', 'Google account connected successfully') });
-      window.history.replaceState({}, "", "/app/tools");
+      window.history.replaceState({}, "", "/tools");
     } else if (googleError) {
       const messages: Record<string, string> = {
         access_denied: t('toolsPage.accessDenied', 'Access was denied. Please try again.'),
@@ -242,7 +242,7 @@ export default function ToolsPage() {
         description: messages[googleError] || t('toolsPage.unknownError', 'An unknown error occurred.'),
         variant: "destructive",
       });
-      window.history.replaceState({}, "", "/app/tools");
+      window.history.replaceState({}, "", "/tools");
     }
   }, [t]);
 

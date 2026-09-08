@@ -117,8 +117,8 @@ const ConversationListItem = ({
       className={cn(
         "group relative flex items-center gap-3 px-4 py-3.5 cursor-pointer transition-all duration-150",
         isSelected
-          ? "bg-green-50/80 border-l-[3px] border-l-green-500 shadow-sm"
-          : "border-l-[3px] border-l-transparent hover:bg-gray-50/80"
+          ? "bg-blue-50/80 border-l-[3px] border-l-[#007BFF]"
+          : "border-l-[3px] border-l-transparent hover:bg-slate-50"
       )}
     >
       <Avatar className="h-11 w-11 flex-shrink-0">
@@ -148,13 +148,13 @@ const ConversationListItem = ({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center min-w-0">
             {conversation.type === "whatsapp" && (
-              <MessageCircle className="w-3.5 h-3.5 text-green-500 inline-block mr-1.5 flex-shrink-0" />
+              <MessageCircle className="w-3.5 h-3.5 text-[#007BFF] inline-block mr-1.5 flex-shrink-0" />
             )}
             {conversation.type === "messenger" && (
-              <MessageCircle className="w-3.5 h-3.5 text-blue-500 inline-block mr-1.5 flex-shrink-0" />
+              <MessageCircle className="w-3.5 h-3.5 text-[#007BFF] inline-block mr-1.5 flex-shrink-0" />
             )}
             {conversation.type === "chatbot" && (
-              <Bot className="w-3.5 h-3.5 text-green-500 inline-block mr-1.5 flex-shrink-0" />
+              <Bot className="w-3.5 h-3.5 text-[#007BFF] inline-block mr-1.5 flex-shrink-0" />
             )}
             <p className="text-[13px] text-gray-500 truncate leading-tight">
               {getMessagePreview(conversation.lastMessageText, demo) ||
@@ -186,7 +186,7 @@ const ConversationListItem = ({
             )}
 
             {conversation.unreadCount && conversation.unreadCount > 0 ? (
-              <Badge className="ml-1 bg-green-500 hover:bg-green-500 text-white text-[10px] h-5 min-w-[20px] flex items-center justify-center rounded-full px-1.5 font-semibold">
+              <Badge className="ml-1 bg-[#007BFF] hover:bg-[#007BFF] text-white text-[10px] h-5 min-w-[20px] flex items-center justify-center rounded-full px-1.5 font-semibold border-transparent">
                 {conversation.unreadCount}
               </Badge>
             ) : null}

@@ -14,27 +14,42 @@
  * Respect the author's rights and Envato licensing terms.
  * ============================================================
  */
-import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { useLocation } from "wouter";
-import { useTranslation } from 'react-i18next';
-import { CampaignCard } from "@/components/CampaignCard";
-import { Status } from "@/components/StatusBadge";
-import { CreateCampaignDialog } from "@/components/CreateCampaignDialog";
-import { EditCampaignDialog } from "@/components/EditCampaignDialog";
-import { CampaignDetailsDialog } from "@/components/CampaignDetailsDialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Search, Target, Play, CheckCircle2, Clock, Trash2, RotateCcw, AlertTriangle, Phone, Video } from "lucide-react";
-import { Card } from "@/components/ui/card";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useLocation } from "wouter";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { format, isAfter, subDays, startOfMonth, startOfYear } from "date-fns";
+import { AuthStorage } from "@/lib/auth-storage";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { OmniPageHero } from "@/components/OmniPageHero";
-import { DataPagination, usePagination } from "@/components/ui/data-pagination";
+import { useAppHeader } from "@/components/AppPageHeader";
 import { useDemoMode } from "@/components/DemoModeBanner";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { EditCampaignDialog } from "@/components/EditCampaignDialog";
+import { CampaignDetailsDialog } from "@/components/CampaignDetailsDialog";
+import { usePagination } from "@/components/ui/data-pagination";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,8 +60,23 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Plus,
+  Search,
+  MessageCircle,
+  Phone,
+  MoreVertical,
+  RotateCcw,
+  RotateCw,
+  Pencil,
+  Eye,
+  Play,
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 
-interface Campaign {
+interface VoiceCampaign {
   id: string;
   name: string;
   type: string;
@@ -54,6 +84,9 @@ interface Campaign {
   totalContacts: number;
   completedCalls: number;
   successfulCalls: number;
+  failedCalls?: number;
+  createdAt?: string | Date | null;
+  scheduledFor?: string | Date | null;
   deletedAt?: string | null;
   phoneNumberId?: string | null;
   sipPhoneNumberId?: string | null;
@@ -65,6 +98,26 @@ interface Campaign {
   retryMaxAttempts?: number;
 }
 
+interface WaCampaign {
+  id: string;
+  name?: string;
+  status?: string;
+  templateName?: string;
+  recipientCount?: number;
+  totalRecipients?: number;
+  sentCount?: number;
+  deliveredCount?: number;
+  failedCount?: number;
+  createdAt?: string | Date | null;
+  scheduledAt?: string | Date | null;
+  createdBy?: string;
+}
+
+interface WaTemplate {
+  id: string;
+  name?: string;
+}
+
 interface User {
   id: string;
   name: string;
@@ -72,124 +125,173 @@ interface User {
   planType: string;
 }
 
-const mockCampaigns = [
-  {
-    id: "1",
-    name: "Q4 Lead Qualification Drive",
-    type: "Lead Qualification",
-    status: "in_progress" as const,
-    totalContacts: 500,
-    completedCalls: 325,
-    successRate: 87.3,
-  },
-  {
-    id: "2",
-    name: "Customer Feedback Survey",
-    type: "Feedback Collection",
-    status: "pending" as const,
-    totalContacts: 1000,
-    completedCalls: 0,
-  },
-  {
-    id: "3",
-    name: "Holiday Promotion 2024",
-    type: "Promotional",
-    status: "scheduled" as const,
-    totalContacts: 2500,
-    completedCalls: 0,
-    schedule: "Dec 15, 2024 at 9:00 AM",
-  },
-  {
-    id: "4",
-    name: "Payment Reminder Q3",
-    type: "Payment Reminder",
-    status: "completed" as const,
-    totalContacts: 750,
-    completedCalls: 750,
-    successRate: 92.1,
-  },
-  {
-    id: "5",
-    name: "Product Launch Announcement",
-    type: "Promotional",
-    status: "in_progress" as const,
-    totalContacts: 1200,
-    completedCalls: 480,
-    successRate: 84.5,
-  },
-  {
-    id: "6",
-    name: "Event Registration Follow-up",
-    type: "Event Promotion",
-    status: "pending" as const,
-    totalContacts: 300,
-    completedCalls: 0,
-  },
-];
+type ChannelTab = "whatsapp" | "calling";
+type StatusLabel = "Ongoing" | "Scheduled" | "Completed" | "Paused" | "Draft" | "Failed" | "Deleted";
+
+function authFetch(url: string) {
+  const headers: Record<string, string> = {};
+  const authHeader = AuthStorage.getAuthHeader();
+  if (authHeader) headers.Authorization = authHeader;
+  return fetch(url, { credentials: "include", headers });
+}
+
+function parseDate(value?: string | Date | null) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatStatus(status: string): StatusLabel {
+  const map: Record<string, StatusLabel> = {
+    in_progress: "Ongoing",
+    sending: "Ongoing",
+    active: "Ongoing",
+    scheduled: "Scheduled",
+    completed: "Completed",
+    paused: "Paused",
+    pending: "Draft",
+    draft: "Draft",
+    failed: "Failed",
+    deleted: "Deleted",
+  };
+  return map[status] || "Draft";
+}
+
+function statusClass(label: StatusLabel) {
+  switch (label) {
+    case "Ongoing":
+      return "bg-blue-50 text-blue-600";
+    case "Scheduled":
+      return "bg-orange-50 text-orange-600";
+    case "Completed":
+      return "bg-emerald-50 text-emerald-600";
+    case "Paused":
+      return "bg-red-50 text-red-500";
+    case "Failed":
+      return "bg-red-50 text-red-500";
+    case "Deleted":
+      return "bg-slate-100 text-slate-500";
+    default:
+      return "bg-slate-100 text-slate-500";
+  }
+}
+
+function tagClass(tag: string) {
+  const key = tag.toLowerCase();
+  if (key.includes("bill")) return "bg-orange-50 text-orange-600";
+  if (key.includes("market") || key.includes("promo") || key.includes("offer")) return "bg-violet-50 text-violet-600";
+  if (key.includes("security") || key.includes("alert")) return "bg-red-50 text-red-500";
+  if (key.includes("retain") || key.includes("reactivat")) return "bg-teal-50 text-teal-600";
+  if (key.includes("onboard") || key.includes("welcome")) return "bg-blue-50 text-blue-600";
+  return "bg-slate-100 text-slate-600";
+}
+
+interface Row {
+  id: string;
+  name: string;
+  tag: string;
+  audience: number;
+  template: string;
+  schedule: string;
+  status: StatusLabel;
+  sent: number;
+  delivered: number;
+  failed: number;
+  createdAt: Date | null;
+  createdBy: string;
+  channel: ChannelTab;
+  rawVoice?: VoiceCampaign;
+}
 
 export default function Campaigns() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { t } = useTranslation();
   const { isDemoMode } = useDemoMode();
-  const [isVideoOpen, setIsVideoOpen] = useState(false);
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
-  const [viewingCampaign, setViewingCampaign] = useState<Campaign | null>(null);
+  const { setPageMeta, search } = useAppHeader();
+
+  const [tab, setTab] = useState<ChannelTab>("whatsapp");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [activeTab, setActiveTab] = useState("active");
+  const [dateFilter, setDateFilter] = useState("all");
+  const [createdByFilter, setCreatedByFilter] = useState("all");
+  const [templateFilter, setTemplateFilter] = useState("all");
+  const [editingCampaign, setEditingCampaign] = useState<VoiceCampaign | null>(null);
+  const [viewingCampaign, setViewingCampaign] = useState<VoiceCampaign | null>(null);
   const [restoringCampaignId, setRestoringCampaignId] = useState<string | null>(null);
   const [showPhoneNumberAlert, setShowPhoneNumberAlert] = useState(false);
+  const [isVideoOpen, setIsVideoOpen] = useState(false);
+
+  const tableSearch = searchQuery || search;
 
   const { data: user, isLoading: userLoading } = useQuery<User>({
     queryKey: ["/api/auth/me"],
   });
 
-  const { data: campaigns = [], isLoading } = useQuery<Campaign[]>({
+  const { data: voiceCampaigns = [], isLoading: voiceLoading } = useQuery<VoiceCampaign[]>({
     queryKey: ["/api/campaigns"],
   });
 
+  const { data: deletedCampaigns = [] } = useQuery<VoiceCampaign[]>({
+    queryKey: ["/api/campaigns/deleted"],
+  });
+
+  const { data: waCampaigns = [], isLoading: waLoading } = useQuery<WaCampaign[]>({
+    queryKey: ["/api/whatsapp/campaigns"],
+    queryFn: async () => {
+      try {
+        const response = await authFetch("/api/whatsapp/campaigns");
+        if (!response.ok) return [];
+        const result = await response.json();
+        return Array.isArray(result) ? result : result?.data || [];
+      } catch {
+        return [];
+      }
+    },
+  });
+
+  const { data: waTemplates = [] } = useQuery<WaTemplate[]>({
+    queryKey: ["/api/whatsapp/templates"],
+    queryFn: async () => {
+      try {
+        const response = await authFetch("/api/whatsapp/templates?limit=100");
+        if (!response.ok) return [];
+        const result = await response.json();
+        return Array.isArray(result) ? result : result?.data || [];
+      } catch {
+        return [];
+      }
+    },
+  });
+
   const isPro = user?.planType === "pro";
-  const campaignsWithoutPhoneNumber = campaigns.filter(c => !c.phoneNumberId && !c.sipPhoneNumberId && !c.plivoPhoneNumberId && c.status !== 'completed');
-  const unassignedIds = campaignsWithoutPhoneNumber.map(c => c.id);
+  const campaignsWithoutPhoneNumber = voiceCampaigns.filter(
+    (c) => !c.phoneNumberId && !c.sipPhoneNumberId && !c.plivoPhoneNumberId && c.status !== "completed"
+  );
+  const unassignedIds = campaignsWithoutPhoneNumber.map((c) => c.id);
 
   useEffect(() => {
-    if (userLoading || isLoading || !user || !isPro || unassignedIds.length === 0) {
-      return;
-    }
-
+    if (userLoading || voiceLoading || !user || !isPro || unassignedIds.length === 0) return;
     const sessionKey = `phone_alert_dismissed_${user.id}`;
     try {
       const dismissedData = sessionStorage.getItem(sessionKey);
-      
       if (dismissedData) {
         const { ids: dismissedIds } = JSON.parse(dismissedData);
         const dismissedSet = new Set(dismissedIds || []);
-        const hasNewUnassigned = unassignedIds.some(id => !dismissedSet.has(id));
-        
-        if (!hasNewUnassigned) {
-          return;
-        }
+        if (!unassignedIds.some((id) => !dismissedSet.has(id))) return;
       }
     } catch {
       sessionStorage.removeItem(sessionKey);
     }
-    
     setShowPhoneNumberAlert(true);
-  }, [userLoading, isLoading, user, isPro, unassignedIds.join(',')]);
+  }, [userLoading, voiceLoading, user, isPro, unassignedIds.join(",")]);
 
-  const handleDismissAlert = () => {
-    if (user) {
-      const sessionKey = `phone_alert_dismissed_${user.id}`;
-      sessionStorage.setItem(sessionKey, JSON.stringify({ ids: unassignedIds }));
-    }
-    setShowPhoneNumberAlert(false);
-  };
-
-  const { data: deletedCampaigns = [], isLoading: deletedLoading } = useQuery<Campaign[]>({
-    queryKey: ["/api/campaigns/deleted"],
-  });
+  useEffect(() => {
+    setPageMeta({
+      title: "Campaigns",
+      subtitle: "Create and manage your WhatsApp and automated calling campaigns.",
+    });
+    return () => setPageMeta(null);
+  }, [setPageMeta]);
 
   const restoreMutation = useMutation({
     mutationFn: async (campaignId: string) => {
@@ -200,349 +302,429 @@ export default function Campaigns() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/campaigns"] });
       queryClient.invalidateQueries({ queryKey: ["/api/campaigns/deleted"] });
-      toast({ title: t('campaigns.restoredSuccess') });
+      toast({ title: "Campaign restored" });
       setRestoringCampaignId(null);
     },
     onError: (error: any) => {
       toast({
-        title: t('campaigns.restoreFailed'),
-        description: error.message || t('common.tryAgain'),
+        title: "Failed to restore campaign",
+        description: error.message || "Please try again",
         variant: "destructive",
       });
       setRestoringCampaignId(null);
     },
   });
 
-  const filteredCampaigns = campaigns.filter((campaign) => {
-    const matchesSearch = campaign.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === "all" || campaign.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const waRows = useMemo<Row[]>(() => waCampaigns.map((campaign) => ({
+    id: campaign.id,
+    name: campaign.name || "Untitled campaign",
+    tag: campaign.templateName || "WhatsApp",
+    audience: campaign.recipientCount || campaign.totalRecipients || 0,
+    template: campaign.templateName || "—",
+    schedule: parseDate(campaign.scheduledAt)
+      ? format(parseDate(campaign.scheduledAt) as Date, "MMM d, yyyy")
+      : "Immediate",
+    status: formatStatus((campaign.status || "draft").toLowerCase()),
+    sent: campaign.sentCount || 0,
+    delivered: campaign.deliveredCount || 0,
+    failed: campaign.failedCount || 0,
+    createdAt: parseDate(campaign.createdAt),
+    createdBy: campaign.createdBy || "All",
+    channel: "whatsapp",
+  })), [waCampaigns]);
 
-  const filteredDeletedCampaigns = deletedCampaigns.filter((campaign) => {
-    const matchesSearch = campaign.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
-  });
+  const voiceRows = useMemo<Row[]>(() => {
+    const active = voiceCampaigns.map((campaign) => ({
+      id: campaign.id,
+      name: campaign.name,
+      tag: campaign.type || "Calling",
+      audience: campaign.totalContacts || 0,
+      template: campaign.type || "Voice script",
+      schedule: parseDate(campaign.scheduledFor)
+        ? format(parseDate(campaign.scheduledFor) as Date, "MMM d, yyyy")
+        : "Immediate",
+      status: formatStatus(campaign.status),
+      sent: campaign.completedCalls || 0,
+      delivered: campaign.successfulCalls || 0,
+      failed: campaign.failedCalls || 0,
+      createdAt: parseDate(campaign.createdAt),
+      createdBy: "All",
+      channel: "calling" as const,
+      rawVoice: campaign,
+    }));
+    const deleted = deletedCampaigns.map((campaign) => ({
+      id: campaign.id,
+      name: campaign.name,
+      tag: campaign.type || "Calling",
+      audience: campaign.totalContacts || 0,
+      template: campaign.type || "Voice script",
+      schedule: "—",
+      status: "Deleted" as const,
+      sent: campaign.completedCalls || 0,
+      delivered: campaign.successfulCalls || 0,
+      failed: campaign.failedCalls || 0,
+      createdAt: parseDate(campaign.createdAt),
+      createdBy: "All",
+      channel: "calling" as const,
+      rawVoice: campaign,
+    }));
+    return [...active, ...deleted];
+  }, [voiceCampaigns, deletedCampaigns]);
 
-  const activePagination = usePagination(filteredCampaigns, 9);
-  const deletedPagination = usePagination(filteredDeletedCampaigns, 9);
+  const rows = tab === "whatsapp" ? waRows : voiceRows;
+  const createdByOptions = Array.from(new Set(waRows.map((row) => row.createdBy).filter((value) => value && value !== "All")));
+  const templateOptions = tab === "whatsapp"
+    ? Array.from(new Set(waRows.map((row) => row.template).filter((value) => value && value !== "—")))
+    : Array.from(new Set(voiceRows.map((row) => row.template).filter(Boolean)));
 
-  const activeCount = campaigns.filter(c => c.status === 'in_progress').length;
-  const completedCount = campaigns.filter(c => c.status === 'completed').length;
-  const pendingCount = campaigns.filter(c => c.status === 'pending' || c.status === 'scheduled').length;
-  const deletedCount = deletedCampaigns.length;
+  const filteredRows = useMemo(() => {
+    const query = tableSearch.trim().toLowerCase();
+    const now = new Date();
+    return rows.filter((row) => {
+      const matchesSearch = !query || row.name.toLowerCase().includes(query) || row.template.toLowerCase().includes(query);
+      const matchesStatus = statusFilter === "all" || row.status.toLowerCase() === statusFilter;
+      const matchesCreatedBy = createdByFilter === "all" || row.createdBy === createdByFilter;
+      const matchesTemplate = templateFilter === "all" || row.template === templateFilter;
+      const created = row.createdAt;
+      const matchesDate =
+        dateFilter === "all" ||
+        (created && dateFilter === "month" && isAfter(created, startOfMonth(now))) ||
+        (created && dateFilter === "30d" && isAfter(created, subDays(now, 30))) ||
+        (created && dateFilter === "year" && isAfter(created, startOfYear(now)));
+      return matchesSearch && matchesStatus && matchesCreatedBy && matchesTemplate && matchesDate;
+    });
+  }, [rows, tableSearch, statusFilter, createdByFilter, templateFilter, dateFilter]);
+
+  const {
+    currentPage,
+    totalPages,
+    totalItems,
+    itemsPerPage,
+    paginatedItems,
+    handlePageChange,
+    handleItemsPerPageChange,
+  } = usePagination(filteredRows, 5);
+
+  useEffect(() => {
+    handlePageChange(1);
+  }, [tab, tableSearch, statusFilter, dateFilter, createdByFilter, templateFilter]);
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setStatusFilter("all");
+    setDateFilter("all");
+    setCreatedByFilter("all");
+    setTemplateFilter("all");
+  };
+
+  const hasFilters = Boolean(tableSearch) || statusFilter !== "all" || dateFilter !== "all" || createdByFilter !== "all" || templateFilter !== "all";
+  const activeRuns =
+    voiceCampaigns.filter((c) => c.status === "in_progress").length +
+    waCampaigns.filter((c) => ["active", "sending"].includes(c.status || "")).length;
+  const startItem = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+  const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+  const isLoading = tab === "whatsapp" ? waLoading : voiceLoading;
+
+  const visiblePages = useMemo(() => {
+    const pages: Array<number | "ellipsis"> = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i += 1) pages.push(i);
+      return pages;
+    }
+    pages.push(1);
+    if (currentPage > 3) pages.push("ellipsis");
+    const start = Math.max(2, currentPage - 1);
+    const end = Math.min(totalPages - 1, currentPage + 1);
+    for (let i = start; i <= end; i += 1) pages.push(i);
+    if (currentPage < totalPages - 2) pages.push("ellipsis");
+    pages.push(totalPages);
+    return pages;
+  }, [currentPage, totalPages]);
+
+  const openRow = (row: Row) => {
+    if (row.channel === "whatsapp") {
+      setLocation(`/whatsapp/analytics/campaign/${row.id}`);
+      return;
+    }
+    if (row.status === "Deleted") return;
+    setLocation(`/campaigns/${row.id}`);
+  };
+
+  const filterTriggerClass = "h-10 w-full sm:w-[160px] bg-white border-slate-200";
 
   return (
-    <div className="space-y-6">
-      <OmniPageHero
-        section="campaigns"
-        title={t('campaigns.title')}
-        description={t('campaigns.description')}
-        icon={Target}
-        theme="orange"
-        actions={
-          <>
-            {isDemoMode && (
+    <div className="space-y-5 pb-8">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-[13px] text-slate-400">
+          <Link href="/dashboard" className="hover:text-slate-600">Dashboard</Link>
+          <span>&gt;</span>
+          <span className="text-slate-600">Campaigns</span>
+          </div>
               <Button
-                variant="outline"
-                onClick={() => setIsVideoOpen(true)}
-                className="bg-white/80 dark:bg-white/10 hover:bg-white text-orange-900 dark:text-orange-100 border-orange-200 dark:border-orange-800 font-semibold shadow"
-                data-testid="button-watch-demo-campaigns"
-              >
-                <Video className="h-4 w-4 mr-2 text-orange-600 dark:text-orange-400" />
-                <span>Watch Demo Video</span>
-              </Button>
-            )}
-            <Button 
-              onClick={() => setCreateDialogOpen(true)} 
-              className="bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-lg"
+          onClick={() => setLocation("/campaigns/new")}
+          className="h-10 bg-[#007BFF] hover:bg-[#0069d9] text-white border-transparent"
               data-testid="button-create-campaign"
             >
               <Plus className="h-4 w-4 mr-2" />
-              {t('campaigns.createNew')}
+          Create Campaign
             </Button>
-          </>
-        }
-      >
-        <div className="relative mt-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          {/* Total Campaigns Card */}
-          <div className="bg-white/70 dark:bg-zinc-900/60 backdrop-blur-md rounded-xl p-6 border border-orange-100/60 dark:border-orange-900/30 hover-elevate transition-all shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-orange-600/70 dark:text-orange-400/70 text-xs font-semibold uppercase tracking-wider">{t('campaigns.totalCampaigns')}</span>
-              <div className="h-8 w-8 rounded-lg bg-orange-100 dark:bg-orange-950/40 flex items-center justify-center text-orange-600 dark:text-orange-400">
-                <Target className="h-4 w-4" />
-              </div>
-            </div>
-            <div className="text-3xl font-extrabold text-orange-700 dark:text-orange-300 mb-2">{campaigns.length}</div>
-            <div className="w-full bg-orange-100/50 dark:bg-orange-950/20 h-1.5 rounded-full overflow-hidden">
-              <div className="bg-gradient-to-r from-orange-500 to-amber-500 h-full rounded-full" style={{ width: '100%' }} />
-            </div>
           </div>
 
-          {/* Active Campaigns Card */}
-          <div className="bg-white/70 dark:bg-zinc-900/60 backdrop-blur-md rounded-xl p-6 border border-emerald-100/60 dark:border-emerald-900/30 hover-elevate transition-all shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-emerald-600/70 dark:text-emerald-400/70 text-xs font-semibold uppercase tracking-wider">{t('campaigns.status.active')}</span>
-              <div className="h-8 w-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-                <Play className="h-4 w-4" />
-              </div>
-            </div>
-            <div className="text-3xl font-extrabold text-emerald-700 dark:text-emerald-300 mb-2">{activeCount}</div>
-            <div className="w-full bg-emerald-100/50 dark:bg-emerald-950/25 h-1.5 rounded-full overflow-hidden">
-              <div 
-                className="bg-emerald-500 h-full rounded-full transition-all duration-500" 
-                style={{ width: `${campaigns.length > 0 ? (activeCount / campaigns.length) * 100 : 0}%` }} 
-              />
-            </div>
-          </div>
-
-          {/* Completed Campaigns Card */}
-          <div className="bg-white/70 dark:bg-zinc-900/60 backdrop-blur-md rounded-xl p-6 border border-blue-100/60 dark:border-blue-900/30 hover-elevate transition-all shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-blue-600/70 dark:text-blue-400/70 text-xs font-semibold uppercase tracking-wider">{t('campaigns.status.completed')}</span>
-              <div className="h-8 w-8 rounded-lg bg-blue-100 dark:bg-blue-950/40 flex items-center justify-center text-blue-600 dark:text-blue-400">
-                <CheckCircle2 className="h-4 w-4" />
-              </div>
-            </div>
-            <div className="text-3xl font-extrabold text-blue-700 dark:text-blue-300 mb-2">{completedCount}</div>
-            <div className="w-full bg-blue-100/50 dark:bg-blue-950/25 h-1.5 rounded-full overflow-hidden">
-              <div 
-                className="bg-blue-500 h-full rounded-full transition-all duration-500" 
-                style={{ width: `${campaigns.length > 0 ? (completedCount / campaigns.length) * 100 : 0}%` }} 
-              />
-            </div>
-          </div>
-
-          {/* Pending Campaigns Card */}
-          <div className="bg-white/70 dark:bg-zinc-900/60 backdrop-blur-md rounded-xl p-6 border border-amber-100/60 dark:border-amber-900/30 hover-elevate transition-all shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-amber-600/70 dark:text-amber-400/70 text-xs font-semibold uppercase tracking-wider">{t('campaigns.status.pending')}</span>
-              <div className="h-8 w-8 rounded-lg bg-amber-100 dark:bg-amber-950/40 flex items-center justify-center text-amber-600 dark:text-amber-400">
-                <Clock className="h-4 w-4" />
-              </div>
-            </div>
-            <div className="text-3xl font-extrabold text-amber-700 dark:text-amber-300 mb-2">{pendingCount}</div>
-            <div className="w-full bg-amber-100/50 dark:bg-amber-950/25 h-1.5 rounded-full overflow-hidden">
-              <div 
-                className="bg-amber-500 h-full rounded-full transition-all duration-500" 
-                style={{ width: `${campaigns.length > 0 ? (pendingCount / campaigns.length) * 100 : 0}%` }} 
-              />
-            </div>
-          </div>
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 border-t border-b border-slate-200 pt-3">
+        <div className="flex items-center gap-8">
+          <button
+            type="button"
+            onClick={() => setTab("whatsapp")}
+            className={`flex items-center gap-2 pb-3 text-sm font-medium border-b-2 -mb-px ${
+              tab === "whatsapp" ? "border-[#007BFF] text-[#007BFF]" : "border-transparent text-slate-500"
+            }`}
+          >
+            <MessageCircle className="h-4 w-4" />
+            WhatsApp Campaigns
+            <span className={`rounded-md min-w-6 h-6 px-1.5 flex items-center justify-center text-[11px] font-semibold ${tab === "whatsapp" ? "bg-blue-50 text-[#007BFF]" : "bg-slate-100 text-slate-500"}`}>
+              {waRows.length}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("calling")}
+            className={`flex items-center gap-2 pb-3 text-sm font-medium border-b-2 -mb-px ${
+              tab === "calling" ? "border-[#007BFF] text-[#007BFF]" : "border-transparent text-slate-500"
+            }`}
+          >
+            <Phone className="h-4 w-4" />
+            Auto Calling Campaigns
+            <span className={`rounded-md min-w-6 h-6 px-1.5 flex items-center justify-center text-[11px] font-semibold ${tab === "calling" ? "bg-blue-50 text-[#007BFF]" : "bg-slate-100 text-slate-500"}`}>
+              {voiceCampaigns.length}
+            </span>
+          </button>
         </div>
-      </OmniPageHero>
+        <div className="flex items-center gap-2 text-sm text-slate-500 pb-3">
+          <span className="h-2 w-2 rounded-md bg-emerald-500" />
+          {activeRuns} Active Dispatch Run{activeRuns === 1 ? "" : "s"}
+        </div>
+      </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <TabsList>
-            <TabsTrigger value="active" data-testid="tab-active-campaigns">
-              {t('campaigns.activeCampaigns')} ({campaigns.length})
-            </TabsTrigger>
-            <TabsTrigger value="deleted" data-testid="tab-deleted-campaigns">
-              <Trash2 className="h-4 w-4 mr-1" />
-              {t('campaigns.deletedCampaigns')} ({deletedCount})
-            </TabsTrigger>
-          </TabsList>
-          
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto sm:flex-1 sm:justify-end">
-            <div className="relative w-full sm:w-auto sm:min-w-[250px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5">
+        <div className="flex flex-col xl:flex-row xl:items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 flex-1 min-w-0">
+            <div className="relative w-full sm:w-[280px] shrink-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
-                placeholder={t('campaigns.searchPlaceholder')}
-                className="pl-9"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search Campaign by name..."
+                className="h-10 pl-9 bg-white border-slate-200"
                 data-testid="input-search-campaigns"
               />
             </div>
-            {activeTab === "active" && (
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full sm:w-[180px]" data-testid="select-filter-status">
-                  <SelectValue placeholder={t('campaigns.filterByStatus')} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t('campaigns.allStatus')}</SelectItem>
-                  <SelectItem value="pending">{t('campaigns.status.pending')}</SelectItem>
-                  <SelectItem value="in_progress">{t('campaigns.status.active')}</SelectItem>
-                  <SelectItem value="completed">{t('campaigns.status.completed')}</SelectItem>
-                  <SelectItem value="scheduled">{t('campaigns.status.scheduled')}</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
+              <SelectTrigger className={filterTriggerClass}>
+                <SelectValue placeholder="Status: All" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Status: All</SelectItem>
+                <SelectItem value="ongoing">Ongoing</SelectItem>
+                <SelectItem value="scheduled">Scheduled</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="paused">Paused</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
+                {tab === "calling" && <SelectItem value="deleted">Deleted</SelectItem>}
+              </SelectContent>
+            </Select>
+            <Select value={dateFilter} onValueChange={setDateFilter}>
+              <SelectTrigger className={`${filterTriggerClass} sm:w-[150px]`}>
+                <SelectValue placeholder="Date: All Time" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Date: All Time</SelectItem>
+                <SelectItem value="month">This month</SelectItem>
+                <SelectItem value="30d">Last 30 days</SelectItem>
+                <SelectItem value="year">This year</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={createdByFilter} onValueChange={setCreatedByFilter}>
+              <SelectTrigger className={`${filterTriggerClass} sm:w-[170px]`}>
+                <SelectValue placeholder="Created By: All" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Created By: All</SelectItem>
+                {createdByOptions.map((value) => (
+                  <SelectItem key={value} value={value}>{value}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={templateFilter} onValueChange={setTemplateFilter}>
+              <SelectTrigger className={`${filterTriggerClass} sm:w-[200px]`}>
+                <SelectValue placeholder="Template: All Templates" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Template: All Templates</SelectItem>
+                {templateOptions.map((value) => (
+                  <SelectItem key={value} value={value}>{value}</SelectItem>
+                ))}
+                {waTemplates.filter((tpl) => tpl.name && !templateOptions.includes(tpl.name)).map((tpl) => (
+                  <SelectItem key={tpl.id} value={tpl.name || tpl.id}>{tpl.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 whitespace-nowrap shrink-0"
+          >
+            <RotateCw className="h-3.5 w-3.5" />
+            Clear Filters
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent border-slate-100">
+                <TableHead className="text-[11px] font-semibold tracking-wider text-slate-400 whitespace-nowrap pl-5">CAMPAIGN NAME</TableHead>
+                <TableHead className="text-[11px] font-semibold tracking-wider text-slate-400 whitespace-nowrap">AUDIENCE / USERS</TableHead>
+                <TableHead className="text-[11px] font-semibold tracking-wider text-slate-400 whitespace-nowrap">MESSAGE TEMPLATE</TableHead>
+                <TableHead className="text-[11px] font-semibold tracking-wider text-slate-400 whitespace-nowrap">SCHEDULE</TableHead>
+                <TableHead className="text-[11px] font-semibold tracking-wider text-slate-400 whitespace-nowrap">STATUS</TableHead>
+                <TableHead className="text-[11px] font-semibold tracking-wider text-slate-400 whitespace-nowrap">SENT</TableHead>
+                <TableHead className="text-[11px] font-semibold tracking-wider text-slate-400 whitespace-nowrap">DELIVERED</TableHead>
+                <TableHead className="text-[11px] font-semibold tracking-wider text-slate-400 whitespace-nowrap">FAILED</TableHead>
+                <TableHead className="text-[11px] font-semibold tracking-wider text-slate-400 whitespace-nowrap">CREATED DATE</TableHead>
+                <TableHead className="text-[11px] font-semibold tracking-wider text-slate-400 whitespace-nowrap text-right pr-5">ACTIONS</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={10} className="text-center text-slate-400 py-16">Loading campaigns...</TableCell>
+                </TableRow>
+              ) : paginatedItems.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={10} className="text-center text-slate-400 py-16">
+                    {hasFilters ? "No campaigns match your filters." : "No campaigns yet. Create a campaign to get started."}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                paginatedItems.map((row) => (
+                  <TableRow key={`${row.channel}-${row.id}`} className="border-slate-100">
+                    <TableCell className="pl-5">
+                      <div className="flex items-center gap-3 min-w-[180px]">
+                        <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${row.channel === "whatsapp" ? "bg-emerald-50 text-emerald-600" : "bg-violet-50 text-violet-600"}`}>
+                          {row.channel === "whatsapp" ? <MessageCircle className="h-4 w-4" /> : <Phone className="h-4 w-4" />}
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">{row.name}</p>
+                          <span className={`inline-flex mt-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${tagClass(row.tag)}`}>{row.tag}</span>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm text-slate-700">{row.audience.toLocaleString()}</TableCell>
+                    <TableCell className="text-sm text-slate-700">{row.template}</TableCell>
+                    <TableCell className="text-sm text-slate-500 whitespace-nowrap">{row.schedule}</TableCell>
+                    <TableCell>
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ${statusClass(row.status)}`}>
+                        <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                        {row.status}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-sm text-slate-700">{row.sent.toLocaleString()}</TableCell>
+                    <TableCell className="text-sm text-emerald-600">{row.delivered.toLocaleString()}</TableCell>
+                    <TableCell className="text-sm text-red-500">{row.failed.toLocaleString()}</TableCell>
+                    <TableCell className="text-sm text-slate-500 whitespace-nowrap">
+                      {row.createdAt ? format(row.createdAt, "MMM d, yyyy") : "—"}
+                    </TableCell>
+                    <TableCell className="text-right pr-5">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {row.status !== "Deleted" && (
+                            <DropdownMenuItem onClick={() => openRow(row)}>
+                              <Eye className="mr-2 h-4 w-4" />
+                              View
+                            </DropdownMenuItem>
+                          )}
+                          {row.rawVoice && row.status !== "Deleted" && (
+                            <DropdownMenuItem onClick={() => setEditingCampaign(row.rawVoice!)}>
+                              <Pencil className="mr-2 h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
+                          )}
+                          {row.rawVoice && row.status === "Deleted" && (
+                            <DropdownMenuItem
+                              onClick={() => restoreMutation.mutate(row.id)}
+                              disabled={restoringCampaignId === row.id}
+                            >
+                              <RotateCcw className="mr-2 h-4 w-4" />
+                              {restoringCampaignId === row.id ? "Restoring..." : "Restore"}
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </div>
 
-        <TabsContent value="active" className="space-y-4">
-          {isLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[1, 2, 3].map((i) => (
-                <Card key={i} className="p-6 animate-pulse">
-                  <div className="h-6 bg-muted rounded w-3/4 mb-4" />
-                  <div className="h-4 bg-muted rounded w-full mb-2" />
-                  <div className="h-4 bg-muted rounded w-2/3" />
-                </Card>
-              ))}
+        {totalItems > 0 && (
+          <div className="flex flex-col lg:flex-row items-center justify-between gap-3 px-5 py-4 border-t border-slate-100">
+            <p className="text-sm text-slate-400">
+              Showing {startItem}-{endItem} of {totalItems} campaigns
+            </p>
+            <div className="flex items-center gap-2 text-sm text-slate-500">
+              <span>Per page:</span>
+              <Select value={String(itemsPerPage)} onValueChange={(value) => handleItemsPerPageChange(Number(value))}>
+                <SelectTrigger className="h-8 w-[70px] bg-white border-slate-200">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[5, 10, 25].map((option) => (
+                    <SelectItem key={option} value={String(option)}>{option}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          ) : campaigns.length === 0 ? (
-            <div className="relative overflow-hidden rounded-2xl border border-dashed border-muted-foreground/25 p-12 text-center">
-              <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 via-transparent to-amber-500/5" />
-              <div className="relative">
-                <div className="h-16 w-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-orange-500/20 to-amber-500/20 flex items-center justify-center">
-                  <Target className="h-8 w-8 text-orange-600 dark:text-orange-400" />
-                </div>
-                <h3 className="text-xl font-semibold mb-2">{t('campaigns.noActiveCampaigns')}</h3>
-                <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                  {t('campaigns.getStartedCreate')}
-                </p>
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="sm" className="h-8 bg-white border-slate-200" onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1}>
+                <ChevronLeft className="h-4 w-4 mr-1" />
+                Previous
+              </Button>
+              {visiblePages.map((page, index) =>
+                page === "ellipsis" ? (
+                  <span key={`ellipsis-${index}`} className="px-2 text-slate-400">...</span>
+                ) : (
                 <Button 
-                  onClick={() => setCreateDialogOpen(true)}
-                  className="bg-gradient-to-r from-orange-600 to-amber-600 text-white"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  {t('campaigns.createFirstCampaign')}
+                    key={page}
+                    size="sm"
+                    variant={currentPage === page ? "default" : "outline"}
+                    className={currentPage === page
+                      ? "h-8 w-8 bg-[#007BFF] hover:bg-[#0069d9] text-white border-transparent"
+                      : "h-8 w-8 bg-white border-slate-200"}
+                    onClick={() => handlePageChange(page)}
+                  >
+                    {page}
+                  </Button>
+                )
+              )}
+              <Button variant="outline" size="sm" className="h-8 bg-white border-slate-200" onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === totalPages}>
+                Next
+                <ChevronRight className="h-4 w-4 ml-1" />
                 </Button>
               </div>
             </div>
-          ) : filteredCampaigns.length === 0 ? (
-            <div className="relative overflow-hidden rounded-2xl border border-dashed border-muted-foreground/25 p-12 text-center">
-              <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 via-transparent to-amber-500/5" />
-              <div className="relative">
-                <p className="text-muted-foreground">{t('campaigns.noMatchingCampaigns')}</p>
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {activePagination.paginatedItems.map((campaign) => {
-                  const successRate = campaign.completedCalls > 0 
-                    ? ((campaign.successfulCalls / campaign.completedCalls) * 100).toFixed(1)
-                    : undefined;
-                  
-                  return (
-                    <CampaignCard
-                      key={campaign.id}
-                      id={campaign.id}
-                      name={campaign.name}
-                      type={campaign.type}
-                      status={campaign.status as Status}
-                      totalContacts={campaign.totalContacts}
-                      completedCalls={campaign.completedCalls}
-                      successRate={successRate ? parseFloat(successRate) : undefined}
-                      errorMessage={campaign.errorMessage}
-                      errorCode={campaign.errorCode}
-                      retryEnabled={campaign.retryEnabled}
-                      currentRetryPass={campaign.currentRetryPass}
-                      retryMaxAttempts={campaign.retryMaxAttempts}
-                      onView={() => setLocation(`/app/campaigns/${campaign.id}`)}
-                      onEdit={() => setEditingCampaign(campaign)}
-                    />
-                  );
-                })}
-              </div>
-              <DataPagination
-                currentPage={activePagination.currentPage}
-                totalPages={activePagination.totalPages}
-                totalItems={activePagination.totalItems}
-                itemsPerPage={activePagination.itemsPerPage}
-                onPageChange={activePagination.handlePageChange}
-                onItemsPerPageChange={activePagination.handleItemsPerPageChange}
-                itemsPerPageOptions={[9, 18, 27]}
-                data-testid="pagination-active-campaigns"
-              />
-            </>
-          )}
-        </TabsContent>
-
-        <TabsContent value="deleted" className="space-y-4">
-          {deletedLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[1, 2, 3].map((i) => (
-                <Card key={i} className="p-6 animate-pulse">
-                  <div className="h-6 bg-muted rounded w-3/4 mb-4" />
-                  <div className="h-4 bg-muted rounded w-full mb-2" />
-                  <div className="h-4 bg-muted rounded w-2/3" />
-                </Card>
-              ))}
-            </div>
-          ) : deletedCampaigns.length === 0 ? (
-            <div className="relative overflow-hidden rounded-2xl border border-dashed border-muted-foreground/25 p-12 text-center">
-              <div className="absolute inset-0 bg-gradient-to-br from-gray-500/5 via-transparent to-gray-500/5" />
-              <div className="relative">
-                <div className="h-16 w-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-gray-500/20 to-gray-500/20 flex items-center justify-center">
-                  <Trash2 className="h-8 w-8 text-muted-foreground" />
-                </div>
-                <h3 className="text-xl font-semibold mb-2">{t('campaigns.noDeletedCampaigns')}</h3>
-                <p className="text-muted-foreground max-w-md mx-auto">
-                  {t('campaigns.permanentlyRemoved')}
-                </p>
-              </div>
-            </div>
-          ) : filteredDeletedCampaigns.length === 0 ? (
-            <div className="relative overflow-hidden rounded-2xl border border-dashed border-muted-foreground/25 p-12 text-center">
-              <div className="absolute inset-0 bg-gradient-to-br from-gray-500/5 via-transparent to-gray-500/5" />
-              <div className="relative">
-                <p className="text-muted-foreground">{t('campaigns.noMatchingDeleted')}</p>
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {deletedPagination.paginatedItems.map((campaign) => (
-                  <Card key={campaign.id} className="p-6 relative overflow-hidden opacity-75 hover:opacity-100 transition-opacity" data-testid={`card-deleted-campaign-${campaign.id}`}>
-                    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-gray-400 via-gray-500 to-gray-400" />
-                    
-                    <div className="flex items-start justify-between gap-3 mb-4">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-lg font-semibold text-foreground truncate mb-1" data-testid="text-deleted-campaign-name">
-                          {campaign.name}
-                        </h3>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm text-muted-foreground font-medium">{campaign.type}</span>
-                          <span className="text-muted-foreground">•</span>
-                          <span className="text-sm text-destructive">{t('campaigns.status.deleted')}</span>
-                        </div>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => restoreMutation.mutate(campaign.id)}
-                        disabled={restoringCampaignId === campaign.id}
-                        data-testid={`button-restore-campaign-${campaign.id}`}
-                      >
-                        <RotateCcw className={`h-4 w-4 mr-1 ${restoringCampaignId === campaign.id ? 'animate-spin' : ''}`} />
-                        {restoringCampaignId === campaign.id ? t('campaigns.restoring') : t('campaigns.actions.restore')}
-                      </Button>
+        )}
                     </div>
 
-                    <div className="space-y-2 text-sm text-muted-foreground">
-                      <div className="flex justify-between gap-2">
-                        <span>{t('campaigns.details.totalContacts')}</span>
-                        <span className="font-medium">{campaign.totalContacts}</span>
-                      </div>
-                      <div className="flex justify-between gap-2">
-                        <span>{t('campaigns.completedCalls')}</span>
-                        <span className="font-medium">{campaign.completedCalls}</span>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-              <DataPagination
-                currentPage={deletedPagination.currentPage}
-                totalPages={deletedPagination.totalPages}
-                totalItems={deletedPagination.totalItems}
-                itemsPerPage={deletedPagination.itemsPerPage}
-                onPageChange={deletedPagination.handlePageChange}
-                onItemsPerPageChange={deletedPagination.handleItemsPerPageChange}
-                itemsPerPageOptions={[9, 18, 27]}
-                data-testid="pagination-deleted-campaigns"
-              />
-            </>
-          )}
-        </TabsContent>
-      </Tabs>
-
-      <CreateCampaignDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} />
       <EditCampaignDialog 
         campaign={editingCampaign as any} 
         open={!!editingCampaign} 
@@ -555,59 +737,34 @@ export default function Campaigns() {
       />
 
       <AlertDialog open={showPhoneNumberAlert} onOpenChange={setShowPhoneNumberAlert}>
-        <AlertDialogContent data-testid="dialog-phone-number-required">
+        <AlertDialogContent>
           <AlertDialogHeader>
             <div className="flex items-center gap-3 mb-2">
-              <div className="h-12 w-12 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                <AlertTriangle className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+              <div className="h-12 w-12 rounded-full bg-amber-100 flex items-center justify-center">
+                <AlertTriangle className="h-6 w-6 text-amber-600" />
               </div>
-              <AlertDialogTitle className="text-xl">
-                {t('campaigns.phoneNumberRequired', 'Phone Number Required')}
-              </AlertDialogTitle>
+              <AlertDialogTitle className="text-xl">Phone Number Required</AlertDialogTitle>
             </div>
             <AlertDialogDescription className="text-base">
-              {t('campaigns.proUserPhoneNumberMessage', 
-                `You have ${campaignsWithoutPhoneNumber.length} campaign(s) that need a phone number assigned. As a Pro user, you need to use your own phone number for campaigns.`
-              ).replace('${count}', String(campaignsWithoutPhoneNumber.length))}
+              You have {campaignsWithoutPhoneNumber.length} campaign(s) that need a phone number assigned.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          
-          {campaignsWithoutPhoneNumber.length > 0 && (
-            <div className="my-4 max-h-32 overflow-y-auto">
-              <p className="text-sm text-muted-foreground mb-2">{t('campaigns.affectedCampaigns', 'Affected campaigns:')}</p>
-              <ul className="space-y-1">
-                {campaignsWithoutPhoneNumber.slice(0, 5).map(campaign => (
-                  <li key={campaign.id} className="text-sm flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                    {campaign.name}
-                  </li>
-                ))}
-                {campaignsWithoutPhoneNumber.length > 5 && (
-                  <li className="text-sm text-muted-foreground">
-                    {t('campaigns.andMoreCampaigns', `...and ${campaignsWithoutPhoneNumber.length - 5} more`).replace('${count}', String(campaignsWithoutPhoneNumber.length - 5))}
-                  </li>
-                )}
-              </ul>
-            </div>
-          )}
-
           <AlertDialogFooter>
-            <AlertDialogCancel 
-              onClick={handleDismissAlert}
-              data-testid="button-dismiss-phone-alert"
-            >
-              {t('common.remindLater', 'Remind Me Later')}
+            <AlertDialogCancel onClick={() => {
+              if (user) sessionStorage.setItem(`phone_alert_dismissed_${user.id}`, JSON.stringify({ ids: unassignedIds }));
+              setShowPhoneNumberAlert(false);
+            }}>
+              Remind Me Later
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 setShowPhoneNumberAlert(false);
-                setLocation('/app/phone-numbers');
+                setLocation("/phone-numbers");
               }}
-              className="bg-gradient-to-r from-orange-600 to-amber-600 text-white"
-              data-testid="button-get-phone-number"
+              className="bg-[#007BFF] hover:bg-[#0069d9] text-white border-transparent"
             >
               <Phone className="h-4 w-4 mr-2" />
-              {t('campaigns.getPhoneNumber', 'Get Phone Number')}
+              Get Phone Number
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -615,7 +772,7 @@ export default function Campaigns() {
 
       {isDemoMode && (
         <Dialog open={isVideoOpen} onOpenChange={setIsVideoOpen}>
-          <DialogContent className="sm:max-w-[850px] p-2 bg-slate-950 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+          <DialogContent className="sm:max-w-[850px] p-2 bg-slate-950 border border-slate-800 rounded-2xl">
             <DialogHeader className="p-4 pb-2 text-left">
               <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
                 <Play className="h-5 w-5 text-orange-400 fill-orange-400" />
@@ -625,26 +782,16 @@ export default function Campaigns() {
                 Watch a full walkthrough on creating and managing calling campaigns.
               </DialogDescription>
             </DialogHeader>
-            <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-black border border-slate-800">
+            <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-black">
               {isVideoOpen && (
                 <iframe
                   src="https://drive.google.com/file/d/18y1tCpdZkJ5Dpe9f262lVzP2KurVFvwW/preview"
                   className="w-full h-full border-0"
-                  allow="autoplay; encrypted-media; picture-in-picture"
+                  allow="autoplay; encrypted-media"
                   allowFullScreen
                   title="Campaigns Demo Video"
                 />
               )}
-            </div>
-            <div className="p-3 pt-2 text-right">
-              <a
-                href="https://drive.google.com/file/d/18y1tCpdZkJ5Dpe9f262lVzP2KurVFvwW/view?usp=drive_link"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-orange-400 hover:underline inline-flex items-center gap-1 font-medium"
-              >
-                Open in Google Drive &rarr;
-              </a>
             </div>
           </DialogContent>
         </Dialog>

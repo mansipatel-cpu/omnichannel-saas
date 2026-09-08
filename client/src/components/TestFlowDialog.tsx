@@ -481,7 +481,7 @@ export function TestFlowDialog({ open, onOpenChange, flowId, flowName }: TestFlo
                                 <Separator className="bg-green-200/50 dark:bg-green-800/50" />
 
                                 <div className="grid grid-cols-1 gap-2">
-                                  <Link href={`/app/calls/${testCallId}`}>
+                                  <Link href={`/calls/${testCallId}`}>
                                     <a className="flex items-center justify-between p-2.5 rounded-md bg-white/40 dark:bg-black/20 hover:bg-white/80 dark:hover:bg-black/40 border border-green-100/30 dark:border-green-900/20 transition-colors group">
                                       <div className="flex items-center gap-2">
                                         <FileText className="w-4 h-4 text-green-600 dark:text-green-400" />
@@ -491,7 +491,7 @@ export function TestFlowDialog({ open, onOpenChange, flowId, flowName }: TestFlo
                                     </a>
                                   </Link>
 
-                                  <Link href={`/app/flows?tab=execution&callId=${testCallId}`}>
+                                  <Link href={`/flows?tab=execution&callId=${testCallId}`}>
                                     <a className="flex items-center justify-between p-2.5 rounded-md bg-white/40 dark:bg-black/20 hover:bg-white/80 dark:hover:bg-black/40 border border-green-100/30 dark:border-green-900/20 transition-colors group">
                                       <div className="flex items-center gap-2">
                                         <Layout className="w-4 h-4 text-green-600 dark:text-green-400" />

@@ -422,7 +422,7 @@ export default function PaymentResult() {
                 <Button
                   variant="default"
                   className="w-full bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800"
-                  onClick={() => navigate("/app/billing")}
+                  onClick={() => navigate("/billing")}
                   data-testid="button-try-again"
                 >
                   <RefreshCw className="h-4 w-4 mr-2" />
@@ -432,7 +432,7 @@ export default function PaymentResult() {
               <Button
                 variant={status === "failure" ? "outline" : "default"}
                 className={status !== "failure" ? "w-full bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800" : "w-full"}
-                onClick={() => navigate("/app/billing")}
+                onClick={() => navigate("/billing")}
                 data-testid="button-return-billing"
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />

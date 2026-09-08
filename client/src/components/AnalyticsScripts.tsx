@@ -17,6 +17,7 @@
 import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { isUserAppPath } from "@/lib/app-routes";
 import type { AnalyticsScript } from "@shared/schema";
 
 interface AnalyticsScriptsProps {
@@ -25,7 +26,7 @@ interface AnalyticsScriptsProps {
 
 // Check if a given path is an internal page (admin or user dashboard)
 function isInternalPath(path: string): boolean {
-  return path.startsWith('/admin') || path.startsWith('/app') || path === '/dashboard' || path.startsWith('/dashboard/');
+  return path.startsWith("/admin") || isUserAppPath(path);
 }
 
 // Storage key for persisting hidden script IDs across sessions

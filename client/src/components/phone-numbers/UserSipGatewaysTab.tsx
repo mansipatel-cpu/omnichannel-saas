@@ -1,7 +1,7 @@
 /**
  * UserSipGatewaysTab
  *
- * Shown as a tab in /app/phone-numbers.
+ * Shown as a tab in /phone-numbers.
  * Allows each user to manage their own SIP gateways (credentials)
  * and manually add custom phone numbers linked to those gateways.
  */

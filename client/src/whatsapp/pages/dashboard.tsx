@@ -606,7 +606,7 @@ export default function Dashboard() {
                   <Button
                     variant="outline"
                     className="p-4 h-auto text-left flex flex-col items-start space-y-2 hover:bg-green-50"
-                    onClick={() => setLocation("/templates")}
+                    onClick={() => setLocation("~/templates/new")}
                   >
                     <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center">
                       <FileText className="w-4 h-4 text-white" />

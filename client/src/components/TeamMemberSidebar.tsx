@@ -78,55 +78,55 @@ const USER_SECTION_ROUTES: Record<string, { url: string; icon: any; label: strin
     { url: "/dashboard", icon: Home, label: "Dashboard", group: "build", iconColor: "text-blue-500" },
   ],
   campaigns: [
-    { url: "/app/campaigns", icon: Target, label: "Campaigns", group: "build", iconColor: "text-orange-500" },
+    { url: "/campaigns", icon: Target, label: "Campaigns", group: "build", iconColor: "text-orange-500" },
   ],
   agents: [
-    { url: "/app/agents", icon: Bot, label: "Agents", group: "build", iconColor: "text-blue-500" },
-    { url: "/app/prompt-templates", icon: FileText, label: "Prompt Templates", group: "build", iconColor: "text-green-500" },
-    { url: "/app/voices", icon: Mic, label: "Voices", group: "build", iconColor: "text-pink-500" },
+    { url: "/agents", icon: Bot, label: "Agents", group: "build", iconColor: "text-blue-500" },
+    { url: "/templates", icon: FileText, label: "Templates", group: "build", iconColor: "text-green-500" },
+    { url: "/voices", icon: Mic, label: "Voices", group: "build", iconColor: "text-pink-500" },
   ],
   knowledge_base: [
-    { url: "/app/knowledge-base", icon: BookOpen, label: "Knowledge Base", group: "build", iconColor: "text-violet-500" },
+    { url: "/knowledge-base", icon: BookOpen, label: "Knowledge Base", group: "build", iconColor: "text-violet-500" },
   ],
   templates: [
-    { url: "/app/flows", icon: Workflow, label: "Flow Builder", group: "build", iconColor: "text-indigo-500" },
+    { url: "/flows", icon: Workflow, label: "Flow Builder", group: "build", iconColor: "text-indigo-500" },
   ],
   contacts: [
-    { url: "/app/contacts", icon: UserCheck, label: "All Contacts", group: "telephony", iconColor: "text-brand" },
+    { url: "/contacts", icon: UserCheck, label: "All Contacts", group: "telephony", iconColor: "text-brand" },
   ],
   crm: [
-    { url: "/app/crm", icon: ContactRound, label: "Quick CRM", group: "tools", iconColor: "text-cyan-500" },
+    { url: "/crm", icon: ContactRound, label: "Quick CRM", group: "tools", iconColor: "text-cyan-500" },
   ],
   calls: [
-    { url: "/app/calls", icon: Phone, label: "Calls", group: "monitor", iconColor: "text-blue-500" },
+    { url: "/calls", icon: Phone, label: "Calls", group: "monitor", iconColor: "text-blue-500" },
   ],
   messaging: [
-    { url: "/app/conversations", icon: MessageSquare, label: "Conversations", group: "monitor", iconColor: "text-green-500" },
+    { url: "/conversations", icon: MessageSquare, label: "Conversations", group: "monitor", iconColor: "text-green-500" },
   ],
   analytics: [
-    { url: "/app/analytics", icon: BarChart3, label: "Analytics", group: "monitor", iconColor: "text-purple-500" },
+    { url: "/analytics", icon: BarChart3, label: "Analytics", group: "monitor", iconColor: "text-purple-500" },
   ],
   website_widget: [
-    { url: "/app/tools/widgets", icon: Globe, label: "Website Widget", group: "tools", iconColor: "text-sky-500" },
+    { url: "/tools/widgets", icon: Globe, label: "Website Widget", group: "tools", iconColor: "text-sky-500" },
   ],
   webhooks: [
-    { url: "/app/flows/webhooks", icon: Webhook, label: "Webhooks", group: "tools", iconColor: "text-violet-500" },
+    { url: "/flows/webhooks", icon: Webhook, label: "Webhooks", group: "tools", iconColor: "text-violet-500" },
   ],
   phone_numbers: [
-    { url: "/app/phone-numbers", icon: Phone, label: "Phone Numbers", group: "telephony", iconColor: "text-emerald-500" },
-    { url: "/app/incoming-connections", icon: LinkIcon, label: "Incoming Connections", group: "telephony", iconColor: "text-amber-500" },
+    { url: "/phone-numbers", icon: Phone, label: "Phone Numbers", group: "telephony", iconColor: "text-emerald-500" },
+    { url: "/incoming-connections", icon: LinkIcon, label: "Incoming Connections", group: "telephony", iconColor: "text-amber-500" },
   ],
   billing: [
-    { url: "/app/billing", icon: CreditCard, label: "Billing & Credits", group: "billing", iconColor: "text-amber-500" },
+    { url: "/billing", icon: CreditCard, label: "Billing & Credits", group: "billing", iconColor: "text-amber-500" },
   ],
   api_keys: [
-    { url: "/app/api-keys", icon: Key, label: "API Keys", group: "settings", iconColor: "text-slate-500" },
+    { url: "/api-keys", icon: Key, label: "API Keys", group: "settings", iconColor: "text-slate-500" },
   ],
   settings: [
-    { url: "/app/settings", icon: Settings, label: "Settings", group: "settings" },
+    { url: "/settings", icon: Settings, label: "Settings", group: "settings" },
   ],
   team: [
-    { url: "/app/team", icon: Users, label: "Team Management", group: "settings" },
+    { url: "/team", icon: Users, label: "Team Management", group: "settings" },
   ],
 };
 
@@ -163,8 +163,8 @@ const ADMIN_SECTION_TABS: Record<string, { tabValue: string; icon: any; label: s
 };
 
 const FLOW_AUTOMATION_ROUTES = [
-  { url: "/app/flows/forms", icon: ClipboardList, label: "Forms", group: "tools", iconColor: "text-cyan-500" },
-  { url: "/app/flows/appointments", icon: Calendar, label: "Appointments", group: "tools", iconColor: "text-rose-500" },
+  { url: "/flows/forms", icon: ClipboardList, label: "Forms", group: "tools", iconColor: "text-cyan-500" },
+  { url: "/flows/appointments", icon: Calendar, label: "Appointments", group: "tools", iconColor: "text-rose-500" },
 ];
 
 export function TeamMemberSidebar() {
@@ -265,7 +265,7 @@ export function TeamMemberSidebar() {
 
     if (groups.tools.length > 0) {
       groups.build.push({
-        url: "/app/tools",
+        url: "/tools",
         icon: Wrench,
         label: t('nav.tools', 'Tools'),
         iconColor: "text-slate-500",
@@ -438,11 +438,11 @@ export function TeamMemberSidebar() {
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
-                    isActive={location === "/app/billing"}
+                    isActive={location === "/billing"}
                     tooltip={t('nav.billingCredits') || 'Billing & Credits'}
                     data-testid="link-billing-credits"
                   >
-                    <Link href="/app/billing" onClick={handleNavClick}>
+                    <Link href="/billing" onClick={handleNavClick}>
                       <CreditCard className="h-4 w-4 text-amber-500" />
                       <span>{t('nav.billingCredits') || 'Billing & Credits'}</span>
                     </Link>

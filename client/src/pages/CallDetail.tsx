@@ -246,7 +246,7 @@ export default function CallDetail() {
   if (!call) {
     return (
       <div className="space-y-4">
-        <Button variant="ghost" onClick={() => setLocation("/app/calls")} data-testid="button-back">
+        <Button variant="ghost" onClick={() => setLocation("/calls")} data-testid="button-back">
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Calls
         </Button>
@@ -370,7 +370,7 @@ export default function CallDetail() {
             </div>
           </div>
           <Button
-            onClick={() => setLocation('/app/billing')}
+            onClick={() => setLocation('/billing')}
             data-testid="button-topup-credits"
             className="shrink-0"
           >
@@ -387,7 +387,7 @@ export default function CallDetail() {
         <div className="relative mb-4 flex items-center justify-between">
           <Button 
             variant="ghost" 
-            onClick={() => setLocation("/app/calls")} 
+            onClick={() => setLocation("/calls")} 
             className="-ml-2"
             data-testid="button-back"
           >
@@ -399,7 +399,7 @@ export default function CallDetail() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => prevCall && setLocation(`/app/calls/${prevCall.id}`)}
+              onClick={() => prevCall && setLocation(`/calls/${prevCall.id}`)}
               disabled={!prevCall}
               className="bg-background/80"
               data-testid="button-prev-call"
@@ -410,7 +410,7 @@ export default function CallDetail() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => nextCall && setLocation(`/app/calls/${nextCall.id}`)}
+              onClick={() => nextCall && setLocation(`/calls/${nextCall.id}`)}
               disabled={!nextCall}
               className="bg-background/80"
               data-testid="button-next-call"
@@ -804,7 +804,7 @@ export default function CallDetail() {
                       <Button
                         variant="ghost"
                         className="p-0 h-auto font-semibold text-foreground underline-offset-4 hover:underline"
-                        onClick={() => setLocation(`/app/campaigns/${campaign.id}`)}
+                        onClick={() => setLocation(`/campaigns/${campaign.id}`)}
                         data-testid="link-campaign"
                       >
                         {campaign.name}

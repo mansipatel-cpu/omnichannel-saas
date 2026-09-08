@@ -178,9 +178,9 @@ export default function Billing() {
   const handleTabChange = (value: string) => {
     setActiveTab(value);
     if (value === "plans") {
-      setLocation("/app/billing");
+      setLocation("/billing");
     } else {
-      setLocation(`/app/billing?tab=${value}`);
+      setLocation(`/billing?tab=${value}`);
     }
   };
 

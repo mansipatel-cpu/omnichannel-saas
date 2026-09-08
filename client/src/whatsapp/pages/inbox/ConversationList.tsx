@@ -155,45 +155,45 @@ const ConversationList = ({
   return (
     <div
       className={cn(
-        "bg-white border-r border-gray-200 flex flex-col shadow-[2px_0_8px_-2px_rgba(0,0,0,0.06)]",
+        "bg-white border-r border-slate-200 flex flex-col",
         selectedConversation
-          ? "hidden md:flex md:w-[340px] lg:w-[400px]"
-          : "w-full md:w-[340px] lg:w-[400px]"
+          ? "hidden md:flex md:w-[320px] lg:w-[360px]"
+          : "w-full md:w-[320px] lg:w-[360px]"
       )}
     >
-      <div className="p-2 sm:p-3 md:p-4 border-b border-gray-200 bg-white">
-        <div className="relative mb-2 sm:mb-3">
-          <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-gray-400 pointer-events-none" />
+      <div className="p-4 border-b border-slate-100">
+        <div className="relative mb-3">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
           <Input
-            placeholder="Search..."
+            placeholder="Search conversations..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="pl-7 sm:pl-9 pr-2 sm:pr-3 bg-gray-50 text-xs sm:text-sm w-full h-8 sm:h-10 rounded-lg"
+            className="h-10 pl-9 bg-white border-slate-200 text-sm rounded-md"
           />
         </div>
 
         <Tabs value={filterTab} onValueChange={onFilterTabChange}>
-          <div className="overflow-x-auto -mx-2 sm:-mx-3 md:-mx-4 px-2 sm:px-3 md:px-4 [&::-webkit-scrollbar]:h-[2px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full">
-            <TabsList className="inline-flex w-auto h-7 sm:h-9 md:h-10 gap-1 sm:gap-1.5 md:gap-2 bg-gray-100 p-0.5 sm:p-1 rounded-lg">
-              <TabsTrigger value="all" className="text-[11px] sm:text-xs md:text-sm whitespace-nowrap px-2 sm:px-3 md:px-4 h-full rounded-md">All</TabsTrigger>
-              <TabsTrigger value="whatsapp" className="text-[11px] sm:text-xs md:text-sm whitespace-nowrap px-2 sm:px-3 md:px-4 h-full rounded-md">WA</TabsTrigger>
-              <TabsTrigger value="chatbot" className="text-[11px] sm:text-xs md:text-sm whitespace-nowrap px-2 sm:px-3 md:px-4 h-full rounded-md">Widget</TabsTrigger>
-              <TabsTrigger value="assigned" className="text-[11px] sm:text-xs md:text-sm whitespace-nowrap px-2 sm:px-3 md:px-4 h-full rounded-md">Assigned</TabsTrigger>
-              <TabsTrigger value="unread" className="text-[11px] sm:text-xs md:text-sm whitespace-nowrap px-2 sm:px-3 md:px-4 h-full rounded-md">Unread</TabsTrigger>
-              <TabsTrigger value="open" className="text-[11px] sm:text-xs md:text-sm whitespace-nowrap px-2 sm:px-3 md:px-4 h-full rounded-md">Open</TabsTrigger>
-              <TabsTrigger value="resolved" className="text-[11px] sm:text-xs md:text-sm whitespace-nowrap px-2 sm:px-3 md:px-4 h-full rounded-md">Resolved</TabsTrigger>
+          <div className="overflow-x-auto -mx-1 px-1 [&::-webkit-scrollbar]:h-[2px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full">
+            <TabsList className="inline-flex w-auto h-9 gap-1 bg-[#F4F6F8] p-1 rounded-md">
+              <TabsTrigger value="all" className="text-xs whitespace-nowrap px-3 h-full rounded-md data-[state=active]:bg-white data-[state=active]:text-[#007BFF] data-[state=active]:shadow-sm">All</TabsTrigger>
+              <TabsTrigger value="whatsapp" className="text-xs whitespace-nowrap px-3 h-full rounded-md data-[state=active]:bg-white data-[state=active]:text-[#007BFF] data-[state=active]:shadow-sm">WhatsApp</TabsTrigger>
+              <TabsTrigger value="chatbot" className="text-xs whitespace-nowrap px-3 h-full rounded-md data-[state=active]:bg-white data-[state=active]:text-[#007BFF] data-[state=active]:shadow-sm">Widget</TabsTrigger>
+              <TabsTrigger value="assigned" className="text-xs whitespace-nowrap px-3 h-full rounded-md data-[state=active]:bg-white data-[state=active]:text-[#007BFF] data-[state=active]:shadow-sm">Assigned</TabsTrigger>
+              <TabsTrigger value="unread" className="text-xs whitespace-nowrap px-3 h-full rounded-md data-[state=active]:bg-white data-[state=active]:text-[#007BFF] data-[state=active]:shadow-sm">Unread</TabsTrigger>
+              <TabsTrigger value="open" className="text-xs whitespace-nowrap px-3 h-full rounded-md data-[state=active]:bg-white data-[state=active]:text-[#007BFF] data-[state=active]:shadow-sm">Open</TabsTrigger>
+              <TabsTrigger value="resolved" className="text-xs whitespace-nowrap px-3 h-full rounded-md data-[state=active]:bg-white data-[state=active]:text-[#007BFF] data-[state=active]:shadow-sm">Resolved</TabsTrigger>
             </TabsList>
           </div>
         </Tabs>
       </div>
 
-      <ScrollArea className="flex-1 ">
+      <ScrollArea className="flex-1">
         {conversationsLoading ? (
           <div className="flex items-center justify-center py-8">
             <Loading />
           </div>
         ) : conversations.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
+          <div className="text-center py-10 text-sm text-slate-400">
             No conversations found
           </div>
         ) : (
@@ -202,21 +202,21 @@ const ConversationList = ({
             if (items.length === 0) return null;
             const isCollapsed = collapsed[key];
             return (
-              <div key={key} className="border-b border-gray-100 last:border-b-0">
+              <div key={key} className="border-b border-slate-100 last:border-b-0">
                 <button
                   type="button"
                   onClick={() => toggleSection(key)}
                   aria-expanded={!isCollapsed}
-                  className="w-full sticky top-0 z-10 bg-gray-50/95 backdrop-blur-sm px-4 py-2 flex items-center justify-between text-left hover:bg-gray-100 transition"
+                  className="w-full sticky top-0 z-10 bg-[#F8F9FB] px-4 py-2 flex items-center justify-between text-left hover:bg-slate-100 transition"
                 >
-                  <span className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-600 uppercase tracking-wide">
+                  <span className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
                     {isCollapsed ? (
                       <ChevronRight className="w-3.5 h-3.5" />
                     ) : (
                       <ChevronDown className="w-3.5 h-3.5" />
                     )}
                     {sectionTitles[key]}
-                    <span className="ml-1 text-gray-400 normal-case font-medium">
+                    <span className="ml-1 text-slate-400 normal-case font-medium">
                       ({items.length})
                     </span>
                   </span>
