@@ -187,41 +187,54 @@ export function CreateCampaignForm({
 
   const { user } = useAuth();
 
+  const limitLabel =
+    messagingLimit == null || messagingLimit === Infinity
+      ? "Unlimited"
+      : messagingLimit.toLocaleString();
+
   return (
-    <form onSubmit={handleSubmit(onValid)} className="space-y-5 mt-4" noValidate>
-      <Card>
+    <form onSubmit={handleSubmit(onValid)} className="space-y-4" noValidate>
+      <Card className="rounded-xl border-slate-200 bg-white shadow-sm">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <FileText className="h-4 w-4" />
+          <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+            <FileText className="h-4 w-4 text-slate-500" />
             Campaign Info
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div>
-            <Label htmlFor="name">Campaign Name</Label>
+        <CardContent className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="name" className="text-sm font-medium text-slate-800">
+              Campaign Name <span className="text-red-500">*</span>
+            </Label>
             <Input
               id="name"
               placeholder="e.g. Summer Sale Announcement"
               aria-invalid={!!errors.name}
+              className={`h-11 bg-white border-slate-200 ${
+                errors.name ? "border-red-400 focus-visible:ring-red-400" : ""
+              }`}
               {...register("name")}
             />
             {errors.name && (
-              <p className="mt-1 text-xs text-destructive" role="alert">
+              <p className="mt-1 text-xs text-red-500" role="alert">
                 {errors.name.message}
               </p>
             )}
           </div>
-          <div>
-            <Label htmlFor="description">Description</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="description" className="text-sm font-medium text-slate-800">
+              Description
+            </Label>
             <Textarea
               id="description"
               placeholder="Campaign objectives and notes..."
-              rows={2}
+              rows={3}
               aria-invalid={!!errors.description}
+              className="bg-white border-slate-200 min-h-[88px]"
               {...register("description")}
             />
             {errors.description && (
-              <p className="mt-1 text-xs text-destructive" role="alert">
+              <p className="mt-1 text-xs text-red-500" role="alert">
                 {errors.description.message}
               </p>
             )}
@@ -229,10 +242,10 @@ export function CreateCampaignForm({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="rounded-xl border-slate-200 bg-white shadow-sm">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Eye className="h-4 w-4" />
+          <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+            <Eye className="h-4 w-4 text-slate-500" />
             Template
           </CardTitle>
         </CardHeader>
@@ -244,45 +257,66 @@ export function CreateCampaignForm({
               submitLabel="Use Template"
               categoryFilter="MARKETING"
               trigger={
-                <Button type="button" variant="outline" className="gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 gap-2 bg-white border-slate-200 text-slate-800"
+                >
                   <FileText className="h-4 w-4" />
                   {selectedTemplate ? "Change Template" : "Select Template"}
                 </Button>
               }
             />
             {selectedTemplate && (
-              <div className="flex items-center gap-2 text-sm text-green-700">
+              <div className="flex items-center gap-2 text-sm text-emerald-700">
                 <Check className="h-4 w-4" />
                 <span className="font-medium">{selectedTemplate.name}</span>
               </div>
             )}
           </div>
 
+          <div className="flex items-start gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2.5 text-sm text-blue-800">
+            <Info className="h-4 w-4 mt-0.5 shrink-0 text-blue-500" />
+            <span>
+              Your channel&apos;s WhatsApp messaging limit is{" "}
+              <strong>{limitLabel}</strong>
+              {messagingLimit != null && messagingLimit !== Infinity
+                ? " messages per 24 hours"
+                : ""}
+              {messagingTier ? ` (${messagingTier})` : ""}.
+            </span>
+          </div>
+
           {selectedTemplate && (
-            <div className="rounded-lg border bg-muted/50 p-4 space-y-1.5">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Preview</p>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-1.5">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                Preview
+              </p>
               {selectedTemplate.headerType === "text" && selectedTemplate.headerText && (
                 <div className="font-semibold text-sm">{selectedTemplate.headerText}</div>
               )}
-              <div className="whitespace-pre-wrap text-sm">{selectedTemplate.body}</div>
+              <div className="whitespace-pre-wrap text-sm text-slate-800">
+                {selectedTemplate.body}
+              </div>
               {selectedTemplate.footerText && (
-                <div className="text-xs text-muted-foreground">{selectedTemplate.footerText}</div>
+                <div className="text-xs text-slate-500">{selectedTemplate.footerText}</div>
               )}
               {templateConfig && (
-                <div className="mt-2 pt-2 border-t border-gray-200 space-y-1">
+                <div className="mt-2 pt-2 border-t border-slate-200 space-y-1">
                   {templateConfig.variables.length > 0 && (
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-slate-500">
                       {templateConfig.variables.length} variable(s) configured
                     </p>
                   )}
                   {templateConfig.mediaId && (
-                    <p className="text-xs text-green-600">Header media uploaded</p>
+                    <p className="text-xs text-emerald-600">Header media uploaded</p>
                   )}
-                  {templateConfig.buttonParameters && templateConfig.buttonParameters.length > 0 && (
-                    <p className="text-xs text-gray-500">
-                      {templateConfig.buttonParameters.length} button parameter(s) set
-                    </p>
-                  )}
+                  {templateConfig.buttonParameters &&
+                    templateConfig.buttonParameters.length > 0 && (
+                      <p className="text-xs text-slate-500">
+                        {templateConfig.buttonParameters.length} button parameter(s) set
+                      </p>
+                    )}
                 </div>
               )}
             </div>
@@ -290,61 +324,68 @@ export function CreateCampaignForm({
         </CardContent>
       </Card>
 
-      {/* {messagingLimit != null && (
-        <div className="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
-          <Info className="h-4 w-4 mt-0.5 shrink-0" />
-          <span>
-            Your channel's WhatsApp messaging limit is{" "}
-            <strong>
-              {messagingLimit === Infinity
-                ? "Unlimited"
-                : messagingLimit.toLocaleString()}
-            </strong>
-            {messagingLimit !== Infinity ? " messages per 24 hours" : ""}
-            {messagingTier ? ` (${messagingTier})` : ""}.
-          </span>
-        </div>
-      )} */}
-
-      <Card>
+      <Card className="rounded-xl border-slate-200 bg-white shadow-sm">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Clock className="h-4 w-4" />
+          <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+            <Clock className="h-4 w-4 text-slate-500" />
             Scheduling
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div>
-            <Label htmlFor="scheduledTime">Schedule Campaign (Optional)</Label>
+        <CardContent className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="scheduledTime" className="text-sm font-medium text-slate-800">
+              Schedule Campaign (Optional)
+            </Label>
             <Input
               id="scheduledTime"
               type="datetime-local"
               value={scheduledTime}
               onChange={(e) => setScheduledTime(e.target.value)}
+              className="h-11 bg-white border-slate-200"
             />
           </div>
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="autoRetry"
-              checked={autoRetry}
-              onCheckedChange={(checked) => setAutoRetry(!!checked)}
-            />
-            <Label htmlFor="autoRetry" className="font-normal">
-              Enable auto-retry for failed messages
-            </Label>
+          <div className="space-y-1">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="autoRetry"
+                checked={autoRetry}
+                onCheckedChange={(checked) => setAutoRetry(!!checked)}
+              />
+              <Label htmlFor="autoRetry" className="font-normal text-sm text-slate-800">
+                Enable auto-retry for failed messages
+              </Label>
+            </div>
+            <p className="text-xs text-slate-500 pl-6">
+              Automatically retries failed dispatches via alternative SMS or Voice fallback after
+              15 mins.
+            </p>
           </div>
         </CardContent>
       </Card>
 
       {children}
 
-      <div className="flex justify-end gap-2 pt-2">
-        <Button type="button" variant="outline" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button type="submit" disabled={user?.username === 'demouser' ? true : isCreating || !selectedTemplate}>
-          {scheduledTime ? "Schedule Campaign" : "Start Campaign"}
-        </Button>
+      <div className="flex flex-col items-end gap-1.5 pt-1">
+        {!selectedTemplate && (
+          <p className="text-xs text-slate-500">Select a template to enable Start Campaign</p>
+        )}
+        <div className="flex justify-end gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onCancel}
+            className="h-10 min-w-[100px] bg-white border-slate-200"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            disabled={user?.username === "demouser" ? true : isCreating || !selectedTemplate}
+            className="h-10 min-w-[140px] bg-[#007BFF] hover:bg-[#0069d9] text-white"
+          >
+            {isCreating ? "Starting..." : "Start Campaign"}
+          </Button>
+        </div>
       </div>
     </form>
   );

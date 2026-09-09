@@ -27,6 +27,7 @@ import { usePagination } from "@/components/ui/data-pagination";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -48,7 +49,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -91,7 +94,12 @@ import {
   ChevronDown,
   Check,
   UserRound,
+  FolderPlus,
+  Shield,
+  Megaphone,
 } from "lucide-react";
+import { GroupMembersDrawer } from "@wa/components/groups/GroupMembersDrawer";
+import { AuthProvider } from "@wa/contexts/auth-context";
 
 interface VoiceContact {
   id: string;
@@ -111,6 +119,7 @@ interface WaContact {
   phone?: string;
   email?: string | null;
   status?: string;
+  groups?: string[];
   createdAt?: string | Date | null;
 }
 
@@ -124,6 +133,9 @@ type ChannelFilter = "all" | "groups" | "contacts";
 interface WaGroup {
   id: string;
   name: string;
+  description?: string | null;
+  contact_count?: number;
+  createdAt?: string | Date | null;
 }
 
 interface DirectoryContact {
@@ -138,6 +150,7 @@ interface DirectoryContact {
   whatsapp: boolean;
   voice: boolean;
   status: DirectoryStatus;
+  groups: string[];
   createdAt: Date | null;
 }
 
@@ -337,20 +350,63 @@ function statusLabel(status: DirectoryStatus) {
 
 export default function AllContacts() {
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
-  const { search: searchQuery, setSearch: setSearchQuery } = useAppHeader();
+  const [location, setLocation] = useLocation();
+  const { search: searchQuery, setSearch: setSearchQuery, setPageMeta, setActions } = useAppHeader();
   const [statusFilter, setStatusFilter] = useState<"all" | DirectoryStatus>("all");
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>("contacts");
   const [channelMenuOpen, setChannelMenuOpen] = useState(false);
   const [monthDate, setMonthDate] = useState<Date | undefined>();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [formOpen, setFormOpen] = useState(false);
+  const [groupFormOpen, setGroupFormOpen] = useState(false);
   const [editing, setEditing] = useState<DirectoryContact | null>(null);
   const [deleting, setDeleting] = useState<DirectoryContact | null>(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", phone: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", group: "" });
+  const [groupForm, setGroupForm] = useState({ name: "", description: "" });
+  const [editingGroup, setEditingGroup] = useState<WaGroup | null>(null);
+  const [membersGroup, setMembersGroup] = useState<WaGroup | null>(null);
+  const [groupSearch, setGroupSearch] = useState("");
+  const [groupSort, setGroupSort] = useState<"newest" | "oldest" | "name" | "members">("newest");
   const [importing, setImporting] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const [focusContactId, setFocusContactId] = useState<string | null>(null);
+
+  // Keep deep-link filter in sync with ?id= / ?view=groups
+  useEffect(() => {
+    const syncFocusFromUrl = () => {
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get("id")?.trim() || "";
+      const view = params.get("view")?.trim() || "";
+      setFocusContactId(id || null);
+      if (!id) {
+        setSearchQuery("");
+      }
+      if (view === "groups") {
+        setChannelFilter("groups");
+      }
+    };
+
+    syncFocusFromUrl();
+
+    const onPopState = () => syncFocusFromUrl();
+    window.addEventListener("popstate", onPopState);
+
+    const onClick = (event: MouseEvent) => {
+      const anchor = (event.target as HTMLElement | null)?.closest?.("a[href]");
+      if (!anchor) return;
+      const href = anchor.getAttribute("href") || "";
+      if (href === "/contacts" || href.startsWith("/contacts?") || href.startsWith("/contacts#")) {
+        queueMicrotask(syncFocusFromUrl);
+      }
+    };
+    document.addEventListener("click", onClick, true);
+
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+      document.removeEventListener("click", onClick, true);
+    };
+  }, [location, setSearchQuery]);
 
   const { data: voiceContacts = [], isLoading: voiceLoading } = useQuery<VoiceContact[]>({
     queryKey: ["/api/contacts/deduplicated"],
@@ -418,6 +474,7 @@ export default function AllContacts() {
         whatsapp: false,
         voice: true,
         status: mapStatus(contact.status),
+        groups: [],
         createdAt: parseDate(contact.createdAt),
       });
     }
@@ -428,6 +485,7 @@ export default function AllContacts() {
       const existing = map.get(phone);
       const name = contact.name?.trim() || existing?.name || phone;
       const createdAt = parseDate(contact.createdAt);
+      const groups = Array.isArray(contact.groups) ? contact.groups : [];
       if (existing) {
         map.set(phone, {
           ...existing,
@@ -438,6 +496,7 @@ export default function AllContacts() {
           email: existing.email || contact.email || null,
           whatsapp: true,
           status: mergeStatus(existing.status, contact.status),
+          groups: groups.length > 0 ? groups : existing.groups,
           createdAt: existing.createdAt && createdAt
             ? existing.createdAt > createdAt ? existing.createdAt : createdAt
             : existing.createdAt || createdAt,
@@ -453,6 +512,7 @@ export default function AllContacts() {
           whatsapp: true,
           voice: false,
           status: mapStatus(contact.status),
+          groups,
           createdAt,
         });
       }
@@ -466,14 +526,33 @@ export default function AllContacts() {
   }, [voiceContacts, waContacts]);
 
   const filteredContacts = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
+    const typedQuery = searchQuery.trim().toLowerCase();
+    const typedDigits = typedQuery.replace(/\D/g, "");
+    // Client-side Team Inbox demo contact id maps to the known demo phone
+    const demoFocusDigits =
+      focusContactId === "client-demo-contact" ? "15550001111" : "";
+
     return directory.filter((contact) => {
+      const phoneDigits = contact.phone.replace(/\D/g, "");
+      const matchesFocusId =
+        !!focusContactId &&
+        (contact.waId === focusContactId ||
+          contact.voiceId === focusContactId ||
+          contact.id === focusContactId ||
+          contact.id.endsWith(`:${focusContactId}`) ||
+          (demoFocusDigits.length > 0 && phoneDigits.includes(demoFocusDigits)));
+      const matchesTyped =
+        !typedQuery ||
+        contact.name.toLowerCase().includes(typedQuery) ||
+        contact.handle.toLowerCase().includes(typedQuery) ||
+        contact.phone.toLowerCase().includes(typedQuery) ||
+        (typedDigits.length >= 7 && phoneDigits.includes(typedDigits)) ||
+        (contact.email || "").toLowerCase().includes(typedQuery);
+
+      // Deep-link by id until the user types in the filter box
       const matchesSearch =
-        !query ||
-        contact.name.toLowerCase().includes(query) ||
-        contact.handle.toLowerCase().includes(query) ||
-        contact.phone.toLowerCase().includes(query) ||
-        (contact.email || "").toLowerCase().includes(query);
+        focusContactId && !typedQuery ? matchesFocusId : matchesTyped;
+
       const matchesStatus = statusFilter === "all" || contact.status === statusFilter;
       const matchesChannel = channelFilter !== "groups";
       const matchesMonth =
@@ -483,7 +562,30 @@ export default function AllContacts() {
           contact.createdAt.getFullYear() === monthDate.getFullYear());
       return matchesSearch && matchesStatus && matchesChannel && matchesMonth;
     });
-  }, [directory, searchQuery, statusFilter, channelFilter, monthDate]);
+  }, [directory, searchQuery, statusFilter, channelFilter, monthDate, focusContactId]);
+
+  const filteredGroups = useMemo(() => {
+    const query = groupSearch.trim().toLowerCase();
+    let list = waGroups.filter((group) => {
+      if (!query) return true;
+      return (
+        group.name.toLowerCase().includes(query) ||
+        (group.description || "").toLowerCase().includes(query)
+      );
+    });
+
+    list = [...list].sort((a, b) => {
+      if (groupSort === "name") return a.name.localeCompare(b.name);
+      if (groupSort === "members") {
+        return (b.contact_count ?? 0) - (a.contact_count ?? 0);
+      }
+      const aTime = parseDate(a.createdAt)?.getTime() || 0;
+      const bTime = parseDate(b.createdAt)?.getTime() || 0;
+      return groupSort === "oldest" ? aTime - bTime : bTime - aTime;
+    });
+
+    return list;
+  }, [waGroups, groupSearch, groupSort]);
 
   const {
     currentPage,
@@ -493,11 +595,14 @@ export default function AllContacts() {
     paginatedItems,
     handlePageChange,
     handleItemsPerPageChange,
-  } = usePagination(filteredContacts, 8);
+  } = usePagination(
+    channelFilter === "groups" ? (filteredGroups as any[]) : filteredContacts,
+    8,
+  );
 
   useEffect(() => {
     handlePageChange(1);
-  }, [searchQuery, statusFilter, channelFilter, monthDate]);
+  }, [searchQuery, statusFilter, channelFilter, monthDate, groupSearch, groupSort]);
 
   const now = new Date();
   const addedThisMonth = directory.filter((contact) => (
@@ -513,9 +618,35 @@ export default function AllContacts() {
   const reachableRate = total > 0 ? ((activeCount / total) * 100).toFixed(1) : "0.0";
   const whatsappCoverage = total > 0 ? ((whatsappCount / total) * 100).toFixed(1) : "0.0";
 
+  const deleteGroupMutation = useMutation({
+    mutationFn: async (groupId: string) => {
+      const response = await apiRequest("DELETE", `/api/whatsapp/groups/${groupId}`);
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data?.error || "Failed to delete group");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/groups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/groups/contact-counts"] });
+      toast({ title: "Group deleted" });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to delete group",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const isGroupsView = channelFilter === "groups";
+  const paginatedGroups = isGroupsView ? (paginatedItems as unknown as WaGroup[]) : [];
+  const paginatedContacts = isGroupsView ? [] : (paginatedItems as DirectoryContact[]);
   const startItem = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
   const endItem = Math.min(currentPage * itemsPerPage, totalItems);
-  const pageIds = paginatedItems.map((contact) => contact.id);
+  const pageIds = paginatedContacts.map((contact) => contact.id);
   const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id));
 
   const isLoading = voiceLoading || waLoading;
@@ -524,10 +655,141 @@ export default function AllContacts() {
     setLocation("/contacts/new");
   };
 
+  const openCreateGroup = () => {
+    if (!activeChannel?.id) {
+      toast({
+        title: "No WhatsApp channel",
+        description: "Create a WhatsApp channel before adding groups.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setLocation("/contacts/groups/new");
+  };
+
+  useEffect(() => {
+    if (isGroupsView) {
+      setPageMeta({
+        title: "Groups",
+        subtitle: "All groups details and management.",
+      });
+    } else {
+      setPageMeta(null);
+    }
+    setActions(null);
+    return () => {
+      setPageMeta(null);
+      setActions(null);
+    };
+  }, [isGroupsView, setPageMeta, setActions]);
+
+  const openEditGroup = (group: WaGroup) => {
+    setEditingGroup(group);
+    setGroupForm({ name: group.name, description: group.description || "" });
+    setGroupFormOpen(true);
+  };
+
+  const exportGroups = () => {
+    const rows = [
+      ["name", "description", "contacts", "createdAt"],
+      ...filteredGroups.map((group) => [
+        group.name,
+        group.description || "",
+        String(group.contact_count ?? 0),
+        parseDate(group.createdAt)?.toISOString() || "",
+      ]),
+    ];
+    const csv = rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "contact-groups.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const openEdit = (contact: DirectoryContact) => {
     setEditing(contact);
-    setForm({ name: contact.name, email: contact.email || "", phone: contact.phone });
+    setForm({
+      name: contact.name,
+      email: contact.email || "",
+      phone: contact.phone,
+      group: contact.groups[0] || "",
+    });
     setFormOpen(true);
+  };
+
+  const addContactToGroup = async (contact: DirectoryContact, groupName: string) => {
+    if (!contact.waId) {
+      toast({
+        title: "WhatsApp contact required",
+        description: "Only WhatsApp contacts can be added to groups.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!activeChannel?.id) {
+      toast({
+        title: "No active channel",
+        description: "Create a WhatsApp channel before assigning groups.",
+        variant: "destructive",
+      });
+      return;
+    }
+    try {
+      const response = await apiRequest("POST", "/api/whatsapp/groups/add-contacts", {
+        contactIds: [contact.waId],
+        groupName,
+        channelId: activeChannel.id,
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data?.error || "Failed to add contact to group");
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/contacts-all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/groups"] });
+      toast({ title: "Added to group", description: `Added to "${groupName}".` });
+    } catch (error: any) {
+      toast({
+        title: "Failed to add to group",
+        description: error?.message || "Something went wrong",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const toggleBlockContact = async (contact: DirectoryContact) => {
+    if (!contact.waId) {
+      toast({
+        title: "WhatsApp contact required",
+        description: "Only WhatsApp contacts can be blocked.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const nextStatus = contact.status === "active" ? "blocked" : "active";
+    try {
+      const response = await apiRequest("PUT", `/api/whatsapp/contacts/${contact.waId}`, {
+        status: nextStatus,
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data?.error || "Failed to update contact status");
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/contacts-all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/contacts"] });
+      toast({
+        title: nextStatus === "blocked" ? "Contact blocked" : "Contact unblocked",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Failed to update status",
+        description: error?.message || "Something went wrong",
+        variant: "destructive",
+      });
+    }
   };
 
   const copyValue = async (value: string, label: string) => {
@@ -544,11 +806,17 @@ export default function AllContacts() {
       const name = form.name.trim();
       const email = form.email.trim();
       const phone = form.phone.trim();
+      const groups = form.group.trim() ? [form.group.trim()] : [];
       if (!name || !phone) throw new Error("Name and phone are required");
       if (!activeChannel?.id) throw new Error("Create a WhatsApp channel before adding contacts.");
 
       if (editing?.waId) {
-        const response = await apiRequest("PUT", `/api/whatsapp/contacts/${editing.waId}`, { name, email, phone });
+        const response = await apiRequest("PUT", `/api/whatsapp/contacts/${editing.waId}`, {
+          name,
+          email,
+          phone,
+          groups,
+        });
         return response.json();
       }
 
@@ -558,7 +826,7 @@ export default function AllContacts() {
         phone,
         channelId: activeChannel.id,
         source: "manual",
-        groups: [],
+        groups,
         tags: [],
       });
       return response.json();
@@ -567,6 +835,8 @@ export default function AllContacts() {
       queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/contacts-all"] });
       queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/contacts"] });
       queryClient.invalidateQueries({ queryKey: ["/api/contacts/deduplicated"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/groups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/groups/contact-counts"] });
       setFormOpen(false);
       setEditing(null);
       toast({ title: editing ? "Contact updated" : "Contact added" });
@@ -574,6 +844,54 @@ export default function AllContacts() {
     onError: (error: any) => {
       toast({
         title: editing ? "Failed to update contact" : "Failed to add contact",
+        description: error.message || "Please try again",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const createGroupMutation = useMutation({
+    mutationFn: async () => {
+      const name = groupForm.name.trim();
+      if (!name) throw new Error("Group name is required");
+      if (!activeChannel?.id) throw new Error("Create a WhatsApp channel before adding groups.");
+
+      if (editingGroup?.id) {
+        const response = await apiRequest("PUT", `/api/whatsapp/groups/${editingGroup.id}`, {
+          name,
+          description: groupForm.description.trim(),
+        });
+        const data = await response.json();
+        if (!response.ok || data?.success === false) {
+          throw new Error(data?.error || "Failed to update group");
+        }
+        return data;
+      }
+
+      const response = await apiRequest("POST", "/api/whatsapp/groups", {
+        name,
+        description: groupForm.description.trim(),
+        channelId: activeChannel.id,
+      });
+      const data = await response.json();
+      if (!response.ok || data?.success === false) {
+        throw new Error(data?.error || "Failed to create group");
+      }
+      return data;
+    },
+    onSuccess: () => {
+      const wasEdit = Boolean(editingGroup);
+      queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/groups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/groups/contact-counts"] });
+      setGroupFormOpen(false);
+      setEditingGroup(null);
+      setGroupForm({ name: "", description: "" });
+      setChannelFilter("groups");
+      toast({ title: wasEdit ? "Group updated" : "Group created" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: editingGroup ? "Failed to update group" : "Failed to create group",
         description: error.message || "Please try again",
         variant: "destructive",
       });
@@ -804,8 +1122,227 @@ export default function AllContacts() {
       <div className="flex items-center gap-2 text-[13px] text-slate-400">
         <Link href="/dashboard" className="hover:text-slate-600">Home</Link>
         <span>&gt;</span>
-        <span className="text-slate-600">Contacts</span>
+        {isGroupsView ? (
+          <>
+            <button
+              type="button"
+              className="hover:text-slate-600"
+              onClick={() => setChannelFilter("contacts")}
+            >
+              Contacts
+            </button>
+            <span>&gt;</span>
+            <span className="text-slate-600">Groups</span>
+          </>
+        ) : (
+          <span className="text-slate-600">Contacts</span>
+        )}
       </div>
+
+      {isGroupsView ? (
+        <>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              variant="outline"
+              className="h-10 bg-white border-slate-200"
+              onClick={exportGroups}
+              data-testid="button-export-groups"
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              Export
+            </Button>
+            <Button
+              onClick={openCreateGroup}
+              className="h-10 bg-[#2F80FF] hover:bg-[#256fe0] text-white border-transparent"
+              data-testid="button-create-group"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Create Group
+            </Button>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                value={groupSearch}
+                onChange={(e) => setGroupSearch(e.target.value)}
+                placeholder="Search groups by name or description..."
+                className="h-11 pl-9 bg-white border-slate-200 rounded-lg"
+                data-testid="input-search-groups"
+              />
+            </div>
+            <Select value={groupSort} onValueChange={(value) => setGroupSort(value as typeof groupSort)}>
+              <SelectTrigger className="h-11 w-full sm:w-[180px] bg-white border-slate-200 rounded-lg">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Newest first</SelectItem>
+                <SelectItem value="oldest">Oldest first</SelectItem>
+                <SelectItem value="name">Name (A–Z)</SelectItem>
+                <SelectItem value="members">Most members</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              className="h-11 bg-white border-slate-200"
+              onClick={() => setChannelFilter("contacts")}
+            >
+              Back to Contacts
+            </Button>
+          </div>
+
+          <div className="space-y-3">
+            {paginatedGroups.length === 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-white px-6 py-16 text-center text-slate-400">
+                {waGroups.length === 0
+                  ? "No groups yet. Create a WhatsApp group to segment your audience."
+                  : `No groups match "${groupSearch}".`}
+              </div>
+            ) : (
+              paginatedGroups.map((group) => {
+                const createdAt = parseDate(group.createdAt);
+                const count = group.contact_count ?? 0;
+                return (
+                  <div
+                    key={group.id}
+                    className="rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm hover:shadow-md transition-shadow"
+                    data-testid={`card-group-${group.id}`}
+                  >
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                      <button
+                        type="button"
+                        className="text-left min-w-0 flex-1"
+                        onClick={() => setMembersGroup(group)}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <h3 className="text-[17px] font-semibold text-slate-900 truncate">{group.name}</h3>
+                          <ChevronRight className="h-4 w-4 text-slate-300 shrink-0" />
+                        </div>
+                        <p className="text-sm text-slate-500 mt-1 line-clamp-2">
+                          {group.description?.trim() || "No description"}
+                        </p>
+                        <div className="flex items-center gap-2 mt-2.5 flex-wrap text-sm">
+                          <span className="inline-flex items-center gap-1.5 text-emerald-600 font-medium">
+                            <Users className="h-4 w-4" />
+                            {count.toLocaleString()} contact{count === 1 ? "" : "s"}
+                          </span>
+                          <span className="text-slate-300">•</span>
+                          <span className="text-slate-400">
+                            Created {createdAt ? format(createdAt, "MMM d, yyyy") : "—"}
+                          </span>
+                        </div>
+                      </button>
+
+                      <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        <Button
+                          variant="outline"
+                          className="h-9 bg-white border-slate-200 text-slate-700"
+                          onClick={() => setMembersGroup(group)}
+                        >
+                          <Users className="h-4 w-4 mr-1.5" />
+                          Members
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="h-9 bg-white border-slate-200 text-slate-700"
+                          disabled={count === 0}
+                          onClick={() =>
+                            setLocation(`/campaigns?createWith=group:${encodeURIComponent(group.id)}`)
+                          }
+                        >
+                          <Megaphone className="h-4 w-4 mr-1.5" />
+                          Send campaign
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="h-9 bg-white border-slate-200 text-slate-700"
+                          onClick={() => openEditGroup(group)}
+                        >
+                          <Pencil className="h-4 w-4 mr-1.5" />
+                          Edit
+                        </Button>
+                        <Button
+                          className="h-9 bg-[#EF4444] hover:bg-[#DC2626] text-white border-transparent"
+                          onClick={() => {
+                            if (window.confirm(`Delete group "${group.name}"?`)) {
+                              deleteGroupMutation.mutate(group.id);
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 mr-1.5" />
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {totalItems > 0 && (
+            <div className="flex flex-col lg:flex-row items-center justify-between gap-3 pt-2">
+              <p className="text-sm text-slate-400">
+                Showing {startItem} to {endItem} of {totalItems.toLocaleString()} groups
+              </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2 text-sm text-slate-500">
+                  <span>Show</span>
+                  <Select value={String(itemsPerPage)} onValueChange={(value) => handleItemsPerPageChange(Number(value))}>
+                    <SelectTrigger className="h-8 w-[110px] bg-white border-slate-200">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[8, 10, 16, 24, 48].map((option) => (
+                        <SelectItem key={option} value={String(option)}>
+                          {option} per page
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8"
+                    disabled={currentPage <= 1}
+                    onClick={() => handlePageChange(currentPage - 1)}
+                  >
+                    Previous
+                  </Button>
+                  {visiblePages.map((page, index) =>
+                    page === "ellipsis" ? (
+                      <span key={`e-${index}`} className="px-2 text-slate-400">…</span>
+                    ) : (
+                      <Button
+                        key={page}
+                        variant={page === currentPage ? "default" : "outline"}
+                        size="sm"
+                        className={`h-8 w-8 ${page === currentPage ? "bg-[#2F80FF] hover:bg-[#256fe0]" : ""}`}
+                        onClick={() => handlePageChange(page)}
+                      >
+                        {page}
+                      </Button>
+                    ),
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => handlePageChange(currentPage + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+      <>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-5">
@@ -900,15 +1437,15 @@ export default function AllContacts() {
               </PopoverTrigger>
               <PopoverContent
                 align="start"
-                className="w-[360px] p-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.12)]"
+                className="w-[300px] p-0 overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.12)]"
               >
-                <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-100">
-                  <p className="text-[11px] font-semibold tracking-[0.12em] text-slate-400 uppercase">
+                <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-100">
+                  <p className="text-[10px] font-semibold tracking-[0.12em] text-slate-400 uppercase">
                     Filter by channel type
                   </p>
                   <button
                     type="button"
-                    className="text-sm font-medium text-[#2F80FF] hover:underline"
+                    className="text-xs font-medium text-[#2F80FF] hover:underline"
                     onClick={() => {
                       setChannelFilter("all");
                       setChannelMenuOpen(false);
@@ -918,45 +1455,35 @@ export default function AllContacts() {
                   </button>
                 </div>
 
-                <div className="p-2.5 space-y-1">
+                <div className="p-2 space-y-0.5">
                   <button
                     type="button"
-                    className={`w-full flex items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors ${
-                      channelFilter === "groups" ? "bg-[#F3F8FF]" : "hover:bg-slate-50"
-                    }`}
+                    className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-slate-50"
                     onClick={() => {
                       setChannelFilter("groups");
                       setChannelMenuOpen(false);
                     }}
                   >
-                    <div className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 ${
-                      channelFilter === "groups" ? "bg-[#2F80FF] text-white" : "bg-[#EAF3FF] text-[#5BA0FF]"
-                    }`}>
-                      <Users className="h-5 w-5" />
+                    <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0 bg-[#EAF3FF] text-[#5BA0FF]">
+                      <Users className="h-4 w-4" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className={`text-[15px] font-semibold leading-5 ${
-                        channelFilter === "groups" ? "text-[#2F80FF]" : "text-slate-900"
-                      }`}>
+                      <p className="text-[13px] font-semibold leading-4 text-slate-900">
                         Groups
                       </p>
-                      <p className="text-[12px] leading-4 text-slate-400 mt-1">
+                      <p className="text-[11px] leading-3.5 text-slate-400 mt-0.5">
                         Segmented audience &amp; internal groups
                       </p>
                     </div>
-                    <span className="rounded-full bg-[#EAF3FF] text-[#2F80FF] px-2.5 py-1 text-[12px] font-semibold tabular-nums shrink-0">
+                    <span className="rounded-full bg-[#EAF3FF] text-[#2F80FF] px-2 py-0.5 text-[11px] font-semibold tabular-nums shrink-0">
                       {waGroups.length.toLocaleString()}
                     </span>
-                    {channelFilter === "groups" ? (
-                      <Check className="h-4 w-4 text-[#2F80FF] shrink-0" strokeWidth={2.5} />
-                    ) : (
-                      <span className="w-4 shrink-0" aria-hidden />
-                    )}
+                    <span className="w-3.5 shrink-0" aria-hidden />
                   </button>
 
                   <button
                     type="button"
-                    className={`w-full flex items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors ${
+                    className={`w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors ${
                       channelFilter === "contacts" ? "bg-[#F3F8FF]" : "hover:bg-slate-50"
                     }`}
                     onClick={() => {
@@ -964,34 +1491,34 @@ export default function AllContacts() {
                       setChannelMenuOpen(false);
                     }}
                   >
-                    <div className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 ${
+                    <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${
                       channelFilter === "contacts" ? "bg-[#2F80FF] text-white" : "bg-[#EAF3FF] text-[#5BA0FF]"
                     }`}>
-                      <UserRound className="h-5 w-5" />
+                      <UserRound className="h-4 w-4" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className={`text-[15px] font-semibold leading-5 ${
+                      <p className={`text-[13px] font-semibold leading-4 ${
                         channelFilter === "contacts" ? "text-[#1D4ED8]" : "text-slate-900"
                       }`}>
                         Contacts
                       </p>
-                      <p className="text-[12px] leading-4 text-slate-400 mt-1">
+                      <p className="text-[11px] leading-3.5 text-slate-400 mt-0.5">
                         Individual phone &amp; WhatsApp contacts
                       </p>
                     </div>
-                    <span className="rounded-full bg-slate-100 text-slate-600 px-2.5 py-1 text-[12px] font-semibold tabular-nums shrink-0">
+                    <span className="rounded-full bg-slate-100 text-slate-600 px-2 py-0.5 text-[11px] font-semibold tabular-nums shrink-0">
                       {total.toLocaleString()}
                     </span>
                     {channelFilter === "contacts" ? (
-                      <Check className="h-4 w-4 text-[#2F80FF] shrink-0" strokeWidth={2.5} />
+                      <Check className="h-3.5 w-3.5 text-[#2F80FF] shrink-0" strokeWidth={2.5} />
                     ) : (
-                      <span className="w-4 shrink-0" aria-hidden />
+                      <span className="w-3.5 shrink-0" aria-hidden />
                     )}
                   </button>
                 </div>
 
-                <div className="border-t border-slate-100 px-4 py-3.5 text-center">
-                  <Link href="/integrations" className="text-sm text-slate-500 hover:text-slate-700">
+                <div className="border-t border-slate-100 px-3 py-2.5 text-center">
+                  <Link href="/integrations" className="text-xs text-slate-500 hover:text-slate-700">
                     View All Channel Integrations
                   </Link>
                 </div>
@@ -1065,12 +1592,20 @@ export default function AllContacts() {
               <Plus className="h-4 w-4 mr-2" />
               Add New Contact
             </Button>
+            <Button
+              onClick={openCreateGroup}
+              className="h-10 bg-[#007BFF] hover:bg-[#0069d9] text-white border-transparent"
+              data-testid="button-add-group"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Group
+            </Button>
           </div>
         </div>
       </div>
 
       <div className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
-        {selectedIds.length > 0 && (
+        {!isGroupsView && selectedIds.length > 0 && (
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 px-5 py-3 border-b border-slate-100 bg-slate-50/70">
             <p className="text-sm font-medium text-slate-700">
               {selectedIds.length} Contact{selectedIds.length === 1 ? "" : "s"} selected
@@ -1141,20 +1676,16 @@ export default function AllContacts() {
                     Loading contacts...
                   </TableCell>
                 </TableRow>
-              ) : paginatedItems.length === 0 ? (
+              ) : paginatedContacts.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center text-slate-400 py-16">
-                    {channelFilter === "groups"
-                      ? waGroups.length === 0
-                        ? "No groups yet. Create a WhatsApp group to segment your audience."
-                        : `${waGroups.length.toLocaleString()} groups available. Switch to Contacts to manage individual contacts.`
-                      : searchQuery || statusFilter !== "all" || channelFilter !== "contacts" || monthDate
-                        ? "No contacts match your filters."
-                        : "No contacts yet. Add a contact to get started."}
+                    {searchQuery || statusFilter !== "all" || channelFilter !== "contacts" || monthDate
+                      ? "No contacts match your filters."
+                      : "No contacts yet. Add a contact to get started."}
                   </TableCell>
                 </TableRow>
               ) : (
-                paginatedItems.map((contact) => (
+                paginatedContacts.map((contact) => (
                   <TableRow key={contact.id} className="border-slate-100" data-testid={`row-contact-${contact.id}`}>
                     <TableCell className="pl-5">
                       <Checkbox
@@ -1221,45 +1752,77 @@ export default function AllContacts() {
                       {contact.createdAt ? format(contact.createdAt, "MMM d, yyyy") : "—"}
                     </TableCell>
                     <TableCell className="text-right pr-5">
-                      <div className="inline-flex items-center gap-1">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 bg-white border-slate-200 text-slate-700"
-                          onClick={() => openEdit(contact)}
-                          data-testid={`button-edit-contact-${contact.id}`}
-                        >
-                          <Pencil className="h-3.5 w-3.5 mr-1.5" />
-                          Edit
-                        </Button>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            {contact.email && (
-                              <DropdownMenuItem onClick={() => copyValue(contact.email || "", "Email")}>
-                                <Copy className="mr-2 h-4 w-4" />
-                                Copy email
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuItem onClick={() => copyValue(contact.phone, "Phone")}>
-                              <Copy className="mr-2 h-4 w-4" />
-                              Copy phone
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-slate-400"
+                            data-testid={`button-contact-menu-${contact.id}`}
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem onClick={() => openEdit(contact)}>
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Edit Contact
+                          </DropdownMenuItem>
+                          {waGroups.length > 0 ? (
+                            <DropdownMenuSub>
+                              <DropdownMenuSubTrigger>
+                                <FolderPlus className="mr-2 h-4 w-4" />
+                                Add to Group
+                              </DropdownMenuSubTrigger>
+                              <DropdownMenuSubContent className="w-48">
+                                {waGroups.map((group) => (
+                                  <DropdownMenuItem
+                                    key={group.id}
+                                    onClick={() => addContactToGroup(contact, group.name)}
+                                  >
+                                    {group.name}
+                                  </DropdownMenuItem>
+                                ))}
+                              </DropdownMenuSubContent>
+                            </DropdownMenuSub>
+                          ) : (
                             <DropdownMenuItem
-                              className="text-destructive focus:text-destructive"
-                              onClick={() => setDeleting(contact)}
+                              onClick={() =>
+                                toast({
+                                  title: "No groups yet",
+                                  description: "Create a WhatsApp group before assigning contacts.",
+                                })
+                              }
                             >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Delete
+                              <FolderPlus className="mr-2 h-4 w-4" />
+                              Add to Group
                             </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
+                          )}
+                          <DropdownMenuItem
+                            className={contact.status === "active" ? "text-red-600 focus:text-red-600" : "text-emerald-600 focus:text-emerald-600"}
+                            onClick={() => toggleBlockContact(contact)}
+                          >
+                            {contact.status === "active" ? (
+                              <>
+                                <Shield className="mr-2 h-4 w-4" />
+                                Block Contact
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle2 className="mr-2 h-4 w-4" />
+                                Unblock Contact
+                              </>
+                            )}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-red-600 focus:text-red-600"
+                            onClick={() => setDeleting(contact)}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete Contact
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))
@@ -1331,59 +1894,186 @@ export default function AllContacts() {
           </div>
         )}
       </div>
+      </>
+      )}
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editing ? "Edit contact" : "Add New Contact"}</DialogTitle>
-            <DialogDescription>
-              {editing
-                ? "Update this contact’s name, email, or phone number."
-                : "Add a contact to your directory. New contacts are saved to WhatsApp so they can be messaged immediately."}
+        <DialogContent className="sm:max-w-[480px] gap-0 p-0 overflow-hidden rounded-xl border border-slate-200 shadow-[0_20px_50px_rgba(15,23,42,0.12)]">
+          <DialogHeader className="px-6 pt-6 pb-4 space-y-1">
+            <DialogTitle className="text-[20px] font-semibold text-slate-900">
+              {editing ? "Edit Contact" : "Add New Contact"}
+            </DialogTitle>
+            <DialogDescription className="text-sm text-slate-500">
+              {editing ? "Update contact information" : "Add a contact to your directory"}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className="px-6 pb-2 space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="contact-name">Full name</Label>
+              <Label htmlFor="contact-name" className="text-sm font-semibold text-slate-800">
+                Name
+              </Label>
               <Input
                 id="contact-name"
                 value={form.name}
                 onChange={(e) => setForm((current) => ({ ...current, name: e.target.value }))}
-                placeholder="James Thornton"
+                placeholder="Tinotenda Kutama"
+                className="h-11 rounded-lg border-slate-200 focus-visible:ring-[#007BFF]/30 focus-visible:border-[#007BFF]"
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="contact-email">Email address</Label>
+              <Label htmlFor="contact-email" className="text-sm font-semibold text-slate-800">
+                Email (Optional)
+              </Label>
               <Input
                 id="contact-email"
                 type="email"
                 value={form.email}
                 onChange={(e) => setForm((current) => ({ ...current, email: e.target.value }))}
-                placeholder="james@example.com"
+                placeholder="name@example.com"
+                className="h-11 rounded-lg border-slate-200 focus-visible:ring-[#007BFF]/30 focus-visible:border-[#007BFF]"
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="contact-phone">Phone number</Label>
+              <Label htmlFor="contact-phone" className="text-sm font-semibold text-slate-800">
+                Phone Number
+              </Label>
               <Input
                 id="contact-phone"
                 value={form.phone}
                 onChange={(e) => setForm((current) => ({ ...current, phone: e.target.value }))}
-                placeholder="+1 (555) 201-4832"
+                placeholder="27786466123"
+                className="h-11 rounded-lg border-slate-200 focus-visible:ring-[#007BFF]/30 focus-visible:border-[#007BFF]"
               />
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="contact-group" className="text-sm font-semibold text-slate-800">
+                Groups
+              </Label>
+              <Select
+                value={form.group || undefined}
+                onValueChange={(value) => setForm((current) => ({ ...current, group: value }))}
+              >
+                <SelectTrigger
+                  id="contact-group"
+                  className="h-11 rounded-lg border-slate-200 focus:ring-[#007BFF]/30 focus:border-[#007BFF]"
+                >
+                  <SelectValue placeholder="Select group" />
+                </SelectTrigger>
+                <SelectContent>
+                  {waGroups.map((group) => (
+                    <SelectItem key={group.id} value={group.name}>
+                      {group.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setFormOpen(false)}>Cancel</Button>
+          <DialogFooter className="px-6 py-4 mt-2 sm:justify-end gap-2">
             <Button
-              className="bg-[#007BFF] hover:bg-[#0069d9] text-white border-transparent"
+              variant="outline"
+              className="h-10 rounded-lg border-slate-200 text-slate-700"
+              onClick={() => setFormOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="h-10 rounded-lg bg-[#2F80FF] hover:bg-[#256fe0] text-white border-transparent min-w-[140px]"
               onClick={() => saveMutation.mutate()}
               disabled={saveMutation.isPending}
             >
-              {saveMutation.isPending ? "Saving..." : editing ? "Save changes" : "Add contact"}
+              {saveMutation.isPending
+                ? "Saving..."
+                : editing
+                  ? "Contact updated"
+                  : "Add contact"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={groupFormOpen}
+        onOpenChange={(open) => {
+          setGroupFormOpen(open);
+          if (!open) setEditingGroup(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-[520px] gap-0 p-0 overflow-hidden rounded-xl border border-slate-200 shadow-[0_20px_50px_rgba(15,23,42,0.12)]">
+          <DialogHeader className="px-6 pt-6 pb-4 space-y-1.5">
+            <DialogTitle className="text-[20px] font-semibold text-slate-900">
+              {editingGroup ? "Edit Group" : "Add Group"}
+            </DialogTitle>
+            <DialogDescription className="text-sm text-slate-500">
+              {editingGroup
+                ? "Update your group details below."
+                : "Create a new contact group to segment and organize your audience."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="px-6 pb-2 space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="group-name" className="text-sm font-semibold text-slate-800">
+                Group Name <span className="text-[#2F80FF]">*</span>
+              </Label>
+              <Input
+                id="group-name"
+                value={groupForm.name}
+                onChange={(e) => setGroupForm((current) => ({ ...current, name: e.target.value }))}
+                placeholder="e.g. Internal_group_5 or VIP Customers"
+                className="h-11 rounded-lg border-slate-200 focus-visible:ring-[#2F80FF]/30 focus-visible:border-[#2F80FF]"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="group-description" className="text-sm font-semibold text-slate-800">
+                Description <span className="font-normal text-slate-400">(optional)</span>
+              </Label>
+              <Textarea
+                id="group-description"
+                value={groupForm.description}
+                onChange={(e) => setGroupForm((current) => ({ ...current, description: e.target.value }))}
+                placeholder="Enter group description or purpose (optional)"
+                rows={4}
+                className="min-h-[110px] resize-none rounded-lg border-slate-200 focus-visible:ring-[#2F80FF]/30 focus-visible:border-[#2F80FF]"
+              />
+            </div>
+          </div>
+          <DialogFooter className="px-6 py-4 mt-2 sm:justify-end gap-2">
+            <Button
+              variant="outline"
+              className="h-10 rounded-lg border-slate-200 text-slate-700"
+              onClick={() => setGroupFormOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="h-10 rounded-lg bg-[#2F80FF] hover:bg-[#256fe0] text-white border-transparent min-w-[130px]"
+              onClick={() => createGroupMutation.mutate()}
+              disabled={createGroupMutation.isPending}
+            >
+              {createGroupMutation.isPending
+                ? editingGroup
+                  ? "Saving..."
+                  : "Creating..."
+                : editingGroup
+                  ? "Save changes"
+                  : "Create Group"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {membersGroup && (
+        <AuthProvider>
+          <GroupMembersDrawer
+            open={!!membersGroup}
+            onOpenChange={(open) => {
+              if (!open) setMembersGroup(null);
+            }}
+            group={membersGroup}
+            channelId={activeChannel?.id}
+          />
+        </AuthProvider>
+      )}
 
       <AlertDialog open={!!deleting} onOpenChange={() => setDeleting(null)}>
         <AlertDialogContent>

@@ -461,7 +461,9 @@ export default function Campaigns() {
           <span className="text-slate-600">Campaigns</span>
           </div>
               <Button
-          onClick={() => setLocation("/campaigns/new")}
+          onClick={() =>
+            setLocation(tab === "calling" ? "/campaigns/new?channel=calling" : "/campaigns/new")
+          }
           className="h-10 bg-[#007BFF] hover:bg-[#0069d9] text-white border-transparent"
               data-testid="button-create-campaign"
             >

@@ -219,7 +219,18 @@ export function AppSidebar() {
 
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathMatches(location, "/contacts")} tooltip="Contacts" className={itemClass(pathMatches(location, "/contacts"))} data-testid="link-contacts">
-                  <Link href="/contacts" onClick={handleNavClick}>
+                  <Link
+                    href="/contacts"
+                    onClick={(e) => {
+                      handleNavClick();
+                      // Clear deep-link query (?id=…) so the full contact list shows again
+                      if (window.location.pathname === "/contacts" && window.location.search) {
+                        e.preventDefault();
+                        window.history.pushState({}, "", "/contacts");
+                        window.dispatchEvent(new PopStateEvent("popstate"));
+                      }
+                    }}
+                  >
                     <Users className="h-4 w-4" />
                     <span>Contacts</span>
                   </Link>

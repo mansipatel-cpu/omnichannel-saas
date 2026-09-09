@@ -160,24 +160,26 @@ export function AddContactsDialog({
         onOpenChange(o);
       }}
     >
-      <DialogContent className="sm:max-w-[560px]">
+      <DialogContent className="sm:max-w-[560px] gap-4 rounded-2xl border-slate-200">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <UserPlus className="h-5 w-5 text-green-600" />
-            Add Contacts to "{groupName}"
+          <DialogTitle className="flex items-center gap-2 text-slate-900">
+            <span className="h-9 w-9 rounded-full bg-[#EAF3FF] text-[#2F80FF] inline-flex items-center justify-center">
+              <UserPlus className="h-4 w-4" />
+            </span>
+            Add Contacts to “{groupName}”
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-slate-500">
             Pick contacts from this channel to add to the group.
           </DialogDescription>
         </DialogHeader>
 
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
             placeholder="Search by name, phone, or email"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="h-10 pl-9 border-slate-200"
           />
         </div>
 
@@ -188,41 +190,41 @@ export function AddContactsDialog({
               onCheckedChange={toggleAll}
               disabled={candidates.length === 0}
             />
-            <span className="text-gray-600">
+            <span className="text-slate-600">
               Select all on page ({candidates.length})
             </span>
           </label>
-          <span className="text-gray-500">{selected.size} selected</span>
+          <span className="text-slate-500">{selected.size} selected</span>
         </div>
 
-        <ScrollArea className="h-72 border rounded-md">
+        <ScrollArea className="h-72 border border-slate-200 rounded-xl">
           {isLoading ? (
-            <div className="p-6 text-center text-sm text-gray-500">
+            <div className="p-6 text-center text-sm text-slate-500">
               Loading contacts…
             </div>
           ) : candidates.length === 0 ? (
-            <div className="p-6 text-center text-sm text-gray-500 flex flex-col items-center gap-2">
-              <Users className="h-8 w-8 text-gray-300" />
+            <div className="p-6 text-center text-sm text-slate-500 flex flex-col items-center gap-2">
+              <Users className="h-8 w-8 text-slate-300" />
               {search.trim()
                 ? "No matching contacts."
                 : "All your contacts are already in this group."}
             </div>
           ) : (
-            <div className="divide-y">
+            <div className="divide-y divide-slate-100">
               {candidates.map((c) => (
                 <label
                   key={c.id}
-                  className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                  className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 cursor-pointer"
                 >
                   <Checkbox
                     checked={selected.has(c.id)}
                     onCheckedChange={() => toggle(c.id)}
                   />
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-900 truncate">
+                    <div className="text-sm font-medium text-slate-900 truncate">
                       {c.name || "(no name)"}
                     </div>
-                    <div className="text-xs text-gray-500 truncate">
+                    <div className="text-xs text-slate-500 truncate">
                       {c.phone}
                       {c.email ? ` • ${c.email}` : ""}
                     </div>
@@ -234,7 +236,7 @@ export function AddContactsDialog({
         </ScrollArea>
 
         {totalPages > 1 && (
-          <div className="flex items-center justify-between text-xs text-gray-600">
+          <div className="flex items-center justify-between text-xs text-slate-600">
             <span>
               Page {page} of {totalPages} · {total} matching contact
               {total === 1 ? "" : "s"}
@@ -243,6 +245,7 @@ export function AddContactsDialog({
               <Button
                 size="sm"
                 variant="outline"
+                className="h-8 border-slate-200"
                 disabled={page <= 1 || isLoading}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
               >
@@ -252,6 +255,7 @@ export function AddContactsDialog({
               <Button
                 size="sm"
                 variant="outline"
+                className="h-8 border-slate-200"
                 disabled={page >= totalPages || isLoading}
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               >
@@ -263,11 +267,15 @@ export function AddContactsDialog({
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="outline"
+            className="border-slate-200"
+            onClick={() => onOpenChange(false)}
+          >
             Cancel
           </Button>
           <Button
-            className="bg-green-600 hover:bg-green-700 text-white"
+            className="bg-[#2F80FF] hover:bg-[#256fe0] text-white border-transparent"
             disabled={selected.size === 0 || addMutation.isPending}
             onClick={() => addMutation.mutate()}
           >

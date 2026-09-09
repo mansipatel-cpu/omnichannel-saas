@@ -36,8 +36,8 @@ import {
   Upload,
   Users,
   Phone,
-  ChevronLeft,
-  ChevronRight,
+  Mail,
+  X,
   ArrowRightLeft,
   Copy,
 } from "lucide-react";
@@ -72,6 +72,7 @@ interface Contact {
   name: string;
   phone: string;
   email?: string | null;
+  status?: string | null;
   groups?: string[] | null;
   tags?: string[] | null;
   createdAt?: string;
@@ -626,26 +627,42 @@ export function GroupMembersDrawer({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="w-full sm:max-w-xl flex flex-col p-0">
-          <SheetHeader className="px-6 pt-6">
-            <SheetTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-green-600" />
-              Members of "{group?.name}"
-            </SheetTitle>
-            <SheetDescription>
-              {isLoading
-                ? "Loading members…"
-                : `${total} contact${total === 1 ? "" : "s"} in this group${
-                    isDemo ? " · read-only (demo)" : ""
-                  }`}
-            </SheetDescription>
+        <SheetContent className="w-full sm:max-w-xl flex flex-col p-0 gap-0 border-l border-slate-200 [&>button]:hidden">
+          <SheetHeader className="px-6 pt-5 pb-4 border-b border-slate-100 space-y-0">
+            <div className="flex items-start gap-3">
+              <div className="h-11 w-11 rounded-full bg-[#EAF3FF] text-[#2F80FF] flex items-center justify-center shrink-0">
+                <UserPlus className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1 pr-2">
+                <SheetTitle className="text-[18px] font-semibold text-slate-900 leading-tight">
+                  Members of “{group?.name}”
+                </SheetTitle>
+                <SheetDescription className="text-sm text-slate-500 mt-1">
+                  {isLoading
+                    ? "Loading members…"
+                    : `${total} contact${total === 1 ? "" : "s"} in this group${
+                        isDemo ? " · read-only (demo)" : ""
+                      }`}
+                </SheetDescription>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0 text-slate-400 hover:text-slate-700"
+                onClick={() => onOpenChange(false)}
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </SheetHeader>
 
           <div className="px-6 pt-4 flex flex-wrap gap-2">
             {!isDemo && (
               <Button
                 size="sm"
-                className="bg-green-600 hover:bg-green-700 text-white"
+                className="h-9 bg-[#2F80FF] hover:bg-[#256fe0] text-white border-transparent"
                 onClick={() => setAddOpen(true)}
               >
                 <UserPlus className="h-4 w-4 mr-1.5" />
@@ -665,6 +682,7 @@ export function GroupMembersDrawer({
                 <Button
                   size="sm"
                   variant="outline"
+                  className="h-9 bg-white border-slate-200 text-slate-700"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={importState.active}
                   data-testid="button-group-import-csv"
@@ -677,6 +695,7 @@ export function GroupMembersDrawer({
             <Button
               size="sm"
               variant="outline"
+              className="h-9 bg-white border-slate-200 text-slate-700"
               onClick={exportCSV}
               disabled={total === 0 || exporting}
             >
@@ -689,6 +708,7 @@ export function GroupMembersDrawer({
                   <Button
                     size="sm"
                     variant="outline"
+                    className="h-9 bg-white border-slate-200"
                     disabled={
                       moveMutation.isPending || otherGroups.length === 0
                     }
@@ -733,6 +753,7 @@ export function GroupMembersDrawer({
                   <Button
                     size="sm"
                     variant="outline"
+                    className="h-9 bg-white border-slate-200"
                     disabled={
                       copyMutation.isPending || otherGroups.length === 0
                     }
@@ -776,6 +797,7 @@ export function GroupMembersDrawer({
               <Button
                 size="sm"
                 variant="destructive"
+                className="h-9"
                 onClick={() => askRemove(Array.from(selected))}
                 disabled={removeMutation.isPending}
               >
@@ -811,49 +833,48 @@ export function GroupMembersDrawer({
             </div>
           )}
 
-          <div className="px-6 pt-3 pb-2">
+          <div className="px-6 pt-3 pb-2 space-y-3">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
                 placeholder="Search members"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
+                className="h-10 pl-9 bg-white border-slate-200 rounded-lg"
               />
             </div>
+            {!isDemo && members.length > 0 && (
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <Checkbox
+                  checked={allSelected}
+                  onCheckedChange={toggleAll}
+                  aria-label="Select all"
+                />
+                <span>Select all on this page ({members.length})</span>
+              </div>
+            )}
           </div>
-
-          {!isDemo && members.length > 0 && (
-            <div className="px-6 pb-2 flex items-center gap-2 text-xs text-gray-600">
-              <Checkbox
-                checked={allSelected}
-                onCheckedChange={toggleAll}
-                aria-label="Select all"
-              />
-              <span>Select all on this page ({members.length})</span>
-            </div>
-          )}
 
           <ScrollArea className="flex-1 px-6">
             {isLoading ? (
-              <div className="py-10 text-center text-sm text-gray-500">
+              <div className="py-10 text-center text-sm text-slate-500">
                 Loading…
               </div>
             ) : total === 0 && !search ? (
               <div className="py-12 text-center flex flex-col items-center gap-3">
-                <div className="rounded-full bg-gray-100 p-4">
-                  <Users className="h-8 w-8 text-gray-400" />
+                <div className="rounded-full bg-slate-100 p-4">
+                  <Users className="h-8 w-8 text-slate-400" />
                 </div>
-                <p className="text-sm text-gray-600 font-medium">
+                <p className="text-sm text-slate-700 font-medium">
                   No contacts in this group yet
                 </p>
-                <p className="text-xs text-gray-500 max-w-xs">
+                <p className="text-xs text-slate-500 max-w-xs">
                   Add contacts to start sending campaigns to this audience.
                 </p>
                 {!isDemo && (
                   <Button
                     size="sm"
-                    className="bg-green-600 hover:bg-green-700 text-white mt-2"
+                    className="h-9 bg-[#2F80FF] hover:bg-[#256fe0] text-white border-transparent mt-2"
                     onClick={() => setAddOpen(true)}
                   >
                     <UserPlus className="h-4 w-4 mr-1.5" />
@@ -862,92 +883,122 @@ export function GroupMembersDrawer({
                 )}
               </div>
             ) : members.length === 0 ? (
-              <div className="py-10 text-center text-sm text-gray-500">
+              <div className="py-10 text-center text-sm text-slate-500">
                 No members match "{search}".
               </div>
             ) : (
-              <div className="divide-y border rounded-md">
-                {members.map((m) => (
-                  <div
-                    key={m.id}
-                    className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50"
-                  >
-                    {!isDemo && (
-                      <Checkbox
-                        checked={selected.has(m.id)}
-                        onCheckedChange={() => toggle(m.id)}
-                      />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-gray-900 truncate">
-                        {m.name || "(no name)"}
-                      </div>
-                      <div className="text-xs text-gray-500 flex items-center gap-1 truncate">
-                        <Phone className="h-3 w-3" />
-                        {m.phone}
-                        {m.email ? (
-                          <span className="ml-2 truncate">• {m.email}</span>
-                        ) : null}
-                      </div>
-                      {(m.tags || []).length > 0 && (
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {(m.tags || []).slice(0, 5).map((t) => (
-                            <span
-                              key={t}
-                              className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded"
-                            >
-                              {t}
-                            </span>
-                          ))}
+              <div className="space-y-2 pb-4">
+                {members.map((m) => {
+                  const status = (m.status || "active").toLowerCase();
+                  const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
+                  const isActive = status === "active";
+                  return (
+                    <div
+                      key={m.id}
+                      className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-3.5 py-3 hover:border-slate-300 transition-colors"
+                    >
+                      {!isDemo && (
+                        <Checkbox
+                          checked={selected.has(m.id)}
+                          onCheckedChange={() => toggle(m.id)}
+                          className="mt-1"
+                        />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-semibold text-slate-900 truncate">
+                            {m.name || "(no name)"}
+                          </p>
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                              isActive
+                                ? "bg-emerald-50 text-emerald-700"
+                                : status === "blocked"
+                                  ? "bg-red-50 text-red-700"
+                                  : "bg-slate-100 text-slate-600"
+                            }`}
+                          >
+                            {statusLabel}
+                          </span>
                         </div>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                          <span className="inline-flex items-center gap-1.5">
+                            <Phone className="h-3.5 w-3.5 shrink-0" />
+                            {m.phone}
+                          </span>
+                          {m.email ? (
+                            <span className="inline-flex items-center gap-1.5 truncate">
+                              <Mail className="h-3.5 w-3.5 shrink-0" />
+                              <span className="truncate">{m.email}</span>
+                            </span>
+                          ) : null}
+                        </div>
+                        {(m.tags || []).length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {(m.tags || []).slice(0, 5).map((t) => (
+                              <span
+                                key={t}
+                                className="text-[10px] bg-[#EAF3FF] text-[#2F80FF] px-1.5 py-0.5 rounded"
+                              >
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {!isDemo && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 w-8 p-0 text-red-500 hover:text-red-600 hover:bg-red-50 shrink-0"
+                          onClick={() => askRemove([m.id])}
+                          disabled={removeMutation.isPending}
+                          title="Remove from group"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       )}
                     </div>
-                    {!isDemo && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                        onClick={() => askRemove([m.id])}
-                        disabled={removeMutation.isPending}
-                        title="Remove from group"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </ScrollArea>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="px-6 py-3 border-t flex items-center justify-between text-xs text-gray-600">
-              <span>
-                Page {page} of {totalPages} · {total} total
-              </span>
-              <div className="flex gap-1">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={page <= 1 || isLoading}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  Prev
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={page >= totalPages || isLoading}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                >
-                  Next
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
+          <div className="px-6 py-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm text-slate-500">
+            <span>
+              Showing {members.length} of {total.toLocaleString()} contact
+              {total === 1 ? "" : "s"}
+            </span>
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 border-slate-200"
+                disabled={page <= 1 || isLoading}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 w-8 border-slate-200 bg-white"
+                disabled
+              >
+                {page}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 border-slate-200"
+                disabled={page >= totalPages || isLoading}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Next
+              </Button>
             </div>
-          )}
+          </div>
         </SheetContent>
       </Sheet>
 

@@ -46,6 +46,7 @@ import Voices from "@/pages/Voices";
 import PhoneNumbers from "@/pages/PhoneNumbers";
 import AllContacts from "@/pages/AllContacts";
 import AddContact from "@/pages/AddContact";
+import CreateContactGroup from "@/pages/CreateContactGroup";
 import CreateCampaign from "@/pages/CreateCampaign";
 import AllTemplates from "@/pages/AllTemplates";
 import CreateWhatwayTemplate from "@/pages/CreateWhatwayTemplate";
@@ -174,6 +175,7 @@ function UserAppRoutes({ includeAdmin = false }: { includeAdmin?: boolean }) {
       <Route path="/calls/:id" component={CallDetail} />
       <Route path="/calls" component={Calls} />
       <Route path="/contacts/new" component={AddContact} />
+      <Route path="/contacts/groups/new" component={CreateContactGroup} />
       <Route path="/contacts" component={AllContacts} />
       <Route path="/analytics" component={Analytics} />
       <Route path="/crm" component={CRMPage} />

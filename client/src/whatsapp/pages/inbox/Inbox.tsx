@@ -15,9 +15,9 @@
  * ============================================================
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import Header from "@wa/components/layout/header";
 import { EmptyState } from "@wa/components/ui/empty-state";
 import { MessageCircle } from "lucide-react";
@@ -33,6 +33,14 @@ import ConversationList from "./ConversationList";
 import MessageThread from "./MessageThread";
 import type { Message, ConversationWithContact } from "./types";
 import type { Conversation, Contact } from "@shared/whatsapp-schema";
+import {
+  createDemoConversation,
+  createDemoGreetingMessage,
+  createLocalInboundReply,
+  createLocalOutboundMessage,
+  isDemoConversationId,
+  isServerDemoConversation,
+} from "./demoConversation";
 
 export default function Inbox() {
   const [selectedConversation, setSelectedConversation] =
@@ -49,7 +57,6 @@ export default function Inbox() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { t } = useTranslation();
-  const [location] = useLocation();
   // Use the shared global socket from SocketProvider instead of opening a
   // second connection here. A single socket prevents duplicate event handlers
   // and cuts the server connection count in half.
@@ -68,8 +75,15 @@ const [selectedMediaFile, setSelectedMediaFile] = useState<File | null>(null);
 const [mediaPreviewUrl, setMediaPreviewUrl] = useState("");
 const [showMediaPreview, setShowMediaPreview] = useState(false);
 
-const [sendingMedia, setSendingMedia] = useState(false);
-const [mediaCaption, setMediaCaption] = useState("");
+  const [sendingMedia, setSendingMedia] = useState(false);
+  const [mediaCaption, setMediaCaption] = useState("");
+  const [demoMessages, setDemoMessages] = useState<Message[]>(() => [
+    createDemoGreetingMessage(),
+  ]);
+  const [demoPreview, setDemoPreview] = useState({
+    lastMessageText: createDemoGreetingMessage().content,
+    lastMessageAt: new Date().toISOString(),
+  });
 
 
   const { data: activeChannel } = useQuery({
@@ -85,7 +99,7 @@ const [mediaCaption, setMediaCaption] = useState("");
     staleTime: 30 * 1000,
   });
 
-  const { data: conversations = [], isLoading: conversationsLoading } =
+  const { data: serverConversations = [], isLoading: conversationsLoading } =
     useQuery({
       queryKey: queryKeys.conversations.list(activeChannel?.id),
       queryFn: async () => {
@@ -102,6 +116,19 @@ const [mediaCaption, setMediaCaption] = useState("");
       retryDelay: 2000,
       throwOnError: false,
     });
+
+  const conversations = useMemo(() => {
+    const real = (serverConversations as ConversationWithContact[]).filter(
+      (conv) => !isServerDemoConversation(conv),
+    );
+    const demo = {
+      ...createDemoConversation(activeChannel?.id),
+      lastMessageText: demoPreview.lastMessageText,
+      lastMessageAt: demoPreview.lastMessageAt as any,
+      lastIncomingMessageAt: demoPreview.lastMessageAt as any,
+    };
+    return [demo, ...real];
+  }, [serverConversations, activeChannel?.id, demoPreview]);
 
   const { data: pinsResponse } = useQuery({
     queryKey: queryKeys.conversations.pins(activeChannel?.id),
@@ -199,6 +226,7 @@ const [mediaCaption, setMediaCaption] = useState("");
   });
 
   const handleTogglePin = (conversationId: string, currentlyPinned: boolean) => {
+    if (isDemoConversationId(conversationId)) return;
     togglePinMutation.mutate({ conversationId, currentlyPinned });
   };
 
@@ -214,7 +242,7 @@ const [mediaCaption, setMediaCaption] = useState("");
       const hasMore = response.headers.get("x-has-more") === "true";
       return { messages: data, hasMore };
     },
-    enabled: !!selectedConversation?.id,
+    enabled: !!selectedConversation?.id && !isDemoConversationId(selectedConversation?.id),
     staleTime: 30000,
     retry: 1,
     retryDelay: 2000,
@@ -223,6 +251,9 @@ const [mediaCaption, setMediaCaption] = useState("");
 
   const freshMessages: Message[] = messagesPage?.messages ?? [];
   const messages: Message[] = (() => {
+    if (isDemoConversationId(selectedConversation?.id)) {
+      return demoMessages;
+    }
     const seen = new Set<string>();
     const merged: Message[] = [];
     for (const m of [...olderMessages, ...freshMessages]) {
@@ -607,6 +638,7 @@ socketInstance.on("conversation_updated", (data) => {
 
   useEffect(() => {
   if (!selectedConversation || !socket) return;
+  if (isDemoConversationId(selectedConversation.id)) return;
 
   const room = `conversation:${selectedConversation.id}`;
   console.log("🔗 Joining conversation room:", room);
@@ -638,16 +670,8 @@ socketInstance.on("conversation_updated", (data) => {
       return response.json();
     },
     onSuccess: (data: any) => {
-      if (socket && selectedConversation) {
-        socket.emit("agent_send_message", {
-          conversationId: selectedConversation.id,
-          content: messageText,
-          agentId: user?.id,
-          agentName:
-            `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
-            user?.username,
-        });
-      }
+      // Message is already persisted + broadcast by the HTTP createMessage
+      // endpoint. Do not also emit agent_send_message — that would create a duplicate.
 
       queryClient.invalidateQueries({
         queryKey: queryKeys.conversations.messages(selectedConversation?.id),
@@ -859,6 +883,27 @@ socketInstance.on("conversation_updated", (data) => {
   const handleSendMessage = () => {
     if (!messageText.trim() || !selectedConversation) return;
 
+    if (isDemoConversationId(selectedConversation.id)) {
+      const content = messageText.trim();
+      const outbound = createLocalOutboundMessage(content);
+      setDemoMessages((prev) => [...prev, outbound]);
+      setDemoPreview({
+        lastMessageText: content,
+        lastMessageAt: outbound.createdAt,
+      });
+      setMessageText("");
+
+      window.setTimeout(() => {
+        const reply = createLocalInboundReply();
+        setDemoMessages((prev) => [...prev, reply]);
+        setDemoPreview({
+          lastMessageText: reply.content,
+          lastMessageAt: reply.createdAt,
+        });
+      }, 900);
+      return;
+    }
+
     sendMessageMutation.mutate({
       conversationId: selectedConversation.id,
       content: messageText.trim(),
@@ -1007,36 +1052,8 @@ useEffect(() => {
   };
 
   const handleViewContact = () => {
-    if (!selectedConversation || !selectedConversation.contactId) return;
-    window.location.href = `/contacts?id=${
-      selectedConversation.contactId
-    }&phone=${selectedConversation.contactPhone || ""}`;
-  };
-
-  const handleArchiveChat = async () => {
-    if (!selectedConversation) return;
-
-    try {
-      await apiRequest(
-        "PATCH",
-        `/api/whatsapp/conversations/${selectedConversation.id}`,
-        { status: "archived" }
-      );
-
-      toast({
-        title: t("inbox.toasts.chatArchived"),
-        description: t("inbox.toasts.chatArchivedDesc"),
-      });
-
-      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all() });
-      setSelectedConversation(null);
-    } catch (error) {
-      toast({
-        title: t("common.error"),
-        description: t("inbox.toasts.chatArchiveFailed"),
-        variant: "destructive",
-      });
-    }
+    if (!selectedConversation?.contactId) return;
+    window.location.href = `/contacts?id=${encodeURIComponent(selectedConversation.contactId)}`;
   };
 
   const handleBlockContact = async () => {
@@ -1094,60 +1111,6 @@ useEffect(() => {
     }
   };
 
-  const updateConversationMutation = useMutation({
-    mutationFn: async (data: { id: string; updates: any }) => {
-      const response = await apiRequest(
-        "PUT",
-        `/api/whatsapp/conversations/${data.id}`,
-        data.updates
-      );
-      return response.json();
-    },
-    onSuccess: (updatedConversation) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all() });
-      setSelectedConversation(updatedConversation);
-      toast({
-        title: t("common.success"),
-        description: t("inbox.toasts.conversationUpdated"),
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: t("common.error"),
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleAssignConversation = (
-    assignedTo: string,
-    assignedToName: string
-  ) => {
-    if (!selectedConversation) return;
-
-    updateConversationMutation.mutate({
-      id: selectedConversation.id,
-      updates: {
-        assignedTo,
-        assignedToName,
-        assignedAt: new Date().toISOString(),
-        status: assignedTo ? "assigned" : "open",
-      },
-    });
-  };
-
-  const handleCloseConversation = () => {
-    if (!socket || !selectedConversation) return;
-
-    socket.emit("close_conversation", {
-      conversationId: selectedConversation.id,
-      agentId: user?.id,
-    });
-
-    updateConversationStatus("closed");
-  };
-
   const filteredConversations = conversations.filter((conv: any) => {
     const matchesSearch =
       conv.contact?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -1191,6 +1154,7 @@ useEffect(() => {
 
   const is24HourWindowExpired =
   selectedConversation?.type === "whatsapp" &&
+  !isDemoConversationId(selectedConversation?.id) &&
   normalizeTime((selectedConversation as any)?.lastIncomingMessageAt || selectedConversation?.lastMessageAt) > 0
     ? Date.now() -
         normalizeTime((selectedConversation as any)?.lastIncomingMessageAt || selectedConversation?.lastMessageAt) >
@@ -1271,10 +1235,8 @@ useEffect(() => {
             onBack={() => setSelectedConversation(null)}
             onUpdateStatus={updateConversationStatus}
             onViewContact={handleViewContact}
-            onArchiveChat={handleArchiveChat}
             onBlockContact={handleBlockContact}
             onDeleteChat={handleDeleteChat}
-            onAssignConversation={handleAssignConversation}
             hasMoreMessages={hasMoreMessages}
             onLoadMoreMessages={loadOlderMessages}
             loadingMoreMessages={loadingOlderMessages}

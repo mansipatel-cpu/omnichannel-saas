@@ -15,7 +15,6 @@
  * ============================================================
  */
 
-import { useQuery } from "@tanstack/react-query";
 import { Button } from "@wa/components/ui/button";
 import { Badge } from "@wa/components/ui/badge";
 import { Avatar, AvatarFallback } from "@wa/components/ui/avatar";
@@ -32,12 +31,10 @@ import {
 import {
   MoreVertical,
   Ban,
-  Archive,
   Trash2,
   MessageCircle,
   Check,
   X,
-  UserPlus,
   User as UserIcon,
   Pin,
   PinOff,
@@ -51,73 +48,6 @@ import MessageComposer from "./MessageComposer";
 import type { Message } from "./types";
 import type { Conversation } from "@shared/whatsapp-schema";
 import { isDemoUser, maskName, maskPhone } from "@wa/utils/maskUtils";
-
-const LIMIT = 1000;
-const TeamAssignDropdown = ({
-  conversationId,
-  currentAssignee,
-  currentAssigneeName,
-  onAssign,
-}: {
-  conversationId: string;
-  currentAssignee?: string;
-  currentAssigneeName?: string;
-  onAssign: (assignedTo: string, assignedToName: string) => void;
-}) => {
-  const { data: users = [] } = useQuery({
-    queryKey: ["/api/whatsapp/team/members", LIMIT],
-    queryFn: async () => {
-      const response = await fetch( `/api/whatsapp/team/members?limit=${LIMIT}`);
-      
-      if (!response.ok) throw new Error("Failed to fetch users");
-    const data = await response.json()
-    return data.data;
-    },
-  });
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2 h-9 bg-white border-slate-200 text-slate-700">
-          <UserPlus className="w-4 h-4" />
-          {currentAssignee ? `Reassign (${currentAssigneeName})` : "Assign"}
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel>Assign to team member</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {currentAssignee && (
-          <>
-            <DropdownMenuItem onClick={() => onAssign("", "")}>
-              <UserIcon className="w-4 h-4 mr-2" />
-              Unassign
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-          </>
-        )}
-        {users?.map((user: any) => (
-          <DropdownMenuItem
-            key={user.id}
-            onClick={() =>
-              onAssign(
-                user.id,
-                `${user.firstName} ${user.lastName}`.trim() || user.username
-              )
-            }
-          >
-            <UserIcon className="w-4 h-4 mr-2" />
-            <div className="flex flex-col">
-              <span>
-                {user.firstName} {user.lastName}
-              </span>
-              <span className="text-xs text-gray-500">@{user.username}</span>
-            </div>
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-};
 
 interface MessageThreadProps {
   selectedConversation: Conversation;
@@ -140,10 +70,8 @@ interface MessageThreadProps {
   onBack: () => void;
   onUpdateStatus: (status: string) => void;
   onViewContact: () => void;
-  onArchiveChat: () => void;
   onBlockContact: () => void;
   onDeleteChat: () => void;
-  onAssignConversation: (assignedTo: string, assignedToName: string) => void;
   hasMoreMessages?: boolean;
   onLoadMoreMessages?: () => void;
   loadingMoreMessages?: boolean;
@@ -172,10 +100,8 @@ const MessageThread = ({
   onBack,
   onUpdateStatus,
   onViewContact,
-  onArchiveChat,
   onBlockContact,
   onDeleteChat,
-  onAssignConversation,
   hasMoreMessages = false,
   onLoadMoreMessages,
   loadingMoreMessages = false,
@@ -265,19 +191,6 @@ const MessageThread = ({
                 )}
               </Button>
             )}
-            {!demo &&
-              (
-              <TeamAssignDropdown
-                conversationId={selectedConversation.id}
-                currentAssignee={
-                  selectedConversation.assignedTo || undefined
-                }
-                currentAssigneeName={
-                  selectedConversation?.assignedToName || undefined
-                }
-                onAssign={onAssignConversation}
-              /> )}
-
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-500 hover:text-gray-700">
@@ -304,13 +217,6 @@ const MessageThread = ({
                 <DropdownMenuItem onClick={onViewContact}>
                   <UserIcon className="mr-2 h-4 w-4" />
                   View Contact
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  disabled={false}
-                  onClick={onArchiveChat}
-                >
-                  <Archive className="mr-2 h-4 w-4" />
-                  Archive Chat
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   disabled={false}

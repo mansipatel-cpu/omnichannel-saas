@@ -123,9 +123,13 @@ function EditContactForm({
           name="name"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{t("contacts.addContact.name")}</FormLabel>
+              <FormLabel className="text-sm font-semibold text-slate-800">Name</FormLabel>
               <FormControl>
-                <Input {...field} value={field.value || ""} />
+                <Input
+                  {...field}
+                  value={field.value || ""}
+                  className="h-11 rounded-lg border-slate-200 focus-visible:ring-[#007BFF]/30 focus-visible:border-[#007BFF]"
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -137,9 +141,16 @@ function EditContactForm({
           name="email"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{t("contacts.addContact.email")}</FormLabel>
+              <FormLabel className="text-sm font-semibold text-slate-800">
+                Email (Optional)
+              </FormLabel>
               <FormControl>
-                <Input {...field} type="email" value={field.value || ""} />
+                <Input
+                  {...field}
+                  type="email"
+                  value={field.value || ""}
+                  className="h-11 rounded-lg border-slate-200 focus-visible:ring-[#007BFF]/30 focus-visible:border-[#007BFF]"
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -151,12 +162,15 @@ function EditContactForm({
           name="phone"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{t("contacts.addContact.phone")}</FormLabel>
+              <FormLabel className="text-sm font-semibold text-slate-800">
+                Phone Number
+              </FormLabel>
               <FormControl>
                 <Input
                   {...field}
                   value={field.value}
                   maxLength={20}
+                  className="h-11 rounded-lg border-slate-200 focus-visible:ring-[#007BFF]/30 focus-visible:border-[#007BFF]"
                   onChange={(e) => {
                     const value = e.target.value.replace(/\D/g, "");
                     field.onChange(value);
@@ -173,16 +187,15 @@ function EditContactForm({
           name="groups"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Groups</FormLabel>
+              <FormLabel className="text-sm font-semibold text-slate-800">Groups</FormLabel>
 
               <Select
+                value={field.value?.[0]}
                 onValueChange={(value) => {
-                  if (!field.value.includes(value)) {
-                    field.onChange([...field.value, value]);
-                  }
+                  field.onChange(value ? [value] : []);
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger className="h-11 rounded-lg border-slate-200 focus:ring-[#007BFF]/30 focus:border-[#007BFF]">
                   <SelectValue placeholder="Select group" />
                 </SelectTrigger>
 
@@ -195,29 +208,18 @@ function EditContactForm({
                 </SelectContent>
               </Select>
 
-              <div className="flex flex-wrap gap-2 mt-2">
-                {field.value?.map((name: string) => (
-                  <Badge key={name}>
-                    {name}
-                    <X
-                      className="ml-1 h-3 w-3 cursor-pointer"
-                      onClick={() =>
-                        field.onChange(
-                          field.value.filter((n: string) => n !== name),
-                        )
-                      }
-                    />
-                  </Badge>
-                ))}
-              </div>
-
               <FormMessage />
             </FormItem>
           )}
         />
 
-        <div className="flex justify-end space-x-2">
-          <Button type="button" variant="outline" onClick={onCancel}>
+        <div className="flex justify-end space-x-2 pt-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 rounded-lg border-slate-200 text-slate-700"
+            onClick={onCancel}
+          >
             {t("common.cancel")}
           </Button>
           <Button
@@ -227,7 +229,7 @@ function EditContactForm({
                 ? true
                 : updateContactMutation.isPending
             }
-            className="bg-green-600 hover:bg-green-700 text-white"
+            className="h-10 rounded-lg bg-[#2F80FF] hover:bg-[#256fe0] text-white min-w-[140px]"
           >
             {updateContactMutation.isPending
               ? `${t("contacts.editContact.updating")}`
@@ -527,13 +529,16 @@ export function ContactDialogs({
 
       {/* Edit Contact Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("contacts.editContact.title")}</DialogTitle>
-            <DialogDescription>
+        <DialogContent className="sm:max-w-[480px] gap-0 p-0 overflow-hidden rounded-xl border border-slate-200 shadow-[0_20px_50px_rgba(15,23,42,0.12)]">
+          <DialogHeader className="px-6 pt-6 pb-2 space-y-1">
+            <DialogTitle className="text-[20px] font-semibold text-slate-900">
+              {t("contacts.editContact.title")}
+            </DialogTitle>
+            <DialogDescription className="text-sm text-slate-500">
               {t("contacts.editContact.description")}
             </DialogDescription>
           </DialogHeader>
+          <div className="px-6 pb-6">
           {selectedContact && (
             <EditContactForm
               contact={selectedContact}
@@ -560,6 +565,7 @@ export function ContactDialogs({
               }}
             />
           )}
+          </div>
         </DialogContent>
       </Dialog>
 

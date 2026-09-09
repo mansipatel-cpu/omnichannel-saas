@@ -57,8 +57,9 @@ const AppHeaderContext = createContext<AppHeaderContextValue | null>(null);
 const PAGE_HEADERS: Array<{ test: (path: string) => boolean; title: string; subtitle: string }> = [
   { test: (p) => p === "/dashboard" || p === "/app" || p === "/dashboard", title: "Dashboard", subtitle: "Overview of your communication automation." },
   { test: (p) => p === "/contacts/new", title: "Add New Contact", subtitle: "Add the contact list" },
+  { test: (p) => p === "/contacts/groups/new", title: "Create New Contact Group", subtitle: "Configure group details and select contacts to include in this group." },
   { test: (p) => p === "/contacts", title: "Users", subtitle: "Manage and view all registered platform users and contact records." },
-  { test: (p) => p === "/campaigns/new", title: "Create Campaign", subtitle: "Set up a new campaign for WhatsApp or calling." },
+  { test: (p) => p === "/campaigns/new", title: "Create Campaign", subtitle: "Configure audience, messaging template, scheduling, and channel delivery rules." },
   { test: (p) => p.startsWith("/campaigns/"), title: "Campaign Details", subtitle: "Review campaign performance and contacts." },
   { test: (p) => p === "/campaigns" || p.startsWith("/whatsapp/campaigns"), title: "Campaigns", subtitle: "Create and manage your WhatsApp and automated calling campaigns." },
   { test: (p) => p.startsWith("/calls/"), title: "Call Details", subtitle: "Review the transcript and outcome of this call." },

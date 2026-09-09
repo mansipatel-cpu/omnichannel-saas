@@ -314,17 +314,6 @@ export function ContactsTable({
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => {
-                              setSelectedContact(contact);
-                              setShowEditDialog(true);
-                            }}
-                            className="h-8 w-8 p-0 hidden lg:flex"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
                             onClick={() => handleDeleteContact(contact.id)}
                             disabled={
                               user?.username === "demouser"
@@ -362,13 +351,6 @@ export function ContactsTable({
                               >
                                 <FolderPlus className="h-4 w-4 mr-2" />
                                 Add to Group
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleMessageClick(contact)}
-                                disabled={!channels || channels.length === 0}
-                              >
-                                <MessageSquare className="h-4 w-4 mr-2" />
-                                {t("contacts.sendMessage.title")}
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={() =>
@@ -528,18 +510,6 @@ export function ContactsTable({
                       <MessageSquare className="w-3.5 h-3.5 mr-1.5" />
                       Message
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedContact(contact);
-                        setShowEditDialog(true);
-                      }}
-                      className="flex-1 text-xs"
-                    >
-                      <Edit className="w-3.5 h-3.5 mr-1.5" />
-                      Edit
-                    </Button>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="outline" size="sm" className="px-2">
@@ -547,6 +517,21 @@ export function ContactsTable({
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setSelectedContact(contact);
+                            setShowEditDialog(true);
+                          }}
+                        >
+                          <Edit className="h-4 w-4 mr-2" />
+                          {t("contacts.editContact.title")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleOpenAssignGroup([contact.id])}
+                        >
+                          <FolderPlus className="h-4 w-4 mr-2" />
+                          Add to Group
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() =>
                             handleToggleContactStatus(

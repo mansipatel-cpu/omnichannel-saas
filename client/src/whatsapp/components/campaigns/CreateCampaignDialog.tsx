@@ -424,41 +424,48 @@ const totalContacts = filteredContacts.length;
                     filteredContacts.map((contact: any) => (
                       <div
                         key={contact.id}
-                        className="flex items-center space-x-2 mb-2"
+                        className="flex items-center justify-between gap-3 mb-2"
                       >
-                        <Checkbox
-                          checked={selectedContacts.includes(contact.id)}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setSelectedContacts([
-                                ...selectedContacts,
-                                contact.id,
-                              ]);
-                            } else {
-                              setSelectedContacts(
-                                selectedContacts.filter(
-                                  (id) => id !== contact.id
+                        <div className="flex items-center space-x-2 min-w-0">
+                          <Checkbox
+                            checked={selectedContacts.includes(contact.id)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedContacts([
+                                  ...selectedContacts,
+                                  contact.id,
+                                ]);
+                              } else {
+                                setSelectedContacts(
+                                  selectedContacts.filter(
+                                    (id) => id !== contact.id
+                                  )
+                                );
+                              }
+                            }}
+                          />
+                          <Label className="font-normal truncate">
+                            {user?.username === "demouser" ? (
+                              <>
+                                {contact.name.slice(0, -1).replace(/./g, "*") +
+                                  contact.name.slice(-1)}{" "}
+                                (
+                                {contact.phone.slice(0, -4).replace(/\d/g, "*") +
+                                  contact.phone.slice(-4)}
                                 )
-                              );
-                            }
-                          }}
-                        />
-                        <Label className="font-normal">
-                          {user?.username === "demouser" ? (
-                            <>
-                              {contact.name.slice(0, -1).replace(/./g, "*") +
-                                contact.name.slice(-1)}{" "}
-                              (
-                              {contact.phone.slice(0, -4).replace(/\d/g, "*") +
-                                contact.phone.slice(-4)}
-                              )
-                            </>
-                          ) : (
-                            <>
-                              {contact.name} ({contact.phone})
-                            </>
-                          )}
-                        </Label>
+                              </>
+                            ) : (
+                              <>
+                                {contact.name} ({contact.phone})
+                              </>
+                            )}
+                          </Label>
+                        </div>
+                        {contact.phone && String(contact.phone).replace(/\D/g, "").length >= 8 && (
+                          <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+                            WhatsApp Valid
+                          </span>
+                        )}
                       </div>
                     ))
                   )}
