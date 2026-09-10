@@ -368,6 +368,55 @@ export const getCampaignAnalyticsById = asyncHandler(async (req: Request, res: R
     .where(eq(messages.campaignId, campaignId))
     .groupBy(messages.status);
 
+  // Individual recipients for details table
+  type RecipientRow = {
+    id: string;
+    name: string | null;
+    phone: string | null;
+    status: string | null;
+    errorCode: string | null;
+    errorMessage: string | null;
+  };
+
+  let recipients: RecipientRow[] = await dbRead
+    .select({
+      id: campaignRecipients.id,
+      name: campaignRecipients.name,
+      phone: campaignRecipients.phone,
+      status: campaignRecipients.status,
+      errorCode: campaignRecipients.errorCode,
+      errorMessage: campaignRecipients.errorMessage,
+    })
+    .from(campaignRecipients)
+    .where(eq(campaignRecipients.campaignId, campaignId))
+    .orderBy(desc(campaignRecipients.createdAt))
+    .limit(5000);
+
+  // Fallback to message queue when recipients table is empty
+  if (recipients.length === 0) {
+    const queueRows = await dbRead
+      .select({
+        id: messageQueue.id,
+        phone: messageQueue.recipientPhone,
+        status: messageQueue.status,
+        errorCode: messageQueue.errorCode,
+        errorMessage: messageQueue.errorMessage,
+      })
+      .from(messageQueue)
+      .where(eq(messageQueue.campaignId, campaignId))
+      .orderBy(desc(messageQueue.createdAt))
+      .limit(5000);
+
+    recipients = queueRows.map((row) => ({
+      id: row.id,
+      name: null,
+      phone: row.phone ?? null,
+      status: row.status ?? null,
+      errorCode: row.errorCode ?? null,
+      errorMessage: row.errorMessage ?? null,
+    }));
+  }
+
   // Get error analysis
   const errorAnalysis = await dbRead
     .select({
@@ -386,6 +435,7 @@ export const getCampaignAnalyticsById = asyncHandler(async (req: Request, res: R
     campaign,
     dailyStats,
     recipientStats,
+    recipients,
     errorAnalysis,
   });
 });

@@ -17,13 +17,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { format } from "date-fns";
 import { AuthStorage } from "@/lib/auth-storage";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAppHeader } from "@/components/AppPageHeader";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
@@ -35,11 +32,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarDays } from "lucide-react";
 import { CreateCampaignForm } from "@wa/components/campaigns/CreateCampaignForm";
 import { AuthProvider } from "@wa/contexts/auth-context";
+import { CreateCallingCampaignForm } from "@/components/CreateCallingCampaignForm";
 
 type ChannelType = "whatsapp" | "calling";
 
@@ -72,11 +67,6 @@ interface WaContact {
   groups?: string[];
 }
 
-interface VoiceAgent {
-  id: string;
-  name: string;
-}
-
 function authFetch(url: string) {
   const headers: Record<string, string> = {};
   const authHeader = AuthStorage.getAuthHeader();
@@ -93,19 +83,6 @@ function asArray<T>(result: unknown): T[] {
     return (result as { groups: T[] }).groups;
   }
   return [];
-}
-
-const fieldClass = "h-11 bg-[#F4F6F8] border-transparent rounded-md";
-
-function toLocalInput(date: Date) {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-function parseLocalInput(value: string) {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function isWhatsAppValidPhone(phone?: string) {
@@ -137,14 +114,7 @@ export default function CreateCampaign() {
   const [requiresHeaderImage, setRequiresHeaderImage] = useState(false);
   const [uploadedMediaId, setUploadedMediaId] = useState<string | null>(null);
 
-  // Calling form state
-  const [name, setName] = useState("");
-  const [audience, setAudience] = useState("");
-  const [templateId, setTemplateId] = useState("");
-  const [scheduleType, setScheduleType] = useState("");
-  const [sendTime, setSendTime] = useState("");
-  const [sendTimeOpen, setSendTimeOpen] = useState(false);
-  const [showErrors, setShowErrors] = useState(false);
+  // Calling form is handled by CreateCallingCampaignForm
 
   useEffect(() => {
     setChannel(readChannelFromUrl());
@@ -156,15 +126,12 @@ export default function CreateCampaign() {
       subtitle:
         channel === "whatsapp"
           ? "Configure audience, messaging template, scheduling, and channel delivery rules."
-          : "Set up a new calling campaign for your agents.",
+          : "Fill in the details below to set up and launch your outbound voice campaign.",
     });
     return () => setPageMeta(null);
   }, [setPageMeta, channel]);
 
   useEffect(() => {
-    setAudience("");
-    setTemplateId("");
-    setShowErrors(false);
     setSelectedTemplate(null);
     setVariableMapping({});
     setScheduledTime("");
@@ -258,11 +225,6 @@ export default function CreateCampaign() {
     },
   });
 
-  const { data: agents = [] } = useQuery<VoiceAgent[]>({
-    queryKey: ["/api/agents"],
-    enabled: channel === "calling",
-  });
-
   const filteredContacts = useMemo(() => {
     if (selectedGroup === "all") return waContacts;
     return waContacts.filter((contact) => {
@@ -279,24 +241,6 @@ export default function CreateCampaign() {
       prev.filter((id) => filteredContacts.some((contact) => contact.id === id))
     );
   }, [filteredContacts]);
-
-  const sendDate = parseLocalInput(sendTime);
-
-  const handleSendDateSelect = (date?: Date) => {
-    if (!date) return;
-    const current = parseLocalInput(sendTime);
-    date.setHours(current?.getHours() ?? 9, current?.getMinutes() ?? 0, 0, 0);
-    setSendTime(toLocalInput(date));
-    if (!scheduleType || scheduleType === "immediate") setScheduleType("scheduled");
-  };
-
-  const handleSendClockChange = (value: string) => {
-    const [hours, minutes] = value.split(":").map(Number);
-    const next = parseLocalInput(sendTime) || new Date();
-    next.setHours(hours || 0, minutes || 0, 0, 0);
-    setSendTime(toLocalInput(next));
-    if (!scheduleType || scheduleType === "immediate") setScheduleType("scheduled");
-  };
 
   const createWhatsAppMutation = useMutation({
     mutationFn: async (formData: {
@@ -348,38 +292,6 @@ export default function CreateCampaign() {
         title: "Campaign created",
         description: "Your campaign has been created successfully",
       });
-      setLocation("/campaigns");
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Failed to create campaign",
-        description: error.message || "Please try again",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const createCallingMutation = useMutation({
-    mutationFn: async () => {
-      setShowErrors(true);
-      const campaignName = name.trim();
-      if (!campaignName) throw new Error("Campaign name is required");
-      if (!audience) throw new Error("Select a target audience");
-      if (!templateId) throw new Error("Choose a voice agent");
-      if (!scheduleType) throw new Error("Select a schedule type");
-      if (scheduleType === "scheduled" && !sendTime) throw new Error("Select a send time");
-
-      const response = await apiRequest("POST", "/api/campaigns", {
-        name: campaignName,
-        type: "Lead Qualification",
-        agentId: templateId,
-        scheduledFor: scheduleType === "scheduled" ? new Date(sendTime).toISOString() : null,
-      });
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/campaigns"] });
-      toast({ title: "Campaign created" });
       setLocation("/campaigns");
     },
     onError: (error: any) => {
@@ -548,151 +460,7 @@ export default function CreateCampaign() {
           </div>
         </AuthProvider>
       ) : (
-        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden w-full">
-          <div className="px-6 md:px-8 pt-6 pb-6">
-            <div className="space-y-5">
-              <div className="space-y-1.5">
-                <Label htmlFor="campaign-name" className="text-sm font-semibold text-slate-800">
-                  Campaign Name
-                </Label>
-                <Input
-                  id="campaign-name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g., Summer Promotion 2024"
-                  className={fieldClass}
-                  data-testid="input-campaign-name"
-                />
-                {showErrors && !name.trim() && (
-                  <p className="text-xs text-red-500">Campaign name is required</p>
-                )}
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-sm font-semibold text-slate-800">Target Audience</Label>
-                <Select value={audience} onValueChange={setAudience}>
-                  <SelectTrigger className={fieldClass}>
-                    <SelectValue placeholder="Select audience segment" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="later">Add contacts later</SelectItem>
-                    <SelectItem value="all">All calling contacts</SelectItem>
-                  </SelectContent>
-                </Select>
-                {showErrors && !audience && (
-                  <p className="text-xs text-red-500">Select a target audience</p>
-                )}
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-sm font-semibold text-slate-800">Voice Agent</Label>
-                <Select value={templateId} onValueChange={setTemplateId}>
-                  <SelectTrigger className={fieldClass}>
-                    <SelectValue placeholder="Choose a voice agent" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {agents.map((agent) => (
-                      <SelectItem key={agent.id} value={agent.id}>
-                        {agent.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {showErrors && !templateId && (
-                  <p className="text-xs text-red-500">Choose a voice agent</p>
-                )}
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-sm font-semibold text-slate-800">Schedule Type</Label>
-                <Select value={scheduleType} onValueChange={setScheduleType}>
-                  <SelectTrigger className={fieldClass}>
-                    <SelectValue placeholder="Immediate or Scheduled" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="immediate">Immediate</SelectItem>
-                    <SelectItem value="scheduled">Scheduled</SelectItem>
-                  </SelectContent>
-                </Select>
-                {showErrors && !scheduleType && (
-                  <p className="text-xs text-red-500">Select a schedule type</p>
-                )}
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-sm font-semibold text-slate-800">Send Time</Label>
-                <Popover open={sendTimeOpen} onOpenChange={setSendTimeOpen}>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      className={`${fieldClass} w-full px-3 text-left text-sm flex items-center gap-2 ${
-                        sendDate ? "text-slate-800" : "text-slate-400"
-                      }`}
-                      data-testid="input-send-time"
-                    >
-                      <CalendarDays className="h-4 w-4 text-slate-400 shrink-0" />
-                      {sendDate ? format(sendDate, "MMM d, yyyy 'at' h:mm a") : "Select date & time"}
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={sendDate || undefined}
-                      onSelect={handleSendDateSelect}
-                      disabled={{ before: new Date() }}
-                      initialFocus
-                    />
-                    <div className="flex items-center gap-2 border-t border-slate-100 p-3">
-                      <Input
-                        type="time"
-                        value={sendDate ? format(sendDate, "HH:mm") : "09:00"}
-                        onChange={(e) => handleSendClockChange(e.target.value)}
-                        className="h-9 bg-white border-slate-200"
-                      />
-                      {sendTime && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setSendTime("");
-                            setSendTimeOpen(false);
-                          }}
-                        >
-                          Clear
-                        </Button>
-                      )}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-                {showErrors && scheduleType === "scheduled" && !sendTime && (
-                  <p className="text-xs text-red-500">Select a send time</p>
-                )}
-              </div>
-            </div>
-
-            <div className="border-t border-slate-200 mt-6 pt-5 flex items-center justify-end gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setLocation("/campaigns")}
-                className="h-10 min-w-[120px] px-5 rounded-md bg-white border-slate-200"
-                data-testid="button-cancel-campaign"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                onClick={() => createCallingMutation.mutate()}
-                disabled={createCallingMutation.isPending}
-                className="h-10 min-w-[140px] px-5 rounded-md bg-[#007BFF] hover:bg-[#0069d9] text-white border-transparent"
-                data-testid="button-submit-campaign"
-              >
-                {createCallingMutation.isPending ? "Creating..." : "Create Campaign"}
-              </Button>
-            </div>
-          </div>
-        </div>
+        <CreateCallingCampaignForm />
       )}
     </div>
   );

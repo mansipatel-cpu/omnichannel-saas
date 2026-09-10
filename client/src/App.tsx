@@ -35,6 +35,7 @@ import { useQuery } from "@tanstack/react-query";
 import Dashboard from "@/pages/Dashboard";
 import Campaigns from "@/pages/Campaigns";
 import CampaignDetail from "@/pages/CampaignDetail";
+import WhatsAppCampaignDetail from "@/pages/WhatsAppCampaignDetail";
 import Calls from "@/pages/Calls";
 import CallDetail from "@/pages/CallDetail";
 import Analytics from "@/pages/Analytics";
@@ -170,6 +171,7 @@ function UserAppRoutes({ includeAdmin = false }: { includeAdmin?: boolean }) {
       </Route>
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/campaigns/new" component={CreateCampaign} />
+      <Route path="/campaigns/whatsapp/:id" component={WhatsAppCampaignDetail} />
       <Route path="/campaigns/:id" component={CampaignDetail} />
       <Route path="/campaigns" component={Campaigns} />
       <Route path="/calls/:id" component={CallDetail} />

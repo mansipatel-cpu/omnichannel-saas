@@ -17,17 +17,25 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { format, isAfter, subDays, startOfMonth, startOfYear } from "date-fns";
+import {
+  format,
+  isAfter,
+  subDays,
+  startOfMonth,
+  startOfYear,
+  formatDistanceToNow,
+  differenceInDays,
+  addDays,
+} from "date-fns";
 import { AuthStorage } from "@/lib/auth-storage";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAppHeader } from "@/components/AppPageHeader";
 import { useDemoMode } from "@/components/DemoModeBanner";
-import { EditCampaignDialog } from "@/components/EditCampaignDialog";
-import { CampaignDetailsDialog } from "@/components/CampaignDetailsDialog";
 import { usePagination } from "@/components/ui/data-pagination";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -68,12 +76,14 @@ import {
   MoreVertical,
   RotateCcw,
   RotateCw,
-  Pencil,
   Eye,
   Play,
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
+  Trash2,
+  Clock,
+  LayoutGrid,
 } from "lucide-react";
 
 interface VoiceCampaign {
@@ -125,8 +135,26 @@ interface User {
   planType: string;
 }
 
-type ChannelTab = "whatsapp" | "calling";
+type ChannelTab = "whatsapp" | "calling" | "deleted";
 type StatusLabel = "Ongoing" | "Scheduled" | "Completed" | "Paused" | "Draft" | "Failed" | "Deleted";
+type DeletedChannel = "whatsapp" | "calling";
+
+const PURGE_DAYS = 30;
+
+interface DeletedRow {
+  id: string;
+  name: string;
+  code: string;
+  channel: DeletedChannel;
+  channelLabel: string;
+  subtype: string;
+  audience: number;
+  segment: string;
+  deletedAt: Date;
+  deletedBy: string;
+  deletedByInitials: string;
+  isSample?: boolean;
+}
 
 function authFetch(url: string) {
   const headers: Record<string, string> = {};
@@ -186,6 +214,91 @@ function tagClass(tag: string) {
   return "bg-slate-100 text-slate-600";
 }
 
+function initialsFromName(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "AU";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0] || ""}${parts[1][0] || ""}`.toUpperCase();
+}
+
+function campaignCode(id: string, channel: DeletedChannel) {
+  const suffix = channel === "whatsapp" ? "WA" : "AC";
+  const short = id.replace(/[^a-zA-Z0-9]/g, "").slice(-4).toUpperCase() || "0000";
+  return `CMP-${short}-${suffix}`;
+}
+
+function callingSubtype(type?: string) {
+  const key = (type || "").toLowerCase();
+  if (key.includes("ivr") || key.includes("survey")) return "IVR Survey";
+  if (key.includes("ai") || key.includes("voice")) return "AI Voice";
+  if (key.includes("reminder")) return "Reminder Call";
+  return type || "Outbound Call";
+}
+
+function daysUntilPurge(deletedAt: Date) {
+  return Math.max(0, differenceInDays(addDays(deletedAt, PURGE_DAYS), new Date()));
+}
+
+/** Sample rows so the Deleted Campaigns UI matches the shared design when no soft-deleted campaigns exist yet. */
+const SAMPLE_DELETED_ROWS: DeletedRow[] = [
+  {
+    id: "sample-wa-1",
+    name: "Summer Sale Announcement",
+    code: "CMP-9082-WA",
+    channel: "whatsapp",
+    channelLabel: "WhatsApp Broadcast",
+    subtype: "Rich Media",
+    audience: 4200,
+    segment: "VIP Segment",
+    deletedAt: subDays(new Date(), 2),
+    deletedBy: "Admin User",
+    deletedByInitials: "AU",
+    isSample: true,
+  },
+  {
+    id: "sample-ac-1",
+    name: "Q3 Product Feedback",
+    code: "CMP-4410-AC",
+    channel: "calling",
+    channelLabel: "Auto Calling",
+    subtype: "IVR Survey",
+    audience: 1850,
+    segment: "Active Users",
+    deletedAt: subDays(new Date(), 5),
+    deletedBy: "Alex Verma",
+    deletedByInitials: "AV",
+    isSample: true,
+  },
+  {
+    id: "sample-wa-2",
+    name: "Flash Deal Reminder",
+    code: "CMP-7721-WA",
+    channel: "whatsapp",
+    channelLabel: "WhatsApp Broadcast",
+    subtype: "Text + CTA",
+    audience: 9800,
+    segment: "Cart Abandoners",
+    deletedAt: subDays(new Date(), 12),
+    deletedBy: "Admin User",
+    deletedByInitials: "AU",
+    isSample: true,
+  },
+  {
+    id: "sample-ac-2",
+    name: "Payment Overdue Nudge",
+    code: "CMP-3301-AC",
+    channel: "calling",
+    channelLabel: "Auto Calling",
+    subtype: "AI Voice",
+    audience: 640,
+    segment: "Billing List",
+    deletedAt: subDays(new Date(), 20),
+    deletedBy: "Priya Shah",
+    deletedByInitials: "PS",
+    isSample: true,
+  },
+];
+
 interface Row {
   id: string;
   name: string;
@@ -199,7 +312,7 @@ interface Row {
   failed: number;
   createdAt: Date | null;
   createdBy: string;
-  channel: ChannelTab;
+  channel: "whatsapp" | "calling";
   rawVoice?: VoiceCampaign;
 }
 
@@ -215,9 +328,12 @@ export default function Campaigns() {
   const [dateFilter, setDateFilter] = useState("all");
   const [createdByFilter, setCreatedByFilter] = useState("all");
   const [templateFilter, setTemplateFilter] = useState("all");
-  const [editingCampaign, setEditingCampaign] = useState<VoiceCampaign | null>(null);
-  const [viewingCampaign, setViewingCampaign] = useState<VoiceCampaign | null>(null);
+  const [deletedTypeFilter, setDeletedTypeFilter] = useState("all");
+  const [deletedDateFilter, setDeletedDateFilter] = useState("all");
+  const [selectedDeletedIds, setSelectedDeletedIds] = useState<string[]>([]);
   const [restoringCampaignId, setRestoringCampaignId] = useState<string | null>(null);
+  const [campaignToDelete, setCampaignToDelete] = useState<Row | null>(null);
+  const [campaignToPurge, setCampaignToPurge] = useState<DeletedRow | null>(null);
   const [showPhoneNumberAlert, setShowPhoneNumberAlert] = useState(false);
   const [isVideoOpen, setIsVideoOpen] = useState(false);
 
@@ -315,6 +431,33 @@ export default function Campaigns() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (row: Row) => {
+      const url =
+        row.channel === "whatsapp"
+          ? `/api/whatsapp/campaigns/${row.id}`
+          : `/api/campaigns/${row.id}`;
+      await apiRequest("DELETE", url);
+    },
+    onSuccess: (_data, row) => {
+      if (row.channel === "whatsapp") {
+        queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/campaigns"] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["/api/campaigns"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/campaigns/deleted"] });
+      }
+      toast({ title: "Campaign deleted", description: "Campaign has been deleted successfully" });
+      setCampaignToDelete(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to delete campaign",
+        description: error.message || "Please try again",
+        variant: "destructive",
+      });
+    },
+  });
+
   const waRows = useMemo<Row[]>(() => waCampaigns.map((campaign) => ({
     id: campaign.id,
     name: campaign.name || "Untitled campaign",
@@ -333,8 +476,8 @@ export default function Campaigns() {
     channel: "whatsapp",
   })), [waCampaigns]);
 
-  const voiceRows = useMemo<Row[]>(() => {
-    const active = voiceCampaigns.map((campaign) => ({
+  const voiceRows = useMemo<Row[]>(() =>
+    voiceCampaigns.map((campaign) => ({
       id: campaign.id,
       name: campaign.name,
       tag: campaign.type || "Calling",
@@ -351,25 +494,29 @@ export default function Campaigns() {
       createdBy: "All",
       channel: "calling" as const,
       rawVoice: campaign,
-    }));
-    const deleted = deletedCampaigns.map((campaign) => ({
-      id: campaign.id,
-      name: campaign.name,
-      tag: campaign.type || "Calling",
-      audience: campaign.totalContacts || 0,
-      template: campaign.type || "Voice script",
-      schedule: "—",
-      status: "Deleted" as const,
-      sent: campaign.completedCalls || 0,
-      delivered: campaign.successfulCalls || 0,
-      failed: campaign.failedCalls || 0,
-      createdAt: parseDate(campaign.createdAt),
-      createdBy: "All",
-      channel: "calling" as const,
-      rawVoice: campaign,
-    }));
-    return [...active, ...deleted];
-  }, [voiceCampaigns, deletedCampaigns]);
+    })),
+  [voiceCampaigns]);
+
+  const deletedRows = useMemo<DeletedRow[]>(() => {
+    const actor = user?.name || "Admin User";
+    const fromApi = deletedCampaigns.map((campaign) => {
+      const deletedAt = parseDate(campaign.deletedAt) || parseDate(campaign.createdAt) || new Date();
+      return {
+        id: campaign.id,
+        name: campaign.name,
+        code: campaignCode(campaign.id, "calling"),
+        channel: "calling" as const,
+        channelLabel: "Auto Calling",
+        subtype: callingSubtype(campaign.type),
+        audience: campaign.totalContacts || 0,
+        segment: "All Contacts",
+        deletedAt,
+        deletedBy: actor,
+        deletedByInitials: initialsFromName(actor),
+      };
+    });
+    return fromApi.length > 0 ? fromApi : SAMPLE_DELETED_ROWS;
+  }, [deletedCampaigns, user?.name]);
 
   const rows = tab === "whatsapp" ? waRows : voiceRows;
   const createdByOptions = Array.from(new Set(waRows.map((row) => row.createdBy).filter((value) => value && value !== "All")));
@@ -395,19 +542,46 @@ export default function Campaigns() {
     });
   }, [rows, tableSearch, statusFilter, createdByFilter, templateFilter, dateFilter]);
 
+  const filteredDeletedRows = useMemo(() => {
+    const query = tableSearch.trim().toLowerCase();
+    const now = new Date();
+    return deletedRows.filter((row) => {
+      const matchesSearch =
+        !query ||
+        row.name.toLowerCase().includes(query) ||
+        row.code.toLowerCase().includes(query) ||
+        row.channelLabel.toLowerCase().includes(query) ||
+        row.subtype.toLowerCase().includes(query);
+      const matchesType = deletedTypeFilter === "all" || row.channel === deletedTypeFilter;
+      const matchesDate =
+        deletedDateFilter === "all" ||
+        (deletedDateFilter === "7d" && isAfter(row.deletedAt, subDays(now, 7))) ||
+        (deletedDateFilter === "30d" && isAfter(row.deletedAt, subDays(now, 30))) ||
+        (deletedDateFilter === "month" && isAfter(row.deletedAt, startOfMonth(now)));
+      return matchesSearch && matchesType && matchesDate;
+    });
+  }, [deletedRows, tableSearch, deletedTypeFilter, deletedDateFilter]);
+
+  const campaignPagination = usePagination(filteredRows, 5);
+  const deletedPagination = usePagination(filteredDeletedRows, 10);
+
   const {
     currentPage,
     totalPages,
     totalItems,
     itemsPerPage,
-    paginatedItems,
     handlePageChange,
     handleItemsPerPageChange,
-  } = usePagination(filteredRows, 5);
+  } = tab === "deleted" ? deletedPagination : campaignPagination;
+
+  const paginatedDeletedItems = deletedPagination.paginatedItems;
+  const paginatedCampaignItems = campaignPagination.paginatedItems;
 
   useEffect(() => {
-    handlePageChange(1);
-  }, [tab, tableSearch, statusFilter, dateFilter, createdByFilter, templateFilter]);
+    campaignPagination.handlePageChange(1);
+    deletedPagination.handlePageChange(1);
+    setSelectedDeletedIds([]);
+  }, [tab, tableSearch, statusFilter, dateFilter, createdByFilter, templateFilter, deletedTypeFilter, deletedDateFilter]);
 
   const clearFilters = () => {
     setSearchQuery("");
@@ -415,15 +589,69 @@ export default function Campaigns() {
     setDateFilter("all");
     setCreatedByFilter("all");
     setTemplateFilter("all");
+    setDeletedTypeFilter("all");
+    setDeletedDateFilter("all");
   };
 
-  const hasFilters = Boolean(tableSearch) || statusFilter !== "all" || dateFilter !== "all" || createdByFilter !== "all" || templateFilter !== "all";
+  const hasFilters =
+    tab === "deleted"
+      ? Boolean(tableSearch) || deletedTypeFilter !== "all" || deletedDateFilter !== "all"
+      : Boolean(tableSearch) || statusFilter !== "all" || dateFilter !== "all" || createdByFilter !== "all" || templateFilter !== "all";
   const activeRuns =
     voiceCampaigns.filter((c) => c.status === "in_progress").length +
     waCampaigns.filter((c) => ["active", "sending"].includes(c.status || "")).length;
   const startItem = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
   const endItem = Math.min(currentPage * itemsPerPage, totalItems);
-  const isLoading = tab === "whatsapp" ? waLoading : voiceLoading;
+  const isLoading = tab === "whatsapp" ? waLoading : tab === "calling" ? voiceLoading : false;
+
+  const allVisibleDeletedSelected =
+    paginatedDeletedItems.length > 0 &&
+    paginatedDeletedItems.every((row) => selectedDeletedIds.includes(row.id));
+
+  const toggleSelectAllDeleted = () => {
+    if (allVisibleDeletedSelected) {
+      setSelectedDeletedIds((prev) => prev.filter((id) => !paginatedDeletedItems.some((row) => row.id === id)));
+      return;
+    }
+    setSelectedDeletedIds((prev) => {
+      const next = new Set(prev);
+      paginatedDeletedItems.forEach((row) => next.add(row.id));
+      return Array.from(next);
+    });
+  };
+
+  const toggleDeletedSelection = (id: string) => {
+    setSelectedDeletedIds((prev) =>
+      prev.includes(id) ? prev.filter((value) => value !== id) : [...prev, id]
+    );
+  };
+
+  const handleRestoreDeleted = (row: DeletedRow) => {
+    if (row.isSample) {
+      toast({
+        title: "Sample campaign",
+        description: "This is preview UI data. Restore works for real deleted campaigns.",
+      });
+      return;
+    }
+    restoreMutation.mutate(row.id);
+  };
+
+  const handlePurgeDeleted = (row: DeletedRow) => {
+    if (row.isSample) {
+      toast({
+        title: "Sample campaign removed",
+        description: "Preview row dismissed from this session view.",
+      });
+      setCampaignToPurge(null);
+      return;
+    }
+    toast({
+      title: "Permanent delete",
+      description: "Permanent deletion will be available once backend purge is enabled.",
+    });
+    setCampaignToPurge(null);
+  };
 
   const visiblePages = useMemo(() => {
     const pages: Array<number | "ellipsis"> = [];
@@ -443,14 +671,14 @@ export default function Campaigns() {
 
   const openRow = (row: Row) => {
     if (row.channel === "whatsapp") {
-      setLocation(`/whatsapp/analytics/campaign/${row.id}`);
+      setLocation(`/campaigns/whatsapp/${row.id}`);
       return;
     }
-    if (row.status === "Deleted") return;
     setLocation(`/campaigns/${row.id}`);
   };
 
   const filterTriggerClass = "h-10 w-full sm:w-[160px] bg-white border-slate-200";
+  const deletedCount = deletedCampaigns.length > 0 ? deletedCampaigns.length : SAMPLE_DELETED_ROWS.length;
 
   return (
     <div className="space-y-5 pb-8">
@@ -473,11 +701,11 @@ export default function Campaigns() {
           </div>
 
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 border-t border-b border-slate-200 pt-3">
-        <div className="flex items-center gap-8">
+        <div className="flex items-center gap-6 lg:gap-8 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           <button
             type="button"
             onClick={() => setTab("whatsapp")}
-            className={`flex items-center gap-2 pb-3 text-sm font-medium border-b-2 -mb-px ${
+            className={`flex items-center gap-2 pb-3 text-sm font-medium border-b-2 -mb-px whitespace-nowrap ${
               tab === "whatsapp" ? "border-[#007BFF] text-[#007BFF]" : "border-transparent text-slate-500"
             }`}
           >
@@ -490,7 +718,7 @@ export default function Campaigns() {
           <button
             type="button"
             onClick={() => setTab("calling")}
-            className={`flex items-center gap-2 pb-3 text-sm font-medium border-b-2 -mb-px ${
+            className={`flex items-center gap-2 pb-3 text-sm font-medium border-b-2 -mb-px whitespace-nowrap ${
               tab === "calling" ? "border-[#007BFF] text-[#007BFF]" : "border-transparent text-slate-500"
             }`}
           >
@@ -500,11 +728,31 @@ export default function Campaigns() {
               {voiceCampaigns.length}
             </span>
           </button>
+          <button
+            type="button"
+            onClick={() => setTab("deleted")}
+            className={`flex items-center gap-2 pb-3 text-sm font-medium border-b-2 -mb-px whitespace-nowrap ${
+              tab === "deleted" ? "border-[#007BFF] text-[#007BFF]" : "border-transparent text-slate-500"
+            }`}
+          >
+            <Trash2 className="h-4 w-4" />
+            Deleted Campaigns
+            <span className={`rounded-md min-w-6 h-6 px-1.5 flex items-center justify-center text-[11px] font-semibold ${tab === "deleted" ? "bg-blue-50 text-[#007BFF]" : "bg-slate-100 text-slate-500"}`}>
+              {deletedCount}
+            </span>
+          </button>
         </div>
-        <div className="flex items-center gap-2 text-sm text-slate-500 pb-3">
-          <span className="h-2 w-2 rounded-md bg-emerald-500" />
-          {activeRuns} Active Dispatch Run{activeRuns === 1 ? "" : "s"}
-        </div>
+        {tab === "deleted" ? (
+          <div className="flex items-center gap-2 text-sm text-slate-500 pb-3">
+            <Clock className="h-4 w-4 text-slate-400" />
+            Auto-purged after {PURGE_DAYS} days
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-sm text-slate-500 pb-3">
+            <span className="h-2 w-2 rounded-md bg-emerald-500" />
+            {activeRuns} Active Dispatch Run{activeRuns === 1 ? "" : "s"}
+          </div>
+        )}
       </div>
 
       <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5">
@@ -515,159 +763,313 @@ export default function Campaigns() {
               <Input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search Campaign by name..."
+                placeholder={tab === "deleted" ? "Search deleted campaigns..." : "Search Campaign by name..."}
                 className="h-10 pl-9 bg-white border-slate-200"
                 data-testid="input-search-campaigns"
               />
             </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className={filterTriggerClass}>
-                <SelectValue placeholder="Status: All" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Status: All</SelectItem>
-                <SelectItem value="ongoing">Ongoing</SelectItem>
-                <SelectItem value="scheduled">Scheduled</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="paused">Paused</SelectItem>
-                <SelectItem value="draft">Draft</SelectItem>
-                {tab === "calling" && <SelectItem value="deleted">Deleted</SelectItem>}
-              </SelectContent>
-            </Select>
-            <Select value={dateFilter} onValueChange={setDateFilter}>
-              <SelectTrigger className={`${filterTriggerClass} sm:w-[150px]`}>
-                <SelectValue placeholder="Date: All Time" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Date: All Time</SelectItem>
-                <SelectItem value="month">This month</SelectItem>
-                <SelectItem value="30d">Last 30 days</SelectItem>
-                <SelectItem value="year">This year</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={createdByFilter} onValueChange={setCreatedByFilter}>
-              <SelectTrigger className={`${filterTriggerClass} sm:w-[170px]`}>
-                <SelectValue placeholder="Created By: All" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Created By: All</SelectItem>
-                {createdByOptions.map((value) => (
-                  <SelectItem key={value} value={value}>{value}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={templateFilter} onValueChange={setTemplateFilter}>
-              <SelectTrigger className={`${filterTriggerClass} sm:w-[200px]`}>
-                <SelectValue placeholder="Template: All Templates" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Template: All Templates</SelectItem>
-                {templateOptions.map((value) => (
-                  <SelectItem key={value} value={value}>{value}</SelectItem>
-                ))}
-                {waTemplates.filter((tpl) => tpl.name && !templateOptions.includes(tpl.name)).map((tpl) => (
-                  <SelectItem key={tpl.id} value={tpl.name || tpl.id}>{tpl.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {tab === "deleted" ? (
+              <>
+                <Select value={deletedTypeFilter} onValueChange={setDeletedTypeFilter}>
+                  <SelectTrigger className={filterTriggerClass}>
+                    <SelectValue placeholder="Type: All Types" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Type: All Types</SelectItem>
+                    <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                    <SelectItem value="calling">Auto Calling</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={deletedDateFilter} onValueChange={setDeletedDateFilter}>
+                  <SelectTrigger className={`${filterTriggerClass} sm:w-[180px]`}>
+                    <SelectValue placeholder="Deleted Date: All Time" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Deleted Date: All Time</SelectItem>
+                    <SelectItem value="7d">Last 7 days</SelectItem>
+                    <SelectItem value="30d">Last 30 days</SelectItem>
+                    <SelectItem value="month">This month</SelectItem>
+                  </SelectContent>
+                </Select>
+              </>
+            ) : (
+              <>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className={filterTriggerClass}>
+                    <SelectValue placeholder="Status: All" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Status: All</SelectItem>
+                    <SelectItem value="ongoing">Ongoing</SelectItem>
+                    <SelectItem value="scheduled">Scheduled</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="paused">Paused</SelectItem>
+                    <SelectItem value="draft">Draft</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={dateFilter} onValueChange={setDateFilter}>
+                  <SelectTrigger className={`${filterTriggerClass} sm:w-[150px]`}>
+                    <SelectValue placeholder="Date: All Time" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Date: All Time</SelectItem>
+                    <SelectItem value="month">This month</SelectItem>
+                    <SelectItem value="30d">Last 30 days</SelectItem>
+                    <SelectItem value="year">This year</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={createdByFilter} onValueChange={setCreatedByFilter}>
+                  <SelectTrigger className={`${filterTriggerClass} sm:w-[170px]`}>
+                    <SelectValue placeholder="Created By: All" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Created By: All</SelectItem>
+                    {createdByOptions.map((value) => (
+                      <SelectItem key={value} value={value}>{value}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={templateFilter} onValueChange={setTemplateFilter}>
+                  <SelectTrigger className={`${filterTriggerClass} sm:w-[200px]`}>
+                    <SelectValue placeholder="Template: All Templates" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Template: All Templates</SelectItem>
+                    {templateOptions.map((value) => (
+                      <SelectItem key={value} value={value}>{value}</SelectItem>
+                    ))}
+                    {waTemplates.filter((tpl) => tpl.name && !templateOptions.includes(tpl.name)).map((tpl) => (
+                      <SelectItem key={tpl.id} value={tpl.name || tpl.id}>{tpl.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </>
+            )}
           </div>
-          <button
-            type="button"
-            onClick={clearFilters}
-            className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 whitespace-nowrap shrink-0"
-          >
-            <RotateCw className="h-3.5 w-3.5" />
-            Clear Filters
-          </button>
+          {tab === "deleted" ? (
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-10 w-10 bg-white border-slate-200"
+                onClick={() => {
+                  queryClient.invalidateQueries({ queryKey: ["/api/campaigns/deleted"] });
+                  toast({ title: "Refreshed", description: "Deleted campaigns list updated." });
+                }}
+              >
+                <RotateCw className="h-4 w-4 text-slate-500" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10 bg-white border-slate-200 text-slate-600"
+                onClick={toggleSelectAllDeleted}
+              >
+                <LayoutGrid className="h-4 w-4 mr-2" />
+                Select All
+              </Button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 whitespace-nowrap shrink-0"
+            >
+              <RotateCw className="h-3.5 w-3.5" />
+              Clear Filters
+            </button>
+          )}
         </div>
       </div>
 
       <div className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <Table>
+          {tab === "deleted" ? (
+            <Table className="w-full min-w-[960px]">
+              <TableHeader>
+                <TableRow className="hover:bg-transparent border-slate-100">
+                  <TableHead className="h-10 w-12 px-4">
+                    <Checkbox
+                      checked={allVisibleDeletedSelected}
+                      onCheckedChange={() => toggleSelectAllDeleted()}
+                      aria-label="Select all deleted campaigns"
+                    />
+                  </TableHead>
+                  <TableHead className="h-10 px-3 text-[10px] font-semibold tracking-wider text-slate-400">CAMPAIGN NAME</TableHead>
+                  <TableHead className="h-10 px-3 text-[10px] font-semibold tracking-wider text-slate-400">CHANNEL / TYPE</TableHead>
+                  <TableHead className="h-10 px-3 text-[10px] font-semibold tracking-wider text-slate-400">AUDIENCE</TableHead>
+                  <TableHead className="h-10 px-3 text-[10px] font-semibold tracking-wider text-slate-400">DELETED DATE</TableHead>
+                  <TableHead className="h-10 px-3 text-[10px] font-semibold tracking-wider text-slate-400">DELETED BY</TableHead>
+                  <TableHead className="h-10 px-3 pr-4 text-[10px] font-semibold tracking-wider text-slate-400 text-right">ACTIONS</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedDeletedItems.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center text-slate-400 py-16 px-2">
+                      {hasFilters ? "No deleted campaigns match your filters." : "No deleted campaigns."}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  paginatedDeletedItems.map((row) => {
+                    const purgeIn = daysUntilPurge(row.deletedAt);
+                    const purgeUrgent = purgeIn <= 10;
+                    return (
+                      <TableRow key={row.id} className="border-slate-100">
+                        <TableCell className="px-4 py-3">
+                          <Checkbox
+                            checked={selectedDeletedIds.includes(row.id)}
+                            onCheckedChange={() => toggleDeletedSelection(row.id)}
+                            aria-label={`Select ${row.name}`}
+                          />
+                        </TableCell>
+                        <TableCell className="px-3 py-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className={`h-9 w-9 shrink-0 rounded-lg flex items-center justify-center ${row.channel === "whatsapp" ? "bg-emerald-50 text-emerald-600" : "bg-blue-50 text-blue-600"}`}>
+                              {row.channel === "whatsapp" ? <MessageCircle className="h-4 w-4" /> : <Phone className="h-4 w-4" />}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-slate-900 truncate">{row.name}</p>
+                              <p className="text-xs text-slate-400 mt-0.5">{row.code}</p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="px-3 py-3">
+                          <div className="flex items-start gap-2">
+                            <span className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${row.channel === "whatsapp" ? "bg-emerald-500" : "bg-blue-500"}`} />
+                            <div>
+                              <p className="text-sm font-medium text-slate-800">{row.channelLabel}</p>
+                              <p className="text-xs text-slate-400 mt-0.5">{row.subtype}</p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="px-3 py-3">
+                          <p className="text-sm font-medium text-slate-800">{row.audience.toLocaleString()} Recipients</p>
+                          <p className="text-xs text-slate-400 mt-0.5">{row.segment}</p>
+                        </TableCell>
+                        <TableCell className="px-3 py-3">
+                          <p className="text-sm font-semibold text-slate-800">
+                            {formatDistanceToNow(row.deletedAt, { addSuffix: true })}
+                          </p>
+                          <p className={`text-xs mt-0.5 ${purgeUrgent ? "text-orange-500 font-medium" : "text-slate-400"}`}>
+                            Auto-purges in {purgeIn}d
+                          </p>
+                        </TableCell>
+                        <TableCell className="px-3 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="h-8 w-8 rounded-full bg-slate-100 text-slate-600 text-[11px] font-semibold flex items-center justify-center">
+                              {row.deletedByInitials}
+                            </div>
+                            <span className="text-sm text-slate-700">{row.deletedBy}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="px-3 py-3 pr-4">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8 border-blue-200 bg-blue-50 text-[#007BFF] hover:bg-blue-100 hover:text-[#0069d9]"
+                              onClick={() => handleRestoreDeleted(row)}
+                              disabled={!row.isSample && restoringCampaignId === row.id}
+                            >
+                              <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                              {!row.isSample && restoringCampaignId === row.id ? "Restoring..." : "Restore"}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-slate-400 hover:text-red-500 hover:bg-red-50"
+                              onClick={() => setCampaignToPurge(row)}
+                              title="Delete Permanently"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          ) : (
+          <Table className="w-full table-fixed">
             <TableHeader>
               <TableRow className="hover:bg-transparent border-slate-100">
-                <TableHead className="text-[11px] font-semibold tracking-wider text-slate-400 whitespace-nowrap pl-5">CAMPAIGN NAME</TableHead>
-                <TableHead className="text-[11px] font-semibold tracking-wider text-slate-400 whitespace-nowrap">AUDIENCE / USERS</TableHead>
-                <TableHead className="text-[11px] font-semibold tracking-wider text-slate-400 whitespace-nowrap">MESSAGE TEMPLATE</TableHead>
-                <TableHead className="text-[11px] font-semibold tracking-wider text-slate-400 whitespace-nowrap">SCHEDULE</TableHead>
-                <TableHead className="text-[11px] font-semibold tracking-wider text-slate-400 whitespace-nowrap">STATUS</TableHead>
-                <TableHead className="text-[11px] font-semibold tracking-wider text-slate-400 whitespace-nowrap">SENT</TableHead>
-                <TableHead className="text-[11px] font-semibold tracking-wider text-slate-400 whitespace-nowrap">DELIVERED</TableHead>
-                <TableHead className="text-[11px] font-semibold tracking-wider text-slate-400 whitespace-nowrap">FAILED</TableHead>
-                <TableHead className="text-[11px] font-semibold tracking-wider text-slate-400 whitespace-nowrap">CREATED DATE</TableHead>
-                <TableHead className="text-[11px] font-semibold tracking-wider text-slate-400 whitespace-nowrap text-right pr-5">ACTIONS</TableHead>
+                <TableHead className="h-9 w-[18%] px-2 pl-3 text-[10px] font-semibold tracking-wider text-slate-400">CAMPAIGN</TableHead>
+                <TableHead className="h-9 w-[8%] px-1.5 text-[10px] font-semibold tracking-wider text-slate-400">AUDIENCE</TableHead>
+                <TableHead className="h-9 w-[12%] px-1.5 text-[10px] font-semibold tracking-wider text-slate-400">TEMPLATE</TableHead>
+                <TableHead className="h-9 w-[10%] px-1.5 text-[10px] font-semibold tracking-wider text-slate-400">SCHEDULE</TableHead>
+                <TableHead className="h-9 w-[11%] px-1.5 text-[10px] font-semibold tracking-wider text-slate-400">STATUS</TableHead>
+                <TableHead className="h-9 w-[6%] px-1.5 text-[10px] font-semibold tracking-wider text-slate-400 text-center">SENT</TableHead>
+                <TableHead className="h-9 w-[7%] px-1.5 text-[10px] font-semibold tracking-wider text-slate-400 text-center">DELIVERED</TableHead>
+                <TableHead className="h-9 w-[6%] px-1.5 text-[10px] font-semibold tracking-wider text-slate-400 text-center">FAILED</TableHead>
+                <TableHead className="h-9 w-[12%] px-1.5 text-[10px] font-semibold tracking-wider text-slate-400">CREATED</TableHead>
+                <TableHead className="h-9 w-[10%] px-1.5 pr-3 text-[10px] font-semibold tracking-wider text-slate-400 text-right">ACTIONS</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center text-slate-400 py-16">Loading campaigns...</TableCell>
+                  <TableCell colSpan={10} className="text-center text-slate-400 py-16 px-2">Loading campaigns...</TableCell>
                 </TableRow>
-              ) : paginatedItems.length === 0 ? (
+              ) : paginatedCampaignItems.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center text-slate-400 py-16">
+                  <TableCell colSpan={10} className="text-center text-slate-400 py-16 px-2">
                     {hasFilters ? "No campaigns match your filters." : "No campaigns yet. Create a campaign to get started."}
                   </TableCell>
                 </TableRow>
               ) : (
-                paginatedItems.map((row) => (
+                paginatedCampaignItems.map((row) => (
                   <TableRow key={`${row.channel}-${row.id}`} className="border-slate-100">
-                    <TableCell className="pl-5">
-                      <div className="flex items-center gap-3 min-w-[180px]">
-                        <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${row.channel === "whatsapp" ? "bg-emerald-50 text-emerald-600" : "bg-violet-50 text-violet-600"}`}>
-                          {row.channel === "whatsapp" ? <MessageCircle className="h-4 w-4" /> : <Phone className="h-4 w-4" />}
+                    <TableCell className="px-2 pl-3 py-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className={`h-7 w-7 shrink-0 rounded-md flex items-center justify-center ${row.channel === "whatsapp" ? "bg-emerald-50 text-emerald-600" : "bg-violet-50 text-violet-600"}`}>
+                          {row.channel === "whatsapp" ? <MessageCircle className="h-3.5 w-3.5" /> : <Phone className="h-3.5 w-3.5" />}
                         </div>
-                        <div>
-                          <p className="text-sm font-semibold text-slate-900">{row.name}</p>
-                          <span className={`inline-flex mt-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${tagClass(row.tag)}`}>{row.tag}</span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-slate-900 truncate">{row.name}</p>
+                          <span className={`inline-flex mt-0.5 rounded-full px-1.5 py-0 text-[10px] font-medium truncate max-w-full ${tagClass(row.tag)}`}>{row.tag}</span>
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm text-slate-700">{row.audience.toLocaleString()}</TableCell>
-                    <TableCell className="text-sm text-slate-700">{row.template}</TableCell>
-                    <TableCell className="text-sm text-slate-500 whitespace-nowrap">{row.schedule}</TableCell>
-                    <TableCell>
-                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ${statusClass(row.status)}`}>
-                        <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                    <TableCell className="px-1.5 py-2 text-sm text-slate-700">{row.audience.toLocaleString()}</TableCell>
+                    <TableCell className="px-1.5 py-2 text-sm text-slate-700 truncate" title={row.template}>{row.template}</TableCell>
+                    <TableCell className="px-1.5 py-2 text-sm text-slate-500 truncate" title={row.schedule}>{row.schedule}</TableCell>
+                    <TableCell className="px-1.5 py-2">
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${statusClass(row.status)}`}>
+                        <span className="h-1.5 w-1.5 rounded-full bg-current shrink-0" />
                         {row.status}
                       </span>
                     </TableCell>
-                    <TableCell className="text-sm text-slate-700">{row.sent.toLocaleString()}</TableCell>
-                    <TableCell className="text-sm text-emerald-600">{row.delivered.toLocaleString()}</TableCell>
-                    <TableCell className="text-sm text-red-500">{row.failed.toLocaleString()}</TableCell>
-                    <TableCell className="text-sm text-slate-500 whitespace-nowrap">
+                    <TableCell className="px-1.5 py-2 text-sm text-slate-700 text-center">{row.sent.toLocaleString()}</TableCell>
+                    <TableCell className="px-1.5 py-2 text-sm text-emerald-600 text-center">{row.delivered.toLocaleString()}</TableCell>
+                    <TableCell className="px-1.5 py-2 text-sm text-red-500 text-center">{row.failed.toLocaleString()}</TableCell>
+                    <TableCell className="px-1.5 py-2 text-sm text-slate-500 truncate">
                       {row.createdAt ? format(row.createdAt, "MMM d, yyyy") : "—"}
                     </TableCell>
-                    <TableCell className="text-right pr-5">
+                    <TableCell className="px-1.5 py-2 pr-3 text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400">
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400">
                             <MoreVertical className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          {row.status !== "Deleted" && (
-                            <DropdownMenuItem onClick={() => openRow(row)}>
-                              <Eye className="mr-2 h-4 w-4" />
-                              View
-                            </DropdownMenuItem>
-                          )}
-                          {row.rawVoice && row.status !== "Deleted" && (
-                            <DropdownMenuItem onClick={() => setEditingCampaign(row.rawVoice!)}>
-                              <Pencil className="mr-2 h-4 w-4" />
-                              Edit
-                            </DropdownMenuItem>
-                          )}
-                          {row.rawVoice && row.status === "Deleted" && (
-                            <DropdownMenuItem
-                              onClick={() => restoreMutation.mutate(row.id)}
-                              disabled={restoringCampaignId === row.id}
-                            >
-                              <RotateCcw className="mr-2 h-4 w-4" />
-                              {restoringCampaignId === row.id ? "Restoring..." : "Restore"}
-                            </DropdownMenuItem>
-                          )}
+                          <DropdownMenuItem onClick={() => openRow(row)}>
+                            <Eye className="mr-2 h-4 w-4" />
+                            View
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-red-600 focus:text-red-600"
+                            onClick={() => setCampaignToDelete(row)}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -676,15 +1078,16 @@ export default function Campaigns() {
               )}
             </TableBody>
           </Table>
+          )}
         </div>
 
         {totalItems > 0 && (
           <div className="flex flex-col lg:flex-row items-center justify-between gap-3 px-5 py-4 border-t border-slate-100">
             <p className="text-sm text-slate-400">
-              Showing {startItem}-{endItem} of {totalItems} campaigns
+              Showing {startItem}-{endItem} of {totalItems} {tab === "deleted" ? "deleted campaigns" : "campaigns"}
             </p>
             <div className="flex items-center gap-2 text-sm text-slate-500">
-              <span>Per page:</span>
+              <span>Items per page:</span>
               <Select value={String(itemsPerPage)} onValueChange={(value) => handleItemsPerPageChange(Number(value))}>
                 <SelectTrigger className="h-8 w-[70px] bg-white border-slate-200">
                   <SelectValue />
@@ -697,9 +1100,8 @@ export default function Campaigns() {
               </Select>
             </div>
             <div className="flex items-center gap-1">
-              <Button variant="outline" size="sm" className="h-8 bg-white border-slate-200" onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1}>
-                <ChevronLeft className="h-4 w-4 mr-1" />
-                Previous
+              <Button variant="outline" size="sm" className="h-8 w-8 p-0 bg-white border-slate-200" onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1}>
+                <ChevronLeft className="h-4 w-4" />
               </Button>
               {visiblePages.map((page, index) =>
                 page === "ellipsis" ? (
@@ -718,25 +1120,74 @@ export default function Campaigns() {
                   </Button>
                 )
               )}
-              <Button variant="outline" size="sm" className="h-8 bg-white border-slate-200" onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === totalPages}>
-                Next
-                <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
+              <Button variant="outline" size="sm" className="h-8 w-8 p-0 bg-white border-slate-200" onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === totalPages}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
               </div>
             </div>
         )}
                     </div>
 
-      <EditCampaignDialog 
-        campaign={editingCampaign as any} 
-        open={!!editingCampaign} 
-        onOpenChange={(open: boolean) => !open && setEditingCampaign(null)} 
-      />
-      <CampaignDetailsDialog 
-        campaign={viewingCampaign} 
-        open={!!viewingCampaign} 
-        onOpenChange={(open: boolean) => !open && setViewingCampaign(null)} 
-      />
+      <AlertDialog
+        open={!!campaignToDelete}
+        onOpenChange={(open) => {
+          if (!open && !deleteMutation.isPending) setCampaignToDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete campaign?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {campaignToDelete
+                ? `This will delete "${campaignToDelete.name}". This action cannot be undone.`
+                : "This action cannot be undone."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!campaignToDelete || deleteMutation.isPending}
+              className="bg-red-600 hover:bg-red-700 text-white border-transparent"
+              onClick={(e) => {
+                e.preventDefault();
+                if (campaignToDelete) deleteMutation.mutate(campaignToDelete);
+              }}
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!campaignToPurge}
+        onOpenChange={(open) => {
+          if (!open) setCampaignToPurge(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete permanently?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {campaignToPurge
+                ? `"${campaignToPurge.name}" will be permanently removed and cannot be restored.`
+                : "This action cannot be undone."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white border-transparent"
+              onClick={(e) => {
+                e.preventDefault();
+                if (campaignToPurge) handlePurgeDeleted(campaignToPurge);
+              }}
+            >
+              Delete Permanently
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={showPhoneNumberAlert} onOpenChange={setShowPhoneNumberAlert}>
         <AlertDialogContent>

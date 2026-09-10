@@ -3,7 +3,7 @@
  * Shows navigation based on granted permissions for team members
  * Supports both user team members and admin sub-admins
  */
-import { Users, BookOpen, Mic, Link as LinkIcon, Phone, Settings, ChevronsUpDown, Plus, BarChart3, Home, Target, LogOut, Coins, Shield, CreditCard, TrendingUp, UserCheck, Workflow, Webhook, ClipboardList, Calendar, Layout, FileText, Wrench, Globe, Building2, Key, Puzzle, MessageSquare, Headphones, ListOrdered, ContactRound, Package, DollarSign, Brain, Bot } from "lucide-react";
+import { Users, BookOpen, Mic, Link as LinkIcon, Phone, Settings, ChevronsUpDown, Plus, BarChart3, Home, Target, LogOut, Coins, Shield, CreditCard, TrendingUp, UserCheck, Webhook, Layout, FileText, Wrench, Globe, Building2, Key, Puzzle, MessageSquare, Headphones, ListOrdered, ContactRound, Package, DollarSign, Brain, Bot } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -88,9 +88,7 @@ const USER_SECTION_ROUTES: Record<string, { url: string; icon: any; label: strin
   knowledge_base: [
     { url: "/knowledge-base", icon: BookOpen, label: "Knowledge Base", group: "build", iconColor: "text-violet-500" },
   ],
-  templates: [
-    { url: "/flows", icon: Workflow, label: "Flow Builder", group: "build", iconColor: "text-indigo-500" },
-  ],
+  templates: [],
   contacts: [
     { url: "/contacts", icon: UserCheck, label: "All Contacts", group: "telephony", iconColor: "text-brand" },
   ],
@@ -123,7 +121,7 @@ const USER_SECTION_ROUTES: Record<string, { url: string; icon: any; label: strin
     { url: "/api-keys", icon: Key, label: "API Keys", group: "settings", iconColor: "text-slate-500" },
   ],
   settings: [
-    { url: "/settings", icon: Settings, label: "Settings", group: "settings" },
+    { url: "/whatsapp/waba-connection", icon: Settings, label: "Settings", group: "settings" },
   ],
   team: [
     { url: "/team", icon: Users, label: "Team Management", group: "settings" },
@@ -161,11 +159,6 @@ const ADMIN_SECTION_TABS: Record<string, { tabValue: string; icon: any; label: s
     { tabValue: "teams", icon: Building2, label: "Admin Team" },
   ],
 };
-
-const FLOW_AUTOMATION_ROUTES = [
-  { url: "/flows/forms", icon: ClipboardList, label: "Forms", group: "tools", iconColor: "text-cyan-500" },
-  { url: "/flows/appointments", icon: Calendar, label: "Appointments", group: "tools", iconColor: "text-rose-500" },
-];
 
 export function TeamMemberSidebar() {
   const [location, setLocation] = useLocation();
@@ -218,15 +211,6 @@ export function TeamMemberSidebar() {
     return Object.values(sectionPerms).some(perm => perm.canRead === true);
   };
 
-  // Check if user has a specific permission
-  const hasPermission = (sectionId: string, subsectionId: string, action: 'canCreate' | 'canRead' | 'canUpdate' | 'canDelete'): boolean => {
-    const sectionPerms = permissions[sectionId];
-    if (!sectionPerms) return false;
-    const subsectionPerm = sectionPerms[subsectionId];
-    if (!subsectionPerm) return false;
-    return subsectionPerm[action] === true;
-  };
-
   // Build navigation items based on permissions
   const buildNavItems = () => {
     const groups: Record<string, { url: string; icon: any; label: string; iconColor?: string }[]> = {
@@ -251,17 +235,6 @@ export function TeamMemberSidebar() {
         });
       }
     });
-
-    if (hasPermission('agents', 'flow_builder', 'canRead')) {
-      FLOW_AUTOMATION_ROUTES.forEach(r => {
-        groups[r.group].push({
-          url: r.url,
-          icon: r.icon,
-          label: r.label,
-          iconColor: r.iconColor,
-        });
-      });
-    }
 
     if (groups.tools.length > 0) {
       groups.build.push({

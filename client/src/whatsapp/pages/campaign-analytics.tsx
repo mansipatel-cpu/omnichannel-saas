@@ -35,6 +35,14 @@ import {
 } from "lucide-react";
 import { toast } from "@wa/hooks/use-toast";
 import { useAuth } from "@wa/contexts/auth-context";
+import { AuthStorage } from "@/lib/auth-storage";
+
+function authFetch(url: string, init?: RequestInit) {
+  const headers = new Headers(init?.headers || {});
+  const authHeader = AuthStorage.getAuthHeader();
+  if (authHeader) headers.set("Authorization", authHeader);
+  return fetch(url, { ...init, credentials: "include", headers });
+}
 
 // Simple fallback chart component
 const SimpleDailyChart = ({ data }: { data: any[] }) => {
@@ -145,7 +153,7 @@ export default function CampaignAnalytics() {
   const { data: campaignData, isLoading: loading, error: queryError } = useQuery({
     queryKey: ["campaign-analytics", campaignId],
     queryFn: async () => {
-      const response = await fetch(`/api/whatsapp/analytics/campaigns/${campaignId}`);
+      const response = await authFetch(`/api/whatsapp/analytics/campaigns/${campaignId}`);
       if (!response.ok) {
         throw new Error(`Failed to fetch campaign analytics: ${response.status} ${response.statusText}`);
       }
@@ -268,7 +276,7 @@ export default function CampaignAnalytics() {
         campaignId: campaignId,
       });
 
-      const response = await fetch(`/api/whatsapp/analytics/export?${params}`);
+      const response = await authFetch(`/api/whatsapp/analytics/export?${params}`);
       if (!response.ok) throw new Error("Export failed");
 
       const blob = await response.blob();

@@ -153,6 +153,7 @@ export interface IStorage {
   // Channels
   getChannels(): Promise<Channel[]>;
   getChannelsByUser(userId: string): Promise<Channel[]>;
+  getChannelsByUserId(userId: string): Promise<Channel[]>;
   getChannel(id: string): Promise<Channel | undefined>;
   getChannelByPhoneNumberId(phoneNumberId: string): Promise<Channel | undefined>;
   getChannelsByPhoneNumber(phoneNumber: string): Promise<Channel[]>;
@@ -750,6 +751,10 @@ export class MemStorage implements IStorage {
       .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
   }
 
+  async getChannelsByUserId(userId: string): Promise<Channel[]> {
+    return this.getChannelsByUser(userId);
+  }
+
 
   async getChannel(id: string): Promise<Channel | undefined> {
     return this.channels.get(id);
@@ -764,7 +769,7 @@ export class MemStorage implements IStorage {
       updatedAt: new Date(),
       whatsappBusinessAccountId: insertChannel.whatsappBusinessAccountId || null,
       phoneNumber: insertChannel.phoneNumber || null,
-      isActive: insertChannel.isActive ?? false,
+      isActive: insertChannel.isActive ?? true,
       healthStatus: insertChannel.healthStatus || "unknown",
       lastHealthCheck: null,
       healthDetails: null,

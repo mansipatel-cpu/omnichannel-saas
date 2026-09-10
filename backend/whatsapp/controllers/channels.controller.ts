@@ -56,11 +56,10 @@ export const getChannels = asyncHandler(async (req: Request, res: Response) => {
     // Superadmin sees all channels
     channels = await storage.getChannels();
   } else {
-    // Admin (or other roles) sees only their own channels
-    channels = await storage.getChannelsByUser(user.id);
+    // Return every channel for this user (not a paginated slice)
+    channels = await storage.getChannelsByUserId(user.id);
   }
 
-  // console.log("CHECK CHANNELS:", channels);
   res.json(channels);
 });
 
@@ -263,14 +262,14 @@ export const createChannel = asyncHandler(async (req: Request, res: Response) =>
   const createdBy = (req.session as any).user.id || 'unknown';
   validatedChannel.createdBy = createdBy;
   validatedChannel.connectionMethod = 'manual';
+  // Newly added channels should be visible/active by default
+  validatedChannel.isActive = true;
   
-  // If this is set as active, deactivate all other channels
-  if (validatedChannel.isActive) {
-    const channels = await storage.getChannelsByUserId(createdBy);
-    for (const channel of channels) {
-      if (channel.isActive) {
-        await storage.updateChannel(channel.id, { isActive: false });
-      }
+  // Deactivate all other channels for this user so the new one is the active selection
+  const existingChannels = await storage.getChannelsByUserId(createdBy);
+  for (const channel of existingChannels) {
+    if (channel.isActive) {
+      await storage.updateChannel(channel.id, { isActive: false });
     }
   }
   

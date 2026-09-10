@@ -64,7 +64,7 @@ const PAGE_HEADERS: Array<{ test: (path: string) => boolean; title: string; subt
   { test: (p) => p === "/campaigns" || p.startsWith("/whatsapp/campaigns"), title: "Campaigns", subtitle: "Create and manage your WhatsApp and automated calling campaigns." },
   { test: (p) => p.startsWith("/calls/"), title: "Call Details", subtitle: "Review the transcript and outcome of this call." },
   { test: (p) => p === "/calls", title: "Calls", subtitle: "Browse inbound and outbound call history." },
-  { test: (p) => p === "/analytics", title: "Reports", subtitle: "Track voice and WhatsApp performance." },
+  { test: (p) => p === "/analytics", title: "Analytics", subtitle: "Track voice and WhatsApp performance." },
   { test: (p) => p === "/agents", title: "Agents", subtitle: "Create and manage your voice agents." },
   { test: (p) => p === "/knowledge-base", title: "Knowledge Base", subtitle: "Upload documents your agents can use." },
   { test: (p) => p === "/voices", title: "Voice", subtitle: "Choose and preview voices for calling." },
@@ -84,7 +84,7 @@ const PAGE_HEADERS: Array<{ test: (path: string) => boolean; title: string; subt
   { test: (p) => p === "/settings", title: "Settings", subtitle: "Account, workspace, and preferences." },
   { test: (p) => p === "/whatsapp/inbox", title: "Team Inbox", subtitle: "Reply to WhatsApp conversations in one place." },
   { test: (p) => p === "/whatsapp/api-docs", title: "API Documentation", subtitle: "Integrate WhatsApp messaging into your apps." },
-  { test: (p) => p.startsWith("/whatsapp/waba-connection") || p.startsWith("/whatsapp/channels"), title: "Channels", subtitle: "Connect and manage WhatsApp Business accounts." },
+  { test: (p) => p.startsWith("/whatsapp/waba-connection") || p.startsWith("/whatsapp/channels"), title: "Settings", subtitle: "Connect and manage WhatsApp Business accounts." },
   { test: (p) => p.startsWith("/whatsapp/contacts"), title: "WhatsApp Contacts", subtitle: "Manage WhatsApp-only contact records." },
   { test: (p) => p.startsWith("/admin"), title: "Admin Dashboard", subtitle: "Platform-wide activity and tenants." },
 ];
@@ -208,7 +208,7 @@ export function AppPageHeader() {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuItem onClick={() => setLocation("/settings")} className="cursor-pointer">
+            <DropdownMenuItem onClick={() => setLocation("/whatsapp/waba-connection")} className="cursor-pointer">
               <Settings className="mr-2 h-4 w-4" />
               Settings
             </DropdownMenuItem>

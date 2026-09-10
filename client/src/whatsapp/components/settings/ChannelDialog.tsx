@@ -20,7 +20,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { 
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -28,7 +28,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@wa/components/ui/dialog";
-import { 
+import {
   Form,
   FormControl,
   FormDescription,
@@ -39,11 +39,9 @@ import {
 } from "@wa/components/ui/form";
 import { Input } from "@wa/components/ui/input";
 import { Button } from "@wa/components/ui/button";
-import { Switch } from "@wa/components/ui/switch";
 import { useToast } from "@wa/hooks/use-toast";
 import { apiRequest, queryClient } from "@wa/lib/queryClient";
 import type { Channel } from "@shared/whatsapp-schema";
-import { MessageSquare } from "lucide-react";
 import { useAuth } from "@wa/contexts/auth-context";
 
 const channelFormSchema = z.object({
@@ -63,12 +61,15 @@ interface ChannelDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editingChannel: Channel | null;
-  onSuccess: () => void;
+  onSuccess: (channel?: Channel | null) => void;
 }
+
+const inputClass =
+  "h-10 rounded-md border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus-visible:ring-[#007BFF] focus-visible:ring-offset-0 focus-visible:border-[#007BFF]";
 
 export function ChannelDialog({ open, onOpenChange, editingChannel, onSuccess }: ChannelDialogProps) {
   const { toast } = useToast();
-const {user} = useAuth()
+  const { user } = useAuth();
   const channelForm = useForm<z.infer<typeof channelFormSchema>>({
     resolver: zodResolver(channelFormSchema),
     defaultValues: {
@@ -76,7 +77,7 @@ const {user} = useAuth()
       phoneNumber: "",
       phoneNumberId: "",
       wabaId: "",
-      appId: "", 
+      appId: "",
       accessToken: "",
       businessAccountId: "",
       mmLiteEnabled: false,
@@ -92,7 +93,7 @@ const {user} = useAuth()
         phoneNumber: editingChannel.phoneNumber || "",
         phoneNumberId: editingChannel.phoneNumberId,
         wabaId: editingChannel.whatsappBusinessAccountId || "",
-        appId: editingChannel.appId || "", 
+        appId: editingChannel.appId || "",
         accessToken: editingChannel.accessToken,
         businessAccountId: "",
         mmLiteEnabled: editingChannel.mmLiteEnabled || false,
@@ -100,11 +101,21 @@ const {user} = useAuth()
         mmLiteApiKey: editingChannel.mmLiteApiKey || "",
       });
     } else {
-      channelForm.reset();
+      channelForm.reset({
+        name: "",
+        phoneNumber: "",
+        phoneNumberId: "",
+        wabaId: "",
+        appId: "",
+        accessToken: "",
+        businessAccountId: "",
+        mmLiteEnabled: false,
+        mmLiteApiUrl: "",
+        mmLiteApiKey: "",
+      });
     }
-  }, [editingChannel, channelForm]);
+  }, [editingChannel, open, channelForm]);
 
-  // Create/Update channel mutation
   const createChannelMutation = useMutation({
     mutationFn: async (data: z.infer<typeof channelFormSchema>) => {
       const payload = {
@@ -118,56 +129,62 @@ const {user} = useAuth()
         mmLiteEnabled: data.mmLiteEnabled,
         mmLiteApiUrl: data.mmLiteApiUrl,
         mmLiteApiKey: data.mmLiteApiKey,
+        isActive: true,
       };
-      
-      if (editingChannel) {
-        return await apiRequest("PUT", `/api/whatsapp/channels/${editingChannel.id}`, payload);
-      } else {
-        return await apiRequest("POST", "/api/whatsapp/channels", payload);
-      }
+
+      const res = editingChannel
+        ? await apiRequest("PUT", `/api/whatsapp/channels/${editingChannel.id}`, payload)
+        : await apiRequest("POST", "/api/whatsapp/channels", payload);
+      return await res.json();
     },
-    onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/channels"] });
-      
-      // Check if the channel creation included health check results
-      if (!editingChannel && data.healthStatus) {
-        if (data.healthStatus === 'healthy') {
+    onSuccess: async (created: any) => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/channels"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/channels/active"] });
+
+      if (!editingChannel && created?.healthStatus) {
+        if (created.healthStatus === "healthy") {
           toast({
             title: "Channel created successfully",
             description: "Your channel is connected and healthy!",
           });
-        } else if (data.healthStatus === 'error') {
+        } else if (created.healthStatus === "error") {
           toast({
             title: "Channel created with issues",
-            description: data.healthDetails?.error || "Channel was created but has connection issues. Please check your credentials.",
+            description:
+              created.healthDetails?.error ||
+              "Channel was created but has connection issues. Please check your credentials.",
             variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Channel created",
+            description: "Your new channel has been added successfully.",
           });
         }
       } else {
         toast({
           title: editingChannel ? "Channel updated" : "Channel created",
-          description: editingChannel ? "Your channel has been updated successfully." : "Your new channel has been added successfully.",
+          description: editingChannel
+            ? "Your channel has been updated successfully."
+            : "Your new channel has been added successfully.",
         });
-      }      
-      onSuccess();
+      }
+      onSuccess(created);
     },
-    onError: (error) => {
+    onError: (error: any) => {
       let errorData = error?.response?.data;
-    
-      // If response.data is missing, try to extract JSON from error.message
+
       if (!errorData && typeof error?.message === "string") {
         try {
-          const match = error.message.match(/\{.*\}/); // find JSON inside the message
+          const match = error.message.match(/\{.*\}/);
           if (match) {
             errorData = JSON.parse(match[0]);
           }
-        } catch (e) {
-          console.error("Failed to parse error JSON:", e);
+        } catch {
+          // ignore parse errors
         }
       }
-    
-      console.log("Channel mutation error:", errorData, error);
-    
+
       toast({
         title: "Error",
         description:
@@ -177,9 +194,7 @@ const {user} = useAuth()
           "Something went wrong while saving the channel.",
         variant: "destructive",
       });
-    }
-    
-    
+    },
   });
 
   const handleChannelSubmit = (data: z.infer<typeof channelFormSchema>) => {
@@ -188,42 +203,45 @@ const {user} = useAuth()
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{editingChannel ? "Edit" : "Add New"} WhatsApp Channel</DialogTitle>
-          <DialogDescription>
+      <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto p-0 gap-0 rounded-xl border-slate-200">
+        <DialogHeader className="px-6 pt-6 pb-4 space-y-1.5 text-left">
+          <DialogTitle className="text-xl font-semibold text-slate-900">
+            {editingChannel ? "Edit WhatsApp Channel" : "Add New WhatsApp Channel"}
+          </DialogTitle>
+          <DialogDescription className="text-sm text-slate-500">
             Configure your WhatsApp Business API credentials and settings.
           </DialogDescription>
         </DialogHeader>
+
         <Form {...channelForm}>
-          <form onSubmit={channelForm.handleSubmit(handleChannelSubmit)} className="space-y-4">
+          <form onSubmit={channelForm.handleSubmit(handleChannelSubmit)} className="px-6 pb-6 space-y-5">
             <FormField
               control={channelForm.control}
               name="name"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Channel Name</FormLabel>
+                <FormItem className="space-y-1.5">
+                  <FormLabel className="text-sm font-semibold text-slate-800">Channel Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="My Business" {...field} />
+                    <Input placeholder="My Business" className={inputClass} {...field} />
                   </FormControl>
-                  <FormDescription>
+                  <FormDescription className="text-xs text-slate-400">
                     A friendly name to identify this channel
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            
+
             <FormField
               control={channelForm.control}
               name="phoneNumber"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Phone Number</FormLabel>
+                <FormItem className="space-y-1.5">
+                  <FormLabel className="text-sm font-semibold text-slate-800">Phone Number</FormLabel>
                   <FormControl>
-                    <Input placeholder="+1234567890" {...field} />
+                    <Input placeholder="+1234567890" className={inputClass} {...field} />
                   </FormControl>
-                  <FormDescription>
+                  <FormDescription className="text-xs text-slate-400">
                     The WhatsApp Business phone number
                   </FormDescription>
                   <FormMessage />
@@ -232,84 +250,93 @@ const {user} = useAuth()
             />
 
             <FormField
-  control={channelForm.control}
-  name="appId"
-  render={({ field }) => (
-    <FormItem>
-      <FormLabel>Meta App ID</FormLabel>
-      <FormControl>
-        <Input placeholder="123456789012345" {...field} />
-      </FormControl>
-      <FormDescription>
-        Your Meta (Facebook) App ID
-      </FormDescription>
-      <FormMessage />
-    </FormItem>
-  )}
-/>
+              control={channelForm.control}
+              name="appId"
+              render={({ field }) => (
+                <FormItem className="space-y-1.5">
+                  <FormLabel className="text-sm font-semibold text-slate-800">Meta App ID</FormLabel>
+                  <FormControl>
+                    <Input placeholder="123456789012345" className={inputClass} {...field} />
+                  </FormControl>
+                  <FormDescription className="text-xs text-slate-400">
+                    Your Meta (Facebook) App ID
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-            
             <FormField
               control={channelForm.control}
               name="phoneNumberId"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Phone Number ID</FormLabel>
+                <FormItem className="space-y-1.5">
+                  <FormLabel className="text-sm font-semibold text-slate-800">Phone Number ID</FormLabel>
                   <FormControl>
-                    <Input placeholder="123456789012345" {...field} />
+                    <Input placeholder="123456789012345" className={inputClass} {...field} />
                   </FormControl>
-                  <FormDescription>
+                  <FormDescription className="text-xs text-slate-400">
                     Found in Meta Business Suite under WhatsApp settings
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            
+
             <FormField
               control={channelForm.control}
               name="wabaId"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>WhatsApp Business Account ID</FormLabel>
+                <FormItem className="space-y-1.5">
+                  <FormLabel className="text-sm font-semibold text-slate-800">
+                    WhatsApp Business Account ID
+                  </FormLabel>
                   <FormControl>
-                    <Input placeholder="123456789012345" {...field} />
+                    <Input placeholder="123456789012345" className={inputClass} {...field} />
                   </FormControl>
-                  <FormDescription>
+                  <FormDescription className="text-xs text-slate-400">
                     Your WhatsApp Business Account ID from Meta
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            
+
             <FormField
               control={channelForm.control}
               name="accessToken"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Access Token</FormLabel>
+                <FormItem className="space-y-1.5">
+                  <FormLabel className="text-sm font-semibold text-slate-800">Access Token</FormLabel>
                   <FormControl>
-                    <Input type="password" placeholder="Your access token" {...field} />
+                    <Input
+                      type="password"
+                      placeholder="Your access token"
+                      className={inputClass}
+                      {...field}
+                    />
                   </FormControl>
-                  <FormDescription>
+                  <FormDescription className="text-xs text-slate-400">
                     Your permanent access token from Meta
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            
+
             <FormField
               control={channelForm.control}
               name="businessAccountId"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Business Account ID (Optional)</FormLabel>
+                <FormItem className="space-y-1.5">
+                  <FormLabel className="text-sm font-semibold text-slate-800">
+                    Business Account ID{" "}
+                    <span className="font-normal text-slate-400">(Optional)</span>
+                  </FormLabel>
                   <FormControl>
-                    <Input placeholder="123456789012345" {...field} />
+                    <Input placeholder="123456789012345" className={inputClass} {...field} />
                   </FormControl>
-                  <FormDescription>
+                  <FormDescription className="text-xs text-slate-400">
                     Your Meta Business Account ID (optional)
                   </FormDescription>
                   <FormMessage />
@@ -317,16 +344,25 @@ const {user} = useAuth()
               )}
             />
 
-            <DialogFooter>
+            <DialogFooter className="pt-2 gap-2 sm:gap-2">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => onOpenChange(false)}
+                className="h-10 bg-white border-slate-200 text-slate-700 shadow-none"
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={user?.username === 'demouser'? true :createChannelMutation.isPending}>
-                {createChannelMutation.isPending ? "Saving..." : editingChannel ? "Update" : "Create"} Channel
+              <Button
+                type="submit"
+                disabled={user?.username === "demouser" || createChannelMutation.isPending}
+                className="h-10 bg-[#007BFF] hover:bg-[#0069d9] text-white border-transparent shadow-none"
+              >
+                {createChannelMutation.isPending
+                  ? "Saving..."
+                  : editingChannel
+                    ? "Update Channel"
+                    : "Create Channel"}
               </Button>
             </DialogFooter>
           </form>

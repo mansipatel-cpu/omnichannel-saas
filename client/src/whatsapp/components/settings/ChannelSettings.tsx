@@ -19,13 +19,6 @@ import { useState, useEffect } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@wa/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@wa/components/ui/card";
 import { Badge } from "@wa/components/ui/badge";
 import {
   Dialog,
@@ -66,6 +59,7 @@ import {
   Loader2,
   Webhook,
   Radio,
+  Copy,
 } from "lucide-react";
 import { useToast } from "@wa/hooks/use-toast";
 import { apiRequest, queryClient } from "@wa/lib/queryClient";
@@ -78,6 +72,7 @@ import { TestMessageDialog } from "./TestMessageDialog";
 import { useAuth } from "@wa/contexts/auth-context";
 import { useChannelContext } from "@wa/contexts/channel-context";
 import { useTranslation } from "@wa/lib/i18n";
+import { SiWhatsapp } from "react-icons/si";
 
 
 declare global {
@@ -122,7 +117,9 @@ export function ChannelSettings() {
     queryFn: async () => {
       const response = await apiRequest("GET", "/api/whatsapp/channels");
       const json = await response.json();
-      return json.data ?? [];
+      if (Array.isArray(json)) return json;
+      if (Array.isArray(json?.data)) return json.data;
+      return [];
     },
   });
 
@@ -322,27 +319,30 @@ export function ChannelSettings() {
   };
 
   const getHealthStatusBadge = (status?: string, lastChecked?: string) => {
-    const variant =
+    const label =
       status === "healthy"
-        ? "success"
+        ? "Healthy"
         : status === "warning"
-        ? "warning"
+        ? "Warning"
         : status === "error"
-        ? "destructive"
-        : "secondary";
-    const displayStatus =
-      status === "error"
-        ? t("settings.channel_setting.healthStatus.error")
+        ? "Error"
         : status
-        ? t(`settings.channel_setting.healthStatus.${status}`)
-        : t("settings.channel_setting.healthStatus.unknown");
+        ? status
+        : "Unknown";
+
+    const className =
+      status === "healthy"
+        ? "bg-slate-100 text-slate-600 border-slate-200"
+        : status === "warning"
+        ? "bg-amber-50 text-amber-700 border-amber-200"
+        : status === "error"
+        ? "bg-red-50 text-red-700 border-red-200"
+        : "bg-slate-100 text-slate-500 border-slate-200";
 
     return (
-      <div className="flex items-center space-x-2">
-        <Badge variant={variant as any} className="capitalize">
-          {displayStatus}
-        </Badge>
-      </div>
+      <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium capitalize ${className}`}>
+        {label}
+      </span>
     );
   };
 
@@ -383,12 +383,16 @@ export function ChannelSettings() {
   }, [config?.appId]);
 
   const openConnectionChooser = () => {
+    setEditingChannel(null);
+    setShowChannelDialog(true);
+  };
+
+  const openEmbeddedSignupChooser = () => {
     if (embeddedSignupEnabled) {
       setConnectionFlow("choose");
       setShowConnectionDialog(true);
     } else {
-      setEditingChannel(null);
-      setShowChannelDialog(true);
+      openConnectionChooser();
     }
   };
 
@@ -498,648 +502,210 @@ export function ChannelSettings() {
     }
   };
 
+  const channelPendingDelete = (channels as Channel[]).find((c) => c.id === showDeleteConfirm);
+  const deleteChannelDisplayName =
+    (channelPendingDelete as any)?.healthDetails?.verified_name ||
+    channelPendingDelete?.name ||
+    "this channel";
+  const deleteChannelPhone = channelPendingDelete?.phoneNumber || "";
+  const deleteChannelLabel = deleteChannelPhone
+    ? `${deleteChannelDisplayName} (${deleteChannelPhone})`
+    : deleteChannelDisplayName;
+
   return (
     <>
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <CardTitle className="flex items-center text-base sm:text-lg min-w-0">
-              <Smartphone className="w-5 h-5 mr-2 flex-shrink-0" />
-              <span className="truncate">
-                {t("settings.channel_setting.title")}
-              </span>
-            </CardTitle>
-
-            <div className="flex items-center gap-2">
-              {channels.length > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={resubscribeAllWebhooks}
-                  disabled={resubscribingAll || user?.username === "demouser"}
-                  title="Re-subscribe all channels to receive delivery and read receipts from Meta"
-                >
-                  {resubscribingAll ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Webhook className="w-4 h-4 mr-2" />
-                  )}
-                  Re-subscribe Webhooks
-                </Button>
-              )}
-              <Button onClick={openConnectionChooser} size="sm" className="bg-green-600 hover:bg-green-700">
-                <Plus className="w-4 h-4 mr-2" />
-                {channels.length > 0 ? "Add New Channel" : "Connect WhatsApp"}
-              </Button>
+      <div className="space-y-5">
+        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <Smartphone className="h-6 w-6 text-slate-800 shrink-0" />
+              <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
+                WhatsApp{" "}
+                <span className="inline-flex align-middle rounded-md bg-[#007BFF] px-2.5 py-0.5 text-sm font-semibold text-white">
+                  Channels
+                </span>
+              </h2>
             </div>
-
+            <p className="mt-2 text-sm text-slate-500 max-w-2xl">
+              Configure your WhatsApp Business API channels for Cloud API and MM Lite.
+            </p>
           </div>
 
-          <CardDescription className="mt-2 text-sm sm:text-base">
-            {t("settings.channel_setting.description")}
-          </CardDescription>
-        </CardHeader>
-
-        <CardContent>
-          {channelsLoading ? (
-            <Loading />
-          ) : channels.length === 0 ? (
-            <div className="text-center py-12">
-              <Smartphone className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-              <p className="text-gray-500 mb-4">
-                {t("settings.channel_setting.noChannels")}
-              </p>
-              <Button onClick={openConnectionChooser}>
-                <Plus className="w-4 h-4 mr-2" />
-                {t("settings.channel_setting.addFirstChannel")}
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            {channels.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={resubscribeAllWebhooks}
+                disabled={resubscribingAll || user?.username === "demouser"}
+                title="Re-subscribe all channels to receive delivery and read receipts from Meta"
+                className="h-10 bg-white border-slate-200 text-slate-700 shadow-none"
+              >
+                {resubscribingAll ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Webhook className="w-4 h-4 mr-2" />
+                )}
+                Re-subscribe Webhooks
               </Button>
-            </div>
-          ) : (
+            )}
+            <Button
+              onClick={openConnectionChooser}
+              size="sm"
+              className="h-10 bg-[#007BFF] hover:bg-[#0069d9] text-white border-transparent shadow-none"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              {channels.length > 0 ? "Add New Channel" : "Connect WhatsApp"}
+            </Button>
+          </div>
+        </div>
+
+        {channelsLoading ? (
+          <div className="rounded-xl border border-slate-200 bg-white p-10">
+            <Loading />
+          </div>
+        ) : channels.length === 0 ? (
+          <div className="rounded-xl border border-slate-200 bg-white text-center py-16 px-6">
+            <Smartphone className="w-12 h-12 mx-auto text-slate-300 mb-4" />
+            <p className="text-slate-500 mb-4">
+              {t("settings.channel_setting.noChannels")}
+            </p>
+            <Button
+              onClick={openConnectionChooser}
+              className="bg-[#007BFF] hover:bg-[#0069d9] text-white border-transparent"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              {t("settings.channel_setting.addFirstChannel")}
+            </Button>
+          </div>
+        ) : (
             <div className="space-y-4">
-              {(() => {
-                const filtered = selectedChannel
-                  ? channels.filter((ch: any) => ch.id === selectedChannel.id)
-                  : channels.filter((ch: any) => ch.isActive);
-                const displayChannels = filtered.length > 0 ? filtered : channels.slice(0, 1);
-                return displayChannels;
-              })().map((channel: any) => (
-                <div
-                  key={channel.id}
-                  className="border border-gray-200 rounded-lg p-3 sm:p-4"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 mb-3">
-                        <h3 className="font-semibold text-base sm:text-lg">
-                          {user?.username === "demouser" ? (
-                            <span className="px-2 py-1 rounded">
-                              {channel.name.slice(0, -1).replace(/./g, "*") +
-                                channel.name.slice(-1)}
-                            </span>
-                          ) : (
-                            <>
-                              {(channel as any).healthDetails?.verified_name ? (
-                                <span>
-                                  {(channel as any).healthDetails.verified_name}
-                                  <span className="text-sm font-normal text-gray-500 ml-2">({channel.phoneNumber || channel.name})</span>
+              {(channels.length > 0 ? channels : []).map((channel: any) => (
+              <div
+                key={channel.id}
+                className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden"
+              >
+                <div className="flex flex-col lg:flex-row lg:items-start gap-5 p-5 sm:p-6">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 mb-5">
+                      <h3 className="text-lg font-semibold text-slate-900">
+                        {user?.username === "demouser" ? (
+                          <span>
+                            {channel.name.slice(0, -1).replace(/./g, "*") +
+                              channel.name.slice(-1)}
+                          </span>
+                        ) : (
+                          <>
+                            {(channel as any).healthDetails?.verified_name ? (
+                              <span>
+                                {(channel as any).healthDetails.verified_name}
+                                <span className="text-sm font-normal text-slate-500 ml-1.5">
+                                  ({channel.phoneNumber || channel.name})
                                 </span>
-                              ) : (
-                                channel.name
-                              )}
-                            </>
-                          )}
-                        </h3>
-                        {channel.isActive && (
-                          <Badge variant="success" className="text-xs">
-                            {t("settings.channel_setting.active")}
-                          </Badge>
+                              </span>
+                            ) : (
+                              channel.name
+                            )}
+                          </>
                         )}
-                        {!channel.isActive && (
-                          <Badge variant="destructive" className="text-xs">
-                            Disconnected
-                          </Badge>
-                        )}
-                        {channel.isCoexistence && (
-                          <Badge variant="secondary" className="text-xs flex items-center gap-1 bg-blue-50 text-blue-700 border-blue-200">
-                            <Layers className="w-3 h-3" />
-                            Coexistence
-                          </Badge>
-                        )}
-                        {channel.mmLiteEnabled && (
-                          <Badge
-                            variant="secondary"
-                            className="text-xs flex items-center gap-1"
+                      </h3>
+                      {channel.isActive && (
+                        <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 border border-emerald-200">
+                          Active
+                        </span>
+                      )}
+                      {!channel.isActive && (
+                        <span className="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-700 border border-red-200">
+                          Disconnected
+                        </span>
+                      )}
+                      {channel.isCoexistence && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 border border-blue-200">
+                          <Layers className="w-3 h-3" />
+                          Coexistence
+                        </span>
+                      )}
+                      {channel.mmLiteEnabled && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-0.5 text-xs font-medium text-slate-600 border border-slate-200">
+                          <MessageSquare className="w-3 h-3" />
+                          {t("settings.channel_setting.mmLite")}
+                        </span>
+                      )}
+                    </div>
+
+                    {channel.isCoexistence && channel.isActive && (
+                      <div className="mb-4 p-2.5 bg-blue-50 border border-blue-200 rounded-md">
+                        <div className="flex items-start gap-2">
+                          <Info className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                          <div className="text-xs text-blue-700 space-y-0.5">
+                            <p className="font-medium">Coexistence Mode Active</p>
+                            <p>This number is shared with WhatsApp Business App. Keep the app open at least every 14 days to maintain the connection.</p>
+                            <p className="text-blue-600">View-once media and Windows/WearOS companion devices are not available.</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-2.5 text-sm mb-2">
+                      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                        <span className="font-semibold text-slate-800 w-[140px] shrink-0">Channel ID</span>
+                        <span className="font-mono text-[13px] text-slate-600 break-all">
+                          {user?.username === "demouser"
+                            ? channel.id?.slice(0, 8) + "****"
+                            : channel.id}
+                        </span>
+                        {user?.username !== "demouser" && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(channel.id);
+                              toast({ title: "Copied", description: "Channel ID copied to clipboard" });
+                            }}
+                            className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 hover:text-emerald-700"
                           >
-                            <MessageSquare className="w-3 h-3" />
-                            {t("settings.channel_setting.mmLite")}
-                          </Badge>
+                            <Copy className="w-3 h-3" />
+                            Copy
+                          </button>
                         )}
                       </div>
-
-                      {channel.isCoexistence && channel.isActive && (
-                        <div className="mb-3 p-2.5 bg-blue-50 border border-blue-200 rounded-md">
-                          <div className="flex items-start gap-2">
-                            <Info className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                            <div className="text-xs text-blue-700 space-y-0.5">
-                              <p className="font-medium">Coexistence Mode Active</p>
-                              <p>This number is shared with WhatsApp Business App. Keep the app open at least every 14 days to maintain the connection.</p>
-                              <p className="text-blue-600">View-once media and Windows/WearOS companion devices are not available.</p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {embeddedSignupEnabled && (channel as any).connectionMethod === "manual" && (
-                        <div className="mb-3 p-2.5 bg-amber-50 border border-amber-200 rounded-md">
-                          <div className="flex items-start gap-2">
-                            <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                            <div className="flex-1">
-                              <div className="text-xs text-amber-700 space-y-0.5">
-                                <p className="font-medium">Manual Connection — Reconnect Recommended</p>
-                                <p>This channel was added manually. For better reliability and automatic token refresh, reconnect it via Embedded Signup.</p>
-                              </div>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="mt-2 text-xs text-amber-700 border-amber-300 hover:bg-amber-100"
-                                onClick={() => {
-                                  setConnectionFlow("choose");
-                                  setShowConnectionDialog(true);
-                                }}
-                                disabled={user?.username === "demouser"}
-                              >
-                                <RefreshCw className="w-3 h-3 mr-1" />
-                                Reconnect via Embedded Signup
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="space-y-2 text-xs sm:text-sm text-gray-600 mb-4">
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                          <span className="font-medium text-gray-700">
-                            Channel ID
-                          </span>
-                          <span className="font-mono break-all select-all">
-                            {user?.username === "demouser"
-                              ? channel.id?.slice(0, 8) + "****"
-                              : channel.id}
-                          </span>
-                          {user?.username !== "demouser" && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                navigator.clipboard.writeText(channel.id);
-                                toast({ title: "Copied", description: "Channel ID copied to clipboard" });
-                              }}
-                              className="text-xs text-green-600 hover:text-green-700 font-medium px-1"
-                            >
-                              Copy
-                            </button>
-                          )}
-                        </div>
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                          <span className="font-medium text-gray-700">
-                            Meta App ID
-                          </span>
-                          <span className="font-mono break-all">
-                            {user?.username === "demouser"
-                              ? channel.appId?.slice(0, -4).replace(/./g, "*") +
-                                channel.appId?.slice(-4)
-                              : channel.appId || "Not set"}
-                          </span>
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                          <span className="font-medium text-gray-700">
-                            {t("settings.channel_setting.phone")}
-                          </span>
-                          <span className="font-mono">
-                            {user?.username === "demouser"
-                              ? channel.phoneNumber
-                                  ?.slice(0, -4)
-                                  .replace(/\d/g, "*") +
-                                channel.phoneNumber?.slice(-4)
-                              : channel.phoneNumber ||
-                                t("settings.channel_setting.notSet")}
-                          </span>
-                        </div>
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                          <span className="font-medium text-gray-700">
-                            {t("settings.channel_setting.phoneNumberId")}
-                          </span>
-                          <span className="font-mono break-all">
-                            {user?.username === "demouser"
-                              ? channel.phoneNumberId
-                                  ?.slice(0, -4)
-                                  .replace(/\d/g, "*") +
-                                channel.phoneNumberId?.slice(-4)
-                              : channel.phoneNumberId}
-                          </span>
-                        </div>
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                          <span className="font-medium text-gray-700">
-                            {t("settings.channel_setting.businessAccountId")}
-                          </span>
-                          <span className="font-mono break-all">
-                            {user?.username === "demouser"
-                              ? channel.whatsappBusinessAccountId
-                                  ?.slice(0, -4)
-                                  .replace(/\d/g, "*") +
-                                channel.whatsappBusinessAccountId?.slice(-4)
-                              : channel.whatsappBusinessAccountId ||
-                                t("settings.channel_setting.notSet")}
-                          </span>
-                        </div>
+                      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                        <span className="font-semibold text-slate-800 w-[140px] shrink-0">Meta App ID</span>
+                        <span className="font-mono text-[13px] text-slate-600 break-all">
+                          {user?.username === "demouser"
+                            ? channel.appId?.slice(0, -4).replace(/./g, "*") + channel.appId?.slice(-4)
+                            : channel.appId || "Not set"}
+                        </span>
                       </div>
-
-                      {/* Channel Health Section */}
-                      <div className="mt-4 pt-4 border-t border-gray-200">
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
-                          <div className="flex items-center space-x-2">
-                            <Shield className="w-5 h-5 text-gray-600 flex-shrink-0" />
-                            <span className="font-semibold text-gray-700">
-                              {t("settings.channel_setting.channelHealth")}
-                            </span>
-                          </div>
-                          {getHealthStatusBadge(
-                            channel.healthStatus,
-                            channel.lastHealthCheck
-                          )}
-                        </div>
-
-                        {channel?.healthDetails &&
-                          Object.keys(channel?.healthDetails).length > 0 && (
-                            <div className="mt-3">
-                              {channel?.healthDetails.error ? (
-                                <div className="p-3 bg-red-50 border border-red-200 rounded-md space-y-1 text-xs sm:text-sm">
-                                  <p className="text-red-700 font-medium break-words">
-                                    {t(
-                                      "settings.channel_setting.healthDetails.errorLabel"
-                                    )}{" "}
-                                    {channel.healthDetails.error}
-                                  </p>
-                                  {channel.healthDetails.error_code && (
-                                    <p className="text-red-600">
-                                      {t(
-                                        "settings.channel_setting.healthDetails.errorCode"
-                                      )}{" "}
-                                      {channel.healthDetails.error_code}
-                                    </p>
-                                  )}
-                                  {channel.healthDetails.error_type && (
-                                    <p className="text-red-600">
-                                      {t(
-                                        "settings.channel_setting.healthDetails.errorType"
-                                      )}{" "}
-                                      {channel.healthDetails.error_type}
-                                    </p>
-                                  )}
-                                </div>
-                              ) : (
-                                <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
-                                  {channel.healthDetails.status && (
-                                    <div
-                                      className={`p-2.5 sm:p-3 rounded-lg border ${
-                                        channel.healthDetails.status === "LIVE"
-                                          ? "bg-green-50 border-green-200"
-                                          : "bg-yellow-50 border-yellow-200"
-                                      }`}
-                                    >
-                                      <div className="flex items-center space-x-2 mb-1">
-                                        <Activity
-                                          className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${
-                                            channel.healthDetails.status ===
-                                            "LIVE"
-                                              ? "text-green-600"
-                                              : "text-yellow-600"
-                                          }`}
-                                        />
-                                        <span className="text-[10px] sm:text-xs font-medium text-gray-600">
-                                          {t(
-                                            "settings.channel_setting.healthDetails.accountMode"
-                                          )}
-                                        </span>
-                                      </div>
-                                      <p
-                                        className={`font-semibold text-sm sm:text-base ${
-                                          channel.healthDetails.status ===
-                                          "LIVE"
-                                            ? "text-green-700"
-                                            : "text-yellow-700"
-                                        }`}
-                                      >
-                                        {channel.healthDetails.status}
-                                      </p>
-                                    </div>
-                                  )}
-
-                                  {channel.healthDetails.quality_rating && (
-                                    <div
-                                      className={`p-2.5 sm:p-3 rounded-lg border ${
-                                        channel.healthDetails.quality_rating ===
-                                        "GREEN"
-                                          ? "bg-emerald-50 border-emerald-200"
-                                          : channel.healthDetails
-                                              .quality_rating === "YELLOW"
-                                          ? "bg-amber-50 border-amber-200"
-                                          : "bg-red-50 border-red-200"
-                                      }`}
-                                    >
-                                      <div className="flex items-center space-x-2 mb-1">
-                                        <TrendingUp
-                                          className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${
-                                            channel.healthDetails
-                                              .quality_rating === "GREEN"
-                                              ? "text-emerald-600"
-                                              : channel.healthDetails
-                                                  .quality_rating === "YELLOW"
-                                              ? "text-amber-600"
-                                              : "text-red-600"
-                                          }`}
-                                        />
-                                        <span className="text-[10px] sm:text-xs font-medium text-gray-600">
-                                          {t(
-                                            "settings.channel_setting.healthDetails.qualityRating"
-                                          )}
-                                        </span>
-                                      </div>
-                                      <p
-                                        className={`font-semibold text-sm sm:text-base ${
-                                          channel.healthDetails
-                                            .quality_rating === "GREEN"
-                                            ? "text-emerald-700"
-                                            : channel.healthDetails
-                                                .quality_rating === "YELLOW"
-                                            ? "text-amber-700"
-                                            : "text-red-700"
-                                        }`}
-                                      >
-                                        {channel.healthDetails.quality_rating}
-                                      </p>
-                                    </div>
-                                  )}
-
-                                  {channel.healthDetails.messaging_limit && (
-                                    <div className="p-2.5 sm:p-3 rounded-lg border bg-blue-50 border-blue-200">
-                                      <div className="flex items-center space-x-2 mb-1">
-                                        <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 text-blue-600" />
-                                        <span className="text-[10px] sm:text-xs font-medium text-gray-600">
-                                          {t(
-                                            "settings.channel_setting.healthDetails.messagingLimit"
-                                          )}
-                                        </span>
-                                      </div>
-                                      <p className="font-semibold text-sm sm:text-base text-blue-700">
-                                        {channel.healthDetails.messaging_limit === "TIER_250"
-                                          ? "250 / day"
-                                          : channel.healthDetails.messaging_limit === "TIER_1K"
-                                          ? "1,000 / day"
-                                          : channel.healthDetails.messaging_limit === "TIER_10K"
-                                          ? "10,000 / day"
-                                          : channel.healthDetails.messaging_limit === "TIER_100K"
-                                          ? "100,000 / day"
-                                          : channel.healthDetails.messaging_limit === "UNLIMITED" ||
-                                            channel.healthDetails.messaging_limit === "TIER_UNLIMITED"
-                                          ? "Unlimited"
-                                          : channel.healthDetails.messaging_limit === "UNKNOWN"
-                                          ? "Unconfirmed"
-                                          : channel.healthDetails.messaging_limit}
-                                      </p>
-                                      {channel.lastHealthCheck && (
-                                        <p className="text-[10px] text-gray-400 mt-1">
-                                          Last checked{" "}
-                                          {formatDistanceToNow(new Date(channel.lastHealthCheck), { addSuffix: true })}
-                                        </p>
-                                      )}
-                                    </div>
-                                  )}
-
-                                  {channel.healthDetails.throughput_level && (
-                                    <div className="p-2.5 sm:p-3 rounded-lg border bg-purple-50 border-purple-200">
-                                      <div className="flex items-center space-x-2 mb-1">
-                                        <Gauge className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 text-purple-600" />
-                                        <span className="text-[10px] sm:text-xs font-medium text-gray-600">
-                                          {t(
-                                            "settings.channel_setting.healthDetails.throughput"
-                                          )}
-                                        </span>
-                                      </div>
-                                      <p className="font-semibold text-sm sm:text-base text-purple-700 capitalize">
-                                        {channel.healthDetails.throughput_level}
-                                      </p>
-                                    </div>
-                                  )}
-
-                                  {channel.healthDetails
-                                    .verification_status && (
-                                    <div
-                                      className={`p-2.5 sm:p-3 rounded-lg border ${
-                                        channel.healthDetails
-                                          .verification_status === "VERIFIED"
-                                          ? "bg-teal-50 border-teal-200"
-                                          : "bg-gray-50 border-gray-200"
-                                      }`}
-                                    >
-                                      <div className="flex items-center space-x-2 mb-1">
-                                        <ShieldCheck
-                                          className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${
-                                            channel.healthDetails
-                                              .verification_status ===
-                                            "VERIFIED"
-                                              ? "text-teal-600"
-                                              : "text-gray-600"
-                                          }`}
-                                        />
-                                        <span className="text-[10px] sm:text-xs font-medium text-gray-600">
-                                          {t(
-                                            "settings.channel_setting.healthDetails.verification"
-                                          )}
-                                        </span>
-                                      </div>
-                                      <p
-                                        className={`font-semibold text-sm sm:text-base ${
-                                          channel.healthDetails
-                                            .verification_status === "VERIFIED"
-                                            ? "text-teal-700"
-                                            : "text-gray-700"
-                                        }`}
-                                      >
-                                        {channel.healthDetails.verification_status.replace(
-                                          /_/g,
-                                          " "
-                                        )}
-                                      </p>
-                                    </div>
-                                  )}
-
-                                  {channel.healthDetails.name_status && (
-                                    <div
-                                      className={`p-2.5 sm:p-3 rounded-lg border ${
-                                        channel.healthDetails.name_status ===
-                                        "APPROVED"
-                                          ? "bg-indigo-50 border-indigo-200"
-                                          : "bg-orange-50 border-orange-200"
-                                      }`}
-                                    >
-                                      <div className="flex items-center space-x-2 mb-1">
-                                        <Award
-                                          className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${
-                                            channel.healthDetails
-                                              .name_status === "APPROVED"
-                                              ? "text-indigo-600"
-                                              : "text-orange-600"
-                                          }`}
-                                        />
-                                        <span className="text-[10px] sm:text-xs font-medium text-gray-600">
-                                          {t(
-                                            "settings.channel_setting.healthDetails.nameStatus"
-                                          )}
-                                        </span>
-                                      </div>
-                                      <p
-                                        className={`font-semibold text-sm sm:text-base ${
-                                          channel.healthDetails.name_status ===
-                                          "APPROVED"
-                                            ? "text-indigo-700"
-                                            : "text-orange-700"
-                                        }`}
-                                      >
-                                        {channel.healthDetails.name_status}
-                                      </p>
-                                    </div>
-                                  )}
-
-                                  {channel.healthDetails.health_status?.can_send_message && (
-                                    <div
-                                      className={`p-2.5 sm:p-3 rounded-lg border ${
-                                        channel.healthDetails.health_status.can_send_message === "AVAILABLE"
-                                          ? "bg-green-50 border-green-200"
-                                          : channel.healthDetails.health_status.can_send_message === "LIMITED"
-                                          ? "bg-amber-50 border-amber-200"
-                                          : "bg-red-50 border-red-200"
-                                      }`}
-                                    >
-                                      <div className="flex items-center space-x-2 mb-1">
-                                        <Zap
-                                          className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${
-                                            channel.healthDetails.health_status.can_send_message === "AVAILABLE"
-                                              ? "text-green-600"
-                                              : channel.healthDetails.health_status.can_send_message === "LIMITED"
-                                              ? "text-amber-600"
-                                              : "text-red-600"
-                                          }`}
-                                        />
-                                        <span className="text-[10px] sm:text-xs font-medium text-gray-600">
-                                          Messaging Availability
-                                        </span>
-                                      </div>
-                                      <p
-                                        className={`font-semibold text-sm sm:text-base ${
-                                          channel.healthDetails.health_status.can_send_message === "AVAILABLE"
-                                            ? "text-green-700"
-                                            : channel.healthDetails.health_status.can_send_message === "LIMITED"
-                                            ? "text-amber-700"
-                                            : "text-red-700"
-                                        }`}
-                                      >
-                                        {channel.healthDetails.health_status.can_send_message}
-                                      </p>
-                                      {Array.isArray(channel.healthDetails.health_status.entities) &&
-                                        channel.healthDetails.health_status.entities.length > 0 && (
-                                        <p className="text-[10px] text-gray-500 mt-1">
-                                          {channel.healthDetails.health_status.entities
-                                            .map((e: any) => e.entity_type || e.type || '')
-                                            .filter(Boolean)
-                                            .join(', ')}
-                                        </p>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-
-                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-3 pt-3 border-t border-gray-100">
-                                <p className="text-[10px] sm:text-xs text-gray-500">
-                                  {channel.lastHealthCheck ? (
-                                    <>
-                                      {t("settings.channel_setting.lastChecked")}{" "}
-                                      {formatDistanceToNow(new Date(channel.lastHealthCheck), { addSuffix: true })}
-                                    </>
-                                  ) : (
-                                    "No health check run yet"
-                                  )}
-                                </p>
-                                <Button
-                                  onClick={() =>
-                                    checkChannelHealth(channel.id)
-                                  }
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-xs w-full sm:w-auto"
-                                >
-                                  <RefreshCw className="w-3 h-3 mr-1" />
-                                  {t("settings.channel_setting.refresh")}
-                                </Button>
-                              </div>
-                            </div>
-                          )}
+                      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                        <span className="font-semibold text-slate-800 w-[140px] shrink-0">Phone</span>
+                        <span className="font-mono text-[13px] text-slate-600">
+                          {user?.username === "demouser"
+                            ? channel.phoneNumber?.slice(0, -4).replace(/\d/g, "*") + channel.phoneNumber?.slice(-4)
+                            : channel.phoneNumber || t("settings.channel_setting.notSet")}
+                        </span>
                       </div>
-
-                      {/* Webhook Subscription Section */}
-                      <div className="mt-4 pt-4 border-t border-gray-200">
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Radio className="w-4 h-4 text-gray-600 flex-shrink-0" />
-                            <span className="font-semibold text-gray-700 text-sm">Delivery Webhooks</span>
-                            {webhookSubStatus[channel.id] === "loading" && (
-                              <Badge variant="secondary" className="text-xs flex items-center gap-1">
-                                <Loader2 className="w-3 h-3 animate-spin" /> Checking...
-                              </Badge>
-                            )}
-                            {webhookSubStatus[channel.id] === "subscribed" && (
-                              <Badge variant="secondary" className="text-xs flex items-center gap-1 bg-green-50 text-green-700 border-green-200">
-                                <CheckCircle className="w-3 h-3" /> Subscribed
-                              </Badge>
-                            )}
-                            {webhookSubStatus[channel.id] === "not_subscribed" && (
-                              <Badge variant="secondary" className="text-xs flex items-center gap-1 bg-red-50 text-red-700 border-red-200">
-                                <XCircle className="w-3 h-3" /> Not Subscribed
-                              </Badge>
-                            )}
-                            {(webhookSubStatus[channel.id] === "unknown" || !webhookSubStatus[channel.id]) && (
-                              <Badge variant="secondary" className="text-xs flex items-center gap-1 bg-gray-50 text-gray-600 border-gray-200">
-                                <AlertTriangle className="w-3 h-3" /> Unknown
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => fetchWebhookSubStatus(channel.id)}
-                              disabled={webhookSubStatus[channel.id] === "loading"}
-                              className="text-xs px-2"
-                              title="Refresh subscription status"
-                            >
-                              <RefreshCw className="w-3 h-3" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => resubscribeWebhook(channel.id)}
-                              disabled={
-                                resubscribingChannelId === channel.id ||
-                                user?.username === "demouser"
-                              }
-                              className="text-xs text-green-700 border-green-200 hover:bg-green-50 whitespace-nowrap"
-                            >
-                              {resubscribingChannelId === channel.id ? (
-                                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                              ) : (
-                                <Webhook className="w-3 h-3 mr-1" />
-                              )}
-                              Re-subscribe
-                            </Button>
-                          </div>
-                        </div>
-                        {webhookSubStatus[channel.id] === "not_subscribed" && (
-                          <p className="text-xs text-red-600 mt-2 flex items-start gap-1">
-                            <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                            This channel is not subscribed to Meta webhooks. Campaign delivery and read rates will show 0%. Click Re-subscribe to fix this.
-                          </p>
-                        )}
-                        {(webhookSubStatus[channel.id] === "unknown" || !webhookSubStatus[channel.id]) && (
-                          <p className="text-xs text-gray-500 mt-2">
-                            Click Re-subscribe if campaign delivery and read rates are showing 0%. This registers your channel with Meta to receive delivery receipts.
-                          </p>
-                        )}
+                      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                        <span className="font-semibold text-slate-800 w-[140px] shrink-0">Phone Number ID</span>
+                        <span className="font-mono text-[13px] text-slate-600 break-all">
+                          {user?.username === "demouser"
+                            ? channel.phoneNumberId?.slice(0, -4).replace(/\d/g, "*") + channel.phoneNumberId?.slice(-4)
+                            : channel.phoneNumberId}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                        <span className="font-semibold text-slate-800 w-[140px] shrink-0">Business Account ID</span>
+                        <span className="font-mono text-[13px] text-slate-600 break-all">
+                          {user?.username === "demouser"
+                            ? channel.whatsappBusinessAccountId?.slice(0, -4).replace(/\d/g, "*") +
+                              channel.whatsappBusinessAccountId?.slice(-4)
+                            : channel.whatsappBusinessAccountId || t("settings.channel_setting.notSet")}
+                        </span>
                       </div>
                     </div>
 
+                    </div>
                     {/* Action Buttons */}
-                    <div className="flex sm:flex-col gap-2 sm:gap-2 flex-wrap sm:flex-nowrap">
+                    <div className="flex sm:flex-col gap-2 w-full sm:w-[150px] shrink-0">
                       {channel.isActive ? (
                         <>
                           <Button
@@ -1150,21 +716,20 @@ export function ChannelSettings() {
                               setTestingChannelId(channel.id);
                               setShowTestDialog(true);
                             }}
-                            className="flex-1 sm:flex-none text-xs sm:text-sm"
+                            className="w-full justify-start h-9 bg-white border-slate-200 text-slate-700 shadow-none"
                           >
-                            <TestTube className="w-3.5 h-3.5 sm:w-4 sm:h-4 sm:mr-1" />
-                            <span className="hidden sm:inline">
-                              {t("settings.channel_setting.test")}
-                            </span>
+                            <TestTube className="w-4 h-4 mr-2" />
+                            Test
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => handleEditChannel(channel)}
                             disabled={user?.username === "demouser"}
-                            className="flex-1 sm:flex-none text-xs sm:text-sm"
+                            className="w-full justify-start h-9 bg-white border-slate-200 text-slate-700 shadow-none"
                           >
-                            <Edit className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                            <Edit className="w-4 h-4 mr-2" />
+                            Edit
                           </Button>
                           <Button
                             variant="outline"
@@ -1176,11 +741,11 @@ export function ChannelSettings() {
                               setShowBusinessProfile(true);
                             }}
                             disabled={user?.username === "demouser"}
-                            className="flex-1 sm:flex-none text-xs sm:text-sm text-green-600 border-green-200 hover:bg-green-50"
+                            className="w-full justify-start h-9 text-emerald-600 border-emerald-300 hover:bg-emerald-50 bg-white shadow-none"
                             title="Edit WhatsApp Business Profile"
                           >
-                            <Building2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 sm:mr-1" />
-                            <span className="hidden sm:inline">Profile</span>
+                            <Building2 className="w-4 h-4 mr-2" />
+                            Profile
                           </Button>
                           <Button
                             variant="outline"
@@ -1191,49 +756,33 @@ export function ChannelSettings() {
                               setShowDisplayNameEditor(true);
                             }}
                             disabled={user?.username === "demouser"}
-                            className="flex-1 sm:flex-none text-xs sm:text-sm text-blue-600 border-blue-200 hover:bg-blue-50"
+                            className="w-full justify-start h-9 text-[#007BFF] border-blue-300 hover:bg-blue-50 bg-white shadow-none"
                             title="Manage WhatsApp Display Name"
                           >
-                            <Type className="w-3.5 h-3.5 sm:w-4 sm:h-4 sm:mr-1" />
-                            <span className="hidden sm:inline">Display Name</span>
+                            <Type className="w-4 h-4 mr-2" />
+                            Display Name
                           </Button>
-                          {embeddedSignupEnabled && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setConnectionFlow("choose");
-                                setShowConnectionDialog(true);
-                              }}
-                              disabled={user?.username === "demouser"}
-                              className="flex-1 sm:flex-none text-xs sm:text-sm text-orange-600 border-orange-200 hover:bg-orange-50"
-                              title="Reconnect this channel via Meta Embedded Signup"
-                            >
-                              <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 sm:mr-1" />
-                              <span className="hidden sm:inline">Reconnect</span>
-                            </Button>
-                          )}
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => disconnectChannel(channel.id)}
                             disabled={user?.username === "demouser" || disconnectMutation.isPending}
-                            className="flex-1 sm:flex-none text-xs sm:text-sm text-red-600 border-red-200 hover:bg-red-50"
+                            className="w-full justify-start h-9 text-red-600 border-red-300 hover:bg-red-50 bg-white shadow-none"
                             title="Disconnect this channel from Cloud API"
                           >
-                            <Unplug className="w-3.5 h-3.5 sm:w-4 sm:h-4 sm:mr-1" />
-                            <span className="hidden sm:inline">Disconnect</span>
+                            <Unplug className="w-4 h-4 mr-2" />
+                            Disconnect
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => handleDeleteChannel(channel.id)}
                             disabled={user?.username === "demouser" || deleteChannelMutation.isPending}
-                            className="flex-1 sm:flex-none text-xs sm:text-sm text-red-600 border-red-200 hover:bg-red-50"
+                            className="w-full justify-start h-9 text-red-600 border-red-300 hover:bg-red-50 bg-white shadow-none"
                             title="Permanently delete this channel"
                           >
-                            <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 sm:mr-1" />
-                            <span className="hidden sm:inline">Delete</span>
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Delete
                           </Button>
                         </>
                       ) : (
@@ -1269,12 +818,417 @@ export function ChannelSettings() {
                       )}
                     </div>
                   </div>
+                  {/* Channel Health Section */}
+                  <div className="px-5 sm:px-6 pb-2 pt-0">
+                  <div className="mt-0 pt-4 border-t border-slate-100">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+                      <div className="flex items-center space-x-2">
+                        <Shield className="w-5 h-5 text-slate-600 flex-shrink-0" />
+                        <span className="font-semibold text-slate-800">
+                          {t("settings.channel_setting.channelHealth")}
+                        </span>
+                      </div>
+                      {getHealthStatusBadge(
+                        channel.healthStatus,
+                        channel.lastHealthCheck
+                      )}
+                    </div>
+
+                    {channel?.healthDetails &&
+                      Object.keys(channel?.healthDetails).length > 0 && (
+                        <div className="mt-3">
+                          {channel?.healthDetails.error ? (
+                            <div className="p-3 bg-red-50 border border-red-200 rounded-md space-y-1 text-xs sm:text-sm">
+                              <p className="text-red-700 font-medium break-words">
+                                {t(
+                                  "settings.channel_setting.healthDetails.errorLabel"
+                                )}{" "}
+                                {channel.healthDetails.error}
+                              </p>
+                              {channel.healthDetails.error_code && (
+                                <p className="text-red-600">
+                                  {t(
+                                    "settings.channel_setting.healthDetails.errorCode"
+                                  )}{" "}
+                                  {channel.healthDetails.error_code}
+                                </p>
+                              )}
+                              {channel.healthDetails.error_type && (
+                                <p className="text-red-600">
+                                  {t(
+                                    "settings.channel_setting.healthDetails.errorType"
+                                  )}{" "}
+                                  {channel.healthDetails.error_type}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                              {channel.healthDetails.status && (
+                                <div
+                                  className={`p-2.5 sm:p-3 rounded-lg border ${
+                                    channel.healthDetails.status === "LIVE"
+                                      ? "bg-green-50 border-green-200"
+                                      : "bg-yellow-50 border-yellow-200"
+                                  }`}
+                                >
+                                  <div className="flex items-center space-x-2 mb-1">
+                                    <Activity
+                                      className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${
+                                        channel.healthDetails.status ===
+                                        "LIVE"
+                                          ? "text-green-600"
+                                          : "text-yellow-600"
+                                      }`}
+                                    />
+                                    <span className="text-[10px] sm:text-xs font-medium text-gray-600">
+                                      {t(
+                                        "settings.channel_setting.healthDetails.accountMode"
+                                      )}
+                                    </span>
+                                  </div>
+                                  <p
+                                    className={`font-semibold text-sm sm:text-base ${
+                                      channel.healthDetails.status ===
+                                      "LIVE"
+                                        ? "text-green-700"
+                                        : "text-yellow-700"
+                                    }`}
+                                  >
+                                    {channel.healthDetails.status}
+                                  </p>
+                                </div>
+                              )}
+
+                              {channel.healthDetails.quality_rating && (
+                                <div
+                                  className={`p-2.5 sm:p-3 rounded-lg border ${
+                                    channel.healthDetails.quality_rating ===
+                                    "GREEN"
+                                      ? "bg-emerald-50 border-emerald-200"
+                                      : channel.healthDetails
+                                          .quality_rating === "YELLOW"
+                                      ? "bg-amber-50 border-amber-200"
+                                      : "bg-red-50 border-red-200"
+                                  }`}
+                                >
+                                  <div className="flex items-center space-x-2 mb-1">
+                                    <TrendingUp
+                                      className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${
+                                        channel.healthDetails
+                                          .quality_rating === "GREEN"
+                                          ? "text-emerald-600"
+                                          : channel.healthDetails
+                                              .quality_rating === "YELLOW"
+                                          ? "text-amber-600"
+                                          : "text-red-600"
+                                      }`}
+                                    />
+                                    <span className="text-[10px] sm:text-xs font-medium text-gray-600">
+                                      {t(
+                                        "settings.channel_setting.healthDetails.qualityRating"
+                                      )}
+                                    </span>
+                                  </div>
+                                  <p
+                                    className={`font-semibold text-sm sm:text-base ${
+                                      channel.healthDetails
+                                        .quality_rating === "GREEN"
+                                        ? "text-emerald-700"
+                                        : channel.healthDetails
+                                            .quality_rating === "YELLOW"
+                                        ? "text-amber-700"
+                                        : "text-red-700"
+                                    }`}
+                                  >
+                                    {channel.healthDetails.quality_rating}
+                                  </p>
+                                </div>
+                              )}
+
+                              {channel.healthDetails.messaging_limit && (
+                                <div className="p-2.5 sm:p-3 rounded-lg border bg-blue-50 border-blue-200">
+                                  <div className="flex items-center space-x-2 mb-1">
+                                    <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 text-blue-600" />
+                                    <span className="text-[10px] sm:text-xs font-medium text-gray-600">
+                                      {t(
+                                        "settings.channel_setting.healthDetails.messagingLimit"
+                                      )}
+                                    </span>
+                                  </div>
+                                  <p className="font-semibold text-sm sm:text-base text-blue-700">
+                                    {channel.healthDetails.messaging_limit === "TIER_250"
+                                      ? "250 / day"
+                                      : channel.healthDetails.messaging_limit === "TIER_1K"
+                                      ? "1,000 / day"
+                                      : channel.healthDetails.messaging_limit === "TIER_10K"
+                                      ? "10,000 / day"
+                                      : channel.healthDetails.messaging_limit === "TIER_100K"
+                                      ? "100,000 / day"
+                                      : channel.healthDetails.messaging_limit === "UNLIMITED" ||
+                                        channel.healthDetails.messaging_limit === "TIER_UNLIMITED"
+                                      ? "Unlimited"
+                                      : channel.healthDetails.messaging_limit === "UNKNOWN"
+                                      ? "Unconfirmed"
+                                      : channel.healthDetails.messaging_limit}
+                                  </p>
+                                  {channel.lastHealthCheck && (
+                                    <p className="text-[10px] text-gray-400 mt-1">
+                                      Last checked{" "}
+                                      {formatDistanceToNow(new Date(channel.lastHealthCheck), { addSuffix: true })}
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+
+                              {channel.healthDetails.throughput_level && (
+                                <div className="p-2.5 sm:p-3 rounded-lg border bg-blue-50 border-blue-200">
+                                  <div className="flex items-center space-x-2 mb-1">
+                                    <Gauge className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 text-blue-600" />
+                                    <span className="text-[10px] sm:text-xs font-medium text-gray-600">
+                                      {t(
+                                        "settings.channel_setting.healthDetails.throughput"
+                                      )}
+                                    </span>
+                                  </div>
+                                  <p className="font-semibold text-sm sm:text-base text-blue-700 capitalize">
+                                    {channel.healthDetails.throughput_level}
+                                  </p>
+                                </div>
+                              )}
+
+                              {channel.healthDetails
+                                .verification_status && (
+                                <div
+                                  className={`p-2.5 sm:p-3 rounded-lg border ${
+                                    channel.healthDetails
+                                      .verification_status === "VERIFIED"
+                                      ? "bg-teal-50 border-teal-200"
+                                      : "bg-gray-50 border-gray-200"
+                                  }`}
+                                >
+                                  <div className="flex items-center space-x-2 mb-1">
+                                    <ShieldCheck
+                                      className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${
+                                        channel.healthDetails
+                                          .verification_status ===
+                                        "VERIFIED"
+                                          ? "text-teal-600"
+                                          : "text-gray-600"
+                                      }`}
+                                    />
+                                    <span className="text-[10px] sm:text-xs font-medium text-gray-600">
+                                      {t(
+                                        "settings.channel_setting.healthDetails.verification"
+                                      )}
+                                    </span>
+                                  </div>
+                                  <p
+                                    className={`font-semibold text-sm sm:text-base ${
+                                      channel.healthDetails
+                                        .verification_status === "VERIFIED"
+                                        ? "text-teal-700"
+                                        : "text-gray-700"
+                                    }`}
+                                  >
+                                    {channel.healthDetails.verification_status.replace(
+                                      /_/g,
+                                      " "
+                                    )}
+                                  </p>
+                                </div>
+                              )}
+
+                              {channel.healthDetails.name_status && (
+                                <div
+                                  className={`p-2.5 sm:p-3 rounded-lg border ${
+                                    channel.healthDetails.name_status ===
+                                    "APPROVED"
+                                      ? "bg-blue-50 border-blue-200"
+                                      : "bg-orange-50 border-orange-200"
+                                  }`}
+                                >
+                                  <div className="flex items-center space-x-2 mb-1">
+                                    <Award
+                                      className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${
+                                        channel.healthDetails
+                                          .name_status === "APPROVED"
+                                          ? "text-blue-600"
+                                          : "text-orange-600"
+                                      }`}
+                                    />
+                                    <span className="text-[10px] sm:text-xs font-medium text-gray-600">
+                                      {t(
+                                        "settings.channel_setting.healthDetails.nameStatus"
+                                      )}
+                                    </span>
+                                  </div>
+                                  <p
+                                    className={`font-semibold text-sm sm:text-base ${
+                                      channel.healthDetails.name_status ===
+                                      "APPROVED"
+                                        ? "text-blue-700"
+                                        : "text-orange-700"
+                                    }`}
+                                  >
+                                    {channel.healthDetails.name_status}
+                                  </p>
+                                </div>
+                              )}
+
+                              {channel.healthDetails.health_status?.can_send_message && (
+                                <div
+                                  className={`p-2.5 sm:p-3 rounded-lg border sm:col-span-2 lg:col-span-3 ${
+                                    channel.healthDetails.health_status.can_send_message === "AVAILABLE"
+                                      ? "bg-green-50 border-green-200"
+                                      : channel.healthDetails.health_status.can_send_message === "LIMITED"
+                                      ? "bg-amber-50 border-amber-200"
+                                      : "bg-red-50 border-red-200"
+                                  }`}
+                                >
+                                  <div className="flex items-center space-x-2 mb-1">
+                                    <Zap
+                                      className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${
+                                        channel.healthDetails.health_status.can_send_message === "AVAILABLE"
+                                          ? "text-green-600"
+                                          : channel.healthDetails.health_status.can_send_message === "LIMITED"
+                                          ? "text-amber-600"
+                                          : "text-red-600"
+                                      }`}
+                                    />
+                                    <span className="text-[10px] sm:text-xs font-medium text-gray-600">
+                                      Messaging Availability
+                                    </span>
+                                  </div>
+                                  <p
+                                    className={`font-semibold text-sm sm:text-base ${
+                                      channel.healthDetails.health_status.can_send_message === "AVAILABLE"
+                                        ? "text-green-700"
+                                        : channel.healthDetails.health_status.can_send_message === "LIMITED"
+                                        ? "text-amber-700"
+                                        : "text-red-700"
+                                    }`}
+                                  >
+                                    {channel.healthDetails.health_status.can_send_message}
+                                  </p>
+                                  {Array.isArray(channel.healthDetails.health_status.entities) &&
+                                    channel.healthDetails.health_status.entities.length > 0 && (
+                                    <p className="text-[10px] text-gray-500 mt-1">
+                                      {channel.healthDetails.health_status.entities
+                                        .map((e: any) => e.entity_type || e.type || '')
+                                        .filter(Boolean)
+                                        .join(', ')}
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-3 pt-3 border-t border-gray-100">
+                            <p className="text-[10px] sm:text-xs text-gray-500">
+                              {channel.lastHealthCheck ? (
+                                <>
+                                  {t("settings.channel_setting.lastChecked")}{" "}
+                                  {formatDistanceToNow(new Date(channel.lastHealthCheck), { addSuffix: true })}
+                                </>
+                              ) : (
+                                "No health check run yet"
+                              )}
+                            </p>
+                            <Button
+                              onClick={() =>
+                                checkChannelHealth(channel.id)
+                              }
+                              variant="ghost"
+                              size="sm"
+                              className="text-xs w-full sm:w-auto"
+                            >
+                              <RefreshCw className="w-3 h-3 mr-1" />
+                              {t("settings.channel_setting.refresh")}
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                  </div>
+                  </div>
+
+                  {/* Webhook Subscription Section */}
+                  <div className="px-5 sm:px-6 pb-5">
+                  <div className="mt-0 pt-4 border-t border-slate-100">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Radio className="w-4 h-4 text-slate-600 flex-shrink-0" />
+                        <span className="font-semibold text-slate-800 text-sm">Delivery Webhooks</span>
+                        {webhookSubStatus[channel.id] === "loading" && (
+                          <Badge variant="secondary" className="text-xs flex items-center gap-1">
+                            <Loader2 className="w-3 h-3 animate-spin" /> Checking...
+                          </Badge>
+                        )}
+                        {webhookSubStatus[channel.id] === "subscribed" && (
+                          <Badge variant="secondary" className="text-xs flex items-center gap-1 bg-green-50 text-green-700 border-green-200">
+                            <CheckCircle className="w-3 h-3" /> Subscribed
+                          </Badge>
+                        )}
+                        {webhookSubStatus[channel.id] === "not_subscribed" && (
+                          <Badge variant="secondary" className="text-xs flex items-center gap-1 bg-red-50 text-red-700 border-red-200">
+                            <XCircle className="w-3 h-3" /> Not Subscribed
+                          </Badge>
+                        )}
+                        {(webhookSubStatus[channel.id] === "unknown" || !webhookSubStatus[channel.id]) && (
+                          <Badge variant="secondary" className="text-xs flex items-center gap-1 bg-gray-50 text-gray-600 border-gray-200">
+                            <AlertTriangle className="w-3 h-3" /> Unknown
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => fetchWebhookSubStatus(channel.id)}
+                          disabled={webhookSubStatus[channel.id] === "loading"}
+                          className="text-xs px-2"
+                          title="Refresh subscription status"
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => resubscribeWebhook(channel.id)}
+                          disabled={
+                            resubscribingChannelId === channel.id ||
+                            user?.username === "demouser"
+                          }
+                          className="text-xs text-green-700 border-green-200 hover:bg-green-50 whitespace-nowrap"
+                        >
+                          {resubscribingChannelId === channel.id ? (
+                            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                          ) : (
+                            <Webhook className="w-3 h-3 mr-1" />
+                          )}
+                          Re-subscribe
+                        </Button>
+                      </div>
+                    </div>
+                    {webhookSubStatus[channel.id] === "not_subscribed" && (
+                      <p className="text-xs text-red-600 mt-2 flex items-start gap-1">
+                        <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                        This channel is not subscribed to Meta webhooks. Campaign delivery and read rates will show 0%. Click Re-subscribe to fix this.
+                      </p>
+                    )}
+                    {(webhookSubStatus[channel.id] === "unknown" || !webhookSubStatus[channel.id]) && (
+                      <p className="text-xs text-gray-500 mt-2">
+                        Click Re-subscribe if campaign delivery and read rates are showing 0%. This registers your channel with Meta to receive delivery receipts.
+                      </p>
+                    )}
+                  </div>
+                  </div>
                 </div>
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+      </div>
 
       {/* Connection Type Chooser Dialog */}
       <Dialog open={showConnectionDialog} onOpenChange={setShowConnectionDialog}>
@@ -1553,44 +1507,75 @@ export function ChannelSettings() {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={!!showDeleteConfirm} onOpenChange={() => setShowDeleteConfirm(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-700">
-              <Trash2 className="w-5 h-5" />
+        <DialogContent className="sm:max-w-[520px] p-0 gap-0 rounded-xl border-slate-200 overflow-hidden">
+          <DialogHeader className="px-6 pt-6 pb-4 space-y-1.5 text-left">
+            <DialogTitle className="flex items-center gap-3 text-xl font-semibold text-slate-900">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-50 text-red-600">
+                <Trash2 className="h-[18px] w-[18px]" />
+              </span>
               Delete Channel
             </DialogTitle>
-            <DialogDescription>
-              Are you sure you want to permanently delete this channel?
+            <DialogDescription className="text-sm text-slate-500 pl-12">
+              Are you sure you want to permanently delete this WhatsApp channel?
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3 mt-2">
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
-                <div className="text-xs text-red-700 space-y-1">
-                  <p className="font-medium">This will permanently:</p>
-                  <ul className="list-disc pl-4 space-y-0.5">
-                    <li>Remove the channel from the platform</li>
-                    <li>Remove it from the channel switcher</li>
-                    <li>Delete all associated settings</li>
-                  </ul>
-                  <p className="mt-1 font-medium">This action cannot be undone.</p>
-                </div>
+          <div className="px-6 pb-5 space-y-4">
+            <div className="flex items-center gap-2.5 rounded-full bg-slate-100 px-4 py-2.5">
+              <SiWhatsapp className="h-4 w-4 text-[#25D366] shrink-0" />
+              <p className="text-sm text-slate-700">
+                Channel: <span className="font-semibold text-slate-900">{deleteChannelLabel}</span>
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+              <div className="flex items-start gap-2 mb-2.5">
+                <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+                <p className="text-sm font-semibold text-red-700">
+                  Warning: This action cannot be undone.
+                </p>
               </div>
+              <ul className="list-disc pl-5 space-y-1.5 text-sm text-red-600">
+                <li>Permanently removes this channel configuration and Meta API credentials.</li>
+                <li>Disconnects {deleteChannelLabel} from AutoComm platform.</li>
+                <li>
+                  All active automation dispatches and webhook listeners for this number will be
+                  terminated immediately.
+                </li>
+                <li>
+                  Historical message logs will be locked and archived according to enterprise
+                  compliance retention policy.
+                </li>
+              </ul>
             </div>
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setShowDeleteConfirm(null)}>
+          <DialogFooter className="px-6 py-4 border-t border-slate-100 bg-white sm:justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowDeleteConfirm(null)}
+              className="h-10 border-slate-200 text-slate-700 hover:bg-slate-50 shadow-none"
+            >
               Cancel
             </Button>
             <Button
-              variant="destructive"
+              type="button"
               onClick={confirmDelete}
               disabled={deleteChannelMutation.isPending}
+              className="h-10 bg-red-600 hover:bg-red-700 text-white shadow-none"
             >
-              {deleteChannelMutation.isPending ? "Deleting..." : "Delete Permanently"}
+              {deleteChannelMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete Channel
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1638,7 +1623,7 @@ export function ChannelSettings() {
                 </Button>
                 <Button onClick={() => {
                   setChannelProcessing(null);
-                  openConnectionChooser();
+                  openEmbeddedSignupChooser();
                 }}>
                   Try Again
                 </Button>
@@ -1653,9 +1638,12 @@ export function ChannelSettings() {
         open={showChannelDialog}
         onOpenChange={setShowChannelDialog}
         editingChannel={editingChannel}
-        onSuccess={() => {
+        onSuccess={(created) => {
           setShowChannelDialog(false);
           setEditingChannel(null);
+          if (created?.id) {
+            setSelectedChannel(created as any);
+          }
         }}
       />
 
