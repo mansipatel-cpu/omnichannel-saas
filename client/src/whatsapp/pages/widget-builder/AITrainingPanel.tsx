@@ -40,6 +40,7 @@ import { Switch } from "@wa/components/ui/switch";
 import { Badge } from "@wa/components/ui/badge";
 import { ScrollArea } from "@wa/components/ui/scroll-area";
 import { Separator } from "@wa/components/ui/separator";
+import { Slider } from "@wa/components/ui/slider";
 import { useToast } from "@wa/hooks/use-toast";
 import {
   Globe,
@@ -66,6 +67,7 @@ import {
   Settings,
   Key,
   Cpu,
+  Check,
 } from "lucide-react";
 import { WidgetConfig, EscalationRules } from "./types";
 
@@ -130,15 +132,16 @@ export default function AITrainingPanel({
   const [newTriggerWord, setNewTriggerWord] = useState("");
 
   const [aiConfigForm, setAiConfigForm] = useState({
-    provider: "openai",
+    provider: "vertex",
     apiKey: "",
-    model: "gpt-4o-mini",
+    model: "gemini-1.5-flash",
     endpoint: "https://api.openai.com/v1",
-    temperature: 0.7,
+    temperature: 0.1,
     maxTokens: 2048,
     words: [] as string[],
-    isActive: false,
+    isActive: true,
   });
+  const isVertex = aiConfigForm.provider === "vertex";
   const [aiConfigId, setAiConfigId] = useState<string | null>(null);
   const [isSavingAiConfig, setIsSavingAiConfig] = useState(false);
 
@@ -175,11 +178,11 @@ export default function AITrainingPanel({
     } else if (aiConfigData === null) {
       setAiConfigId(null);
       setAiConfigForm({
-        provider: "openai",
+        provider: "vertex",
         apiKey: "",
-        model: "gpt-4o-mini",
+        model: "gemini-1.5-flash",
         endpoint: "https://api.openai.com/v1",
-        temperature: 0.7,
+        temperature: 0.1,
         maxTokens: 2048,
         words: [],
         isActive: false,
@@ -494,62 +497,323 @@ export default function AITrainingPanel({
 
   if (!siteId) {
     return (
-      <Card>
-        <CardContent className="py-8 text-center text-muted-foreground">
+      <Card className="rounded-xl border border-slate-200 bg-white">
+        <CardContent className="py-8 text-center text-slate-500">
           <Brain className="h-12 w-12 mx-auto mb-3 opacity-50" />
-          <p className="font-medium">Save your widget configuration first</p>
+          <p className="font-medium text-slate-700">Save your widget configuration first</p>
           <p className="text-sm mt-1">AI training requires a saved site configuration to work.</p>
         </CardContent>
       </Card>
     );
   }
 
+  const sectionTabs = [
+    { key: "training", icon: Brain, label: "Training Data" },
+    { key: "qa", icon: MessageSquare, label: "Q&A Pairs" },
+    { key: "behavior", icon: Shield, label: "AI Behavior" },
+    { key: "escalation", icon: AlertTriangle, label: "Escalation" },
+    { key: "test", icon: Sparkles, label: "Test Chat" },
+    { key: "preview", icon: Eye, label: "Data Preview" },
+  ];
+
+  const tempDisplay = Number(aiConfigForm.temperature ?? 0).toFixed(1);
+
   return (
     <div className="space-y-4">
+      {/* AI Provider Configuration — always first */}
+      <Card className="rounded-xl border border-slate-200 bg-white">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <CardTitle className="text-base flex items-center gap-2 text-slate-800">
+              <Settings className="h-4 w-4 text-[#007BFF]" />
+              AI Provider Configuration
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Label className="text-sm text-slate-600">Assistant Active</Label>
+              <Switch
+                checked={aiConfigForm.isActive}
+                onCheckedChange={handleActiveToggle}
+              />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1.5 text-slate-700">
+                  <Settings className="h-3.5 w-3.5 text-[#007BFF]" /> Provider
+                </Label>
+                <Select
+                  value={aiConfigForm.provider}
+                  onValueChange={(v) => {
+                    setAiConfigForm((prev) => ({
+                      ...prev,
+                      provider: v,
+                      model:
+                        v === "vertex"
+                          ? prev.model.startsWith("gemini")
+                            ? prev.model
+                            : "gemini-1.5-flash"
+                          : prev.model.startsWith("gpt") || prev.model.startsWith("o")
+                            ? prev.model
+                            : "gpt-4o-mini",
+                    }));
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select provider" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="openai">OpenAI</SelectItem>
+                    <SelectItem value="vertex">Google Vertex AI (Gemini)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1.5 text-slate-700">
+                  <Cpu className="h-3.5 w-3.5 text-[#007BFF]" /> Model
+                </Label>
+                <Select
+                  value={aiConfigForm.model}
+                  onValueChange={(v) =>
+                    setAiConfigForm((prev) => ({ ...prev, model: v }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {isVertex ? (
+                      <>
+                        <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>
+                        <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro</SelectItem>
+                        <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash</SelectItem>
+                      </>
+                    ) : (
+                      <>
+                        <SelectItem value="gpt-4.1">GPT-4.1</SelectItem>
+                        <SelectItem value="gpt-4.1-mini">GPT-4.1 Mini</SelectItem>
+                        <SelectItem value="gpt-4.1-nano">GPT-4.1 Nano</SelectItem>
+                        <SelectItem value="gpt-4o">GPT-4o</SelectItem>
+                        <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
+                        <SelectItem value="o3-mini">o3-mini</SelectItem>
+                        <SelectItem value="o1">o1</SelectItem>
+                        <SelectItem value="o1-mini">o1-mini</SelectItem>
+                        <SelectItem value="gpt-4-turbo">GPT-4 Turbo</SelectItem>
+                        <SelectItem value="gpt-4">GPT-4</SelectItem>
+                        <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo</SelectItem>
+                      </>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {isVertex ? (
+                <div className="rounded-xl border border-green-200 bg-green-50 p-4 flex items-start gap-3">
+                  <Check className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
+                  <p className="text-sm text-green-800">
+                    Uses <span className="font-medium">vertex_credential.json</span> service
+                    account — no API key needed.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1.5 text-slate-700">
+                    <Key className="h-3.5 w-3.5 text-[#007BFF]" /> API Key
+                  </Label>
+                  <Input
+                    type="password"
+                    value={aiConfigForm.apiKey}
+                    onChange={(e) =>
+                      setAiConfigForm((prev) => ({ ...prev, apiKey: e.target.value }))
+                    }
+                    placeholder="sk-..."
+                  />
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <Label className="text-slate-700">
+                  Temperature ({tempDisplay})
+                </Label>
+                <Slider
+                  value={[aiConfigForm.temperature]}
+                  min={0}
+                  max={2}
+                  step={0.1}
+                  onValueChange={(vals) =>
+                    setAiConfigForm((prev) => ({
+                      ...prev,
+                      temperature: vals[0] ?? 0.7,
+                    }))
+                  }
+                />
+                <p className="text-xs text-slate-500">
+                  Higher = more creative, Lower = more precise
+                </p>
+                <p className="text-xs text-slate-500">Current: {tempDisplay}</p>
+              </div>
+            </div>
+          </div>
+
+          {!isVertex && (
+            <>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1.5 text-slate-700">
+                  <Clock className="h-3.5 w-3.5 text-[#007BFF]" /> Max Tokens
+                </Label>
+                <Input
+                  type="number"
+                  value={aiConfigForm.maxTokens}
+                  onChange={(e) =>
+                    setAiConfigForm((prev) => ({
+                      ...prev,
+                      maxTokens: parseInt(e.target.value) || 2048,
+                    }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1.5 text-slate-700">
+                  <MessageSquare className="h-3.5 w-3.5 text-[#007BFF]" /> Trigger Words
+                </Label>
+                <p className="text-xs text-slate-500">
+                  AI will only respond when a message contains one of these words (applies to
+                  both widget chat and team inbox)
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="e.g., hello, help, pricing"
+                    value={newTriggerWord}
+                    onChange={(e) => setNewTriggerWord(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && newTriggerWord.trim()) {
+                        e.preventDefault();
+                        setAiConfigForm((prev) => ({
+                          ...prev,
+                          words: [...prev.words, newTriggerWord.trim()],
+                        }));
+                        setNewTriggerWord("");
+                      }
+                    }}
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    type="button"
+                    className="border-slate-200"
+                    onClick={() => {
+                      if (newTriggerWord.trim()) {
+                        setAiConfigForm((prev) => ({
+                          ...prev,
+                          words: [...prev.words, newTriggerWord.trim()],
+                        }));
+                        setNewTriggerWord("");
+                      }
+                    }}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {aiConfigForm.words.map((word, i) => (
+                    <Badge key={i} variant="secondary" className="text-xs">
+                      {word}
+                      <button
+                        className="ml-1"
+                        onClick={() =>
+                          setAiConfigForm((prev) => ({
+                            ...prev,
+                            words: prev.words.filter((_, idx) => idx !== i),
+                          }))
+                        }
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                  {aiConfigForm.words.length === 0 && (
+                    <p className="text-xs text-slate-500 italic">
+                      No trigger words defined — AI will respond to all messages
+                    </p>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+
+          <div className="flex justify-end">
+            <Button
+              onClick={saveAiConfig}
+              disabled={isSavingAiConfig}
+              className="bg-[#007BFF] hover:bg-[#0069d9] text-white"
+            >
+              {isSavingAiConfig ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4 mr-2" />
+              )}
+              {isSavingAiConfig ? "Saving..." : "Save Provider Settings"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Section tabs */}
       <div className="flex gap-2 flex-wrap">
-        {[
-          { key: "training", icon: Brain, label: "Training Data" },
-          { key: "qa", icon: MessageSquare, label: "Q&A Pairs" },
-          { key: "behavior", icon: Shield, label: "AI Behavior" },
-          { key: "escalation", icon: AlertTriangle, label: "Escalation" },
-          { key: "test", icon: Sparkles, label: "Test Chat" },
-          { key: "preview", icon: Eye, label: "Data Preview" },
-        ].map(({ key, icon: Icon, label }) => (
-          <Button
-            key={key}
-            variant={activeSection === key ? "default" : "outline"}
-            size="sm"
-            onClick={() => setActiveSection(key)}
-          >
-            <Icon className="h-4 w-4 mr-1" />
-            {label}
-          </Button>
-        ))}
+        {sectionTabs.map(({ key, icon: Icon, label }) => {
+          const isActive = activeSection === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setActiveSection(key)}
+              className={`inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                isActive
+                  ? "bg-[#007BFF] text-white"
+                  : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </button>
+          );
+        })}
       </div>
 
-      {stats && (
-        <div className="grid grid-cols-3 gap-3">
-          <div className="bg-blue-50 dark:bg-blue-950 rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-blue-600">{stats.sources?.length || 0}</p>
-            <p className="text-xs text-muted-foreground">Sources</p>
-          </div>
-          <div className="bg-purple-50 dark:bg-purple-950 rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-purple-600">{stats.totalChunks || 0}</p>
-            <p className="text-xs text-muted-foreground">Chunks</p>
-          </div>
-          <div className="bg-green-50 dark:bg-green-950 rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-green-600">{stats.totalQaPairs || 0}</p>
-            <p className="text-xs text-muted-foreground">Q&A Pairs</p>
-          </div>
+      {/* Stats row */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="rounded-xl border border-slate-200 bg-blue-50 p-3 text-center">
+          <p className="text-2xl font-bold text-[#007BFF]">
+            {stats?.sources?.length || 0}
+          </p>
+          <p className="text-xs text-slate-500">Sources</p>
         </div>
-      )}
+        <div className="rounded-xl border border-slate-200 bg-blue-50 p-3 text-center">
+          <p className="text-2xl font-bold text-[#007BFF]">
+            {stats?.totalChunks || 0}
+          </p>
+          <p className="text-xs text-slate-500">Chunks</p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-green-50 p-3 text-center">
+          <p className="text-2xl font-bold text-green-600">
+            {stats?.totalQaPairs || 0}
+          </p>
+          <p className="text-xs text-slate-500">Q&A Pairs</p>
+        </div>
+      </div>
 
       {activeSection === "training" && (
         <div className="space-y-4">
-          <Card>
+          <Card className="rounded-xl border border-slate-200 bg-white">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <BookOpen className="h-4 w-4" />
+              <CardTitle className="text-base flex items-center gap-2 text-slate-800">
+                <BookOpen className="h-4 w-4 text-[#007BFF]" />
                 Knowledge Base Integration
               </CardTitle>
               <CardDescription>
@@ -560,7 +824,7 @@ export default function AITrainingPanel({
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <Label>Train from Knowledge Base</Label>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-slate-500">
                     Use KB articles to answer customer questions
                   </p>
                 </div>
@@ -574,7 +838,7 @@ export default function AITrainingPanel({
                   onClick={() => syncKbMutation.mutate()}
                   disabled={syncKbMutation.isPending}
                   variant="outline"
-                  className="w-full"
+                  className="w-full border-slate-200"
                 >
                   {syncKbMutation.isPending ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -587,10 +851,10 @@ export default function AITrainingPanel({
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="rounded-xl border border-slate-200 bg-white">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Globe className="h-4 w-4" />
+              <CardTitle className="text-base flex items-center gap-2 text-slate-800">
+                <Globe className="h-4 w-4 text-[#007BFF]" />
                 Website URL Training
               </CardTitle>
               <CardDescription>
@@ -598,38 +862,36 @@ export default function AITrainingPanel({
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="space-y-2">
-                <Input
-                  placeholder="https://example.com/about"
-                  value={urlInput}
-                  onChange={(e) => setUrlInput(e.target.value)}
-                />
-                <Input
-                  placeholder="Source name (optional)"
-                  value={urlName}
-                  onChange={(e) => setUrlName(e.target.value)}
-                />
-                <Button
-                  onClick={() => addUrlMutation.mutate()}
-                  disabled={!urlInput.trim() || addUrlMutation.isPending}
-                  className="w-full"
-                  size="sm"
-                >
-                  {addUrlMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Plus className="h-4 w-4 mr-2" />
-                  )}
-                  Add URL
-                </Button>
-              </div>
+              <Input
+                placeholder="https://example.com/about"
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+              />
+              <Input
+                placeholder="Source name (optional)"
+                value={urlName}
+                onChange={(e) => setUrlName(e.target.value)}
+              />
+              <Button
+                onClick={() => addUrlMutation.mutate()}
+                disabled={!urlInput.trim() || addUrlMutation.isPending}
+                className="w-full bg-[#007BFF] hover:bg-[#0069d9] text-white"
+                size="sm"
+              >
+                {addUrlMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4 mr-2" />
+                )}
+                Add URL
+              </Button>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="rounded-xl border border-slate-200 bg-white">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <FileUp className="h-4 w-4" />
+              <CardTitle className="text-base flex items-center gap-2 text-slate-800">
+                <FileUp className="h-4 w-4 text-[#007BFF]" />
                 Document Upload
               </CardTitle>
               <CardDescription>
@@ -644,30 +906,32 @@ export default function AITrainingPanel({
                 accept=".pdf,.txt,.csv,.md,.docx"
                 onChange={handleFileUpload}
               />
-              <Button
-                variant="outline"
-                className="w-full"
+              <button
+                type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploadDocMutation.isPending}
+                className="w-full rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors py-8 px-4 text-center disabled:opacity-50"
               >
                 {uploadDocMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <Loader2 className="h-8 w-8 mx-auto mb-2 text-[#007BFF] animate-spin" />
                 ) : (
-                  <FileUp className="h-4 w-4 mr-2" />
+                  <FileUp className="h-8 w-8 mx-auto mb-2 text-[#007BFF]" />
                 )}
-                Upload Document
-              </Button>
-              <p className="text-xs text-muted-foreground mt-2">
-                Max 10MB. Supported: PDF, TXT, CSV, DOCX, MD
-              </p>
+                <p className="text-sm font-medium text-slate-700">
+                  {uploadDocMutation.isPending ? "Uploading..." : "Click to upload a document"}
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Max 10MB. Supported: PDF, TXT, CSV, DOCX, MD
+                </p>
+              </button>
             </CardContent>
           </Card>
 
           {sources.length > 0 && (
-            <Card>
+            <Card className="rounded-xl border border-slate-200 bg-white">
               <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Database className="h-4 w-4" />
+                <CardTitle className="text-base flex items-center gap-2 text-slate-800">
+                  <Database className="h-4 w-4 text-[#007BFF]" />
                   Training Sources ({sources.length})
                 </CardTitle>
               </CardHeader>
@@ -676,18 +940,18 @@ export default function AITrainingPanel({
                   {sources.map((source) => (
                     <div
                       key={source.id}
-                      className="flex items-center justify-between p-2 border rounded-lg"
+                      className="flex items-center justify-between p-2 border border-slate-200 rounded-xl"
                     >
                       <div className="flex items-center gap-2 flex-1 min-w-0">
                         {getStatusIcon(source.status)}
                         <div className="min-w-0">
                           <p className="text-sm font-medium truncate">{source.name}</p>
                           <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="text-xs">
+                            <Badge variant="outline" className="text-xs border-slate-200">
                               {source.type}
                             </Badge>
                             {source.chunkCount > 0 && (
-                              <span className="text-xs text-muted-foreground">
+                              <span className="text-xs text-slate-500">
                                 {source.chunkCount} chunks
                               </span>
                             )}
@@ -730,9 +994,9 @@ export default function AITrainingPanel({
 
       {activeSection === "qa" && (
         <div className="space-y-4">
-          <Card>
+          <Card className="rounded-xl border border-slate-200 bg-white">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Add Q&A Pair</CardTitle>
+              <CardTitle className="text-base text-slate-800">Add Q&A Pair</CardTitle>
               <CardDescription>
                 Add custom question-answer pairs for the AI to learn from
               </CardDescription>
@@ -775,7 +1039,7 @@ export default function AITrainingPanel({
               <Button
                 onClick={() => addQaMutation.mutate()}
                 disabled={!newQuestion.trim() || !newAnswer.trim() || addQaMutation.isPending}
-                className="w-full"
+                className="w-full bg-[#007BFF] hover:bg-[#0069d9] text-white"
               >
                 {addQaMutation.isPending ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -788,9 +1052,9 @@ export default function AITrainingPanel({
           </Card>
 
           {qaPairs.length > 0 && (
-            <Card>
+            <Card className="rounded-xl border border-slate-200 bg-white">
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">
+                <CardTitle className="text-base text-slate-800">
                   Existing Q&A Pairs ({qaPairs.length})
                 </CardTitle>
               </CardHeader>
@@ -800,14 +1064,17 @@ export default function AITrainingPanel({
                     {qaPairs.map((qa) => (
                       <div
                         key={qa.id}
-                        className={`p-3 border rounded-lg space-y-2 ${
+                        className={`p-3 border border-slate-200 rounded-xl space-y-2 ${
                           !qa.isActive ? "opacity-50" : ""
                         }`}
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
-                              <Badge variant="outline" className="text-xs">
+                              <Badge
+                                variant="outline"
+                                className="text-xs border-slate-200 text-[#007BFF]"
+                              >
                                 {qa.category}
                               </Badge>
                               {!qa.isActive && (
@@ -816,12 +1083,12 @@ export default function AITrainingPanel({
                                 </Badge>
                               )}
                             </div>
-                            <p className="text-sm font-medium">Q: {qa.question}</p>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              A: {qa.answer}
+                            <p className="text-sm font-medium text-slate-800">
+                              Q: {qa.question}
                             </p>
+                            <p className="text-sm text-slate-500 mt-1">A: {qa.answer}</p>
                           </div>
-                          <div className="flex gap-1 ml-2">
+                          <div className="flex items-center gap-1 ml-2">
                             <Switch
                               checked={qa.isActive}
                               onCheckedChange={(checked) =>
@@ -850,165 +1117,9 @@ export default function AITrainingPanel({
 
       {activeSection === "behavior" && (
         <div className="space-y-4">
-          <Card>
+          <Card className="rounded-xl border border-slate-200 bg-white">
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Settings className="h-4 w-4" />
-                  AI Provider Configuration
-                </CardTitle>
-                <div className="flex items-center gap-2">
-                  <Label className="text-sm">Active</Label>
-                  <Switch
-                    checked={aiConfigForm.isActive}
-                    onCheckedChange={handleActiveToggle}
-                  />
-                </div>
-              </div>
-              <CardDescription>
-                Configure your AI model provider, credentials, and trigger words
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-1.5"><Settings className="h-3.5 w-3.5" /> Provider</Label>
-                  <Select
-                    value={aiConfigForm.provider}
-                    onValueChange={(v) => setAiConfigForm(prev => ({ ...prev, provider: v }))}
-                  >
-                    <SelectTrigger><SelectValue placeholder="Select provider" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="openai">OpenAI</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-1.5"><Key className="h-3.5 w-3.5" /> API Key</Label>
-                  <Input
-                    type="password"
-                    value={aiConfigForm.apiKey}
-                    onChange={(e) => setAiConfigForm(prev => ({ ...prev, apiKey: e.target.value }))}
-                    placeholder="sk-..."
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-1.5"><Cpu className="h-3.5 w-3.5" /> Model</Label>
-                  <Select
-                    value={aiConfigForm.model}
-                    onValueChange={(v) => setAiConfigForm(prev => ({ ...prev, model: v }))}
-                  >
-                    <SelectTrigger><SelectValue placeholder="Select model" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="gpt-4.1">GPT-4.1</SelectItem>
-                      <SelectItem value="gpt-4.1-mini">GPT-4.1 Mini</SelectItem>
-                      <SelectItem value="gpt-4.1-nano">GPT-4.1 Nano</SelectItem>
-                      <SelectItem value="gpt-4o">GPT-4o</SelectItem>
-                      <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
-                      <SelectItem value="o3-mini">o3-mini</SelectItem>
-                      <SelectItem value="o1">o1</SelectItem>
-                      <SelectItem value="o1-mini">o1-mini</SelectItem>
-                      <SelectItem value="gpt-4-turbo">GPT-4 Turbo</SelectItem>
-                      <SelectItem value="gpt-4">GPT-4</SelectItem>
-                      <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-1.5"><Brain className="h-3.5 w-3.5" /> Temperature</Label>
-                  <Input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="2"
-                    value={aiConfigForm.temperature}
-                    onChange={(e) => setAiConfigForm(prev => ({ ...prev, temperature: parseFloat(e.target.value) || 0.7 }))}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" /> Max Tokens</Label>
-                  <Input
-                    type="number"
-                    value={aiConfigForm.maxTokens}
-                    onChange={(e) => setAiConfigForm(prev => ({ ...prev, maxTokens: parseInt(e.target.value) || 2048 }))}
-                  />
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="space-y-2">
-                <Label className="flex items-center gap-1.5">
-                  <MessageSquare className="h-3.5 w-3.5" /> Trigger Words
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  AI will only respond when a message contains one of these words (applies to both widget chat and team inbox)
-                </p>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="e.g., hello, help, pricing"
-                    value={newTriggerWord}
-                    onChange={(e) => setNewTriggerWord(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && newTriggerWord.trim()) {
-                        e.preventDefault();
-                        setAiConfigForm(prev => ({
-                          ...prev,
-                          words: [...prev.words, newTriggerWord.trim()],
-                        }));
-                        setNewTriggerWord("");
-                      }
-                    }}
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    type="button"
-                    onClick={() => {
-                      if (newTriggerWord.trim()) {
-                        setAiConfigForm(prev => ({
-                          ...prev,
-                          words: [...prev.words, newTriggerWord.trim()],
-                        }));
-                        setNewTriggerWord("");
-                      }
-                    }}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {aiConfigForm.words.map((word, i) => (
-                    <Badge key={i} variant="secondary" className="text-xs">
-                      {word}
-                      <button
-                        className="ml-1"
-                        onClick={() =>
-                          setAiConfigForm(prev => ({
-                            ...prev,
-                            words: prev.words.filter((_, idx) => idx !== i),
-                          }))
-                        }
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                  {aiConfigForm.words.length === 0 && (
-                    <p className="text-xs text-muted-foreground italic">No trigger words defined — AI will respond to all messages</p>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">System Prompt</CardTitle>
+              <CardTitle className="text-base text-slate-800">System Prompt</CardTitle>
               <CardDescription>
                 Define how the AI should behave and respond to customers
               </CardDescription>
@@ -1019,16 +1130,17 @@ export default function AITrainingPanel({
                 onChange={(e) => updateConfig("systemPrompt", e.target.value)}
                 rows={6}
                 placeholder="You are a helpful customer support assistant..."
+                maxLength={4000}
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-slate-500">
                 {config.systemPrompt?.length || 0} / 4000 characters
               </p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="rounded-xl border border-slate-200 bg-white">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Response Settings</CardTitle>
+              <CardTitle className="text-base text-slate-800">Response Settings</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -1041,8 +1153,8 @@ export default function AITrainingPanel({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="formal">Formal</SelectItem>
                     <SelectItem value="friendly">Friendly</SelectItem>
+                    <SelectItem value="formal">Formal</SelectItem>
                     <SelectItem value="concise">Concise</SelectItem>
                     <SelectItem value="detailed">Detailed</SelectItem>
                   </SelectContent>
@@ -1077,7 +1189,7 @@ export default function AITrainingPanel({
                   rows={2}
                   placeholder="I'm sorry, I don't have the information you're looking for."
                 />
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-slate-500">
                   Shown when the AI cannot generate a response
                 </p>
               </div>
@@ -1086,17 +1198,16 @@ export default function AITrainingPanel({
 
           <div className="flex justify-end">
             <Button
-              onClick={async () => {
-                await Promise.all([saveAiConfig(), saveBehaviorConfig()]);
-              }}
-              disabled={isSavingAiConfig || isSavingBehavior}
+              onClick={saveBehaviorConfig}
+              disabled={isSavingBehavior}
+              className="bg-[#007BFF] hover:bg-[#0069d9] text-white"
             >
-              {(isSavingAiConfig || isSavingBehavior) ? (
+              {isSavingBehavior ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
                 <Save className="h-4 w-4 mr-2" />
               )}
-              {(isSavingAiConfig || isSavingBehavior) ? "Saving..." : "Save AI Settings"}
+              {isSavingBehavior ? "Saving..." : "Save AI Settings"}
             </Button>
           </div>
         </div>
@@ -1104,152 +1215,154 @@ export default function AITrainingPanel({
 
       {activeSection === "escalation" && (
         <div className="space-y-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4" />
-              Escalation Rules
-            </CardTitle>
-            <CardDescription>
-              Configure when the AI should transfer conversations to human agents
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label>Enable Auto-Escalation</Label>
-                <p className="text-xs text-muted-foreground">
-                  Automatically transfer to an agent when AI can't help
-                </p>
+          <Card className="rounded-xl border border-slate-200 bg-white">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2 text-slate-800">
+                <AlertTriangle className="h-4 w-4 text-[#007BFF]" />
+                Escalation Rules
+              </CardTitle>
+              <CardDescription>
+                Configure when the AI should transfer conversations to human agents
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Enable Auto-Escalation</Label>
+                  <p className="text-xs text-slate-500">
+                    Automatically transfer to an agent when AI can&apos;t help
+                  </p>
+                </div>
+                <Switch
+                  checked={escalation.enabled}
+                  onCheckedChange={(checked) => updateEscalation("enabled", checked)}
+                />
               </div>
-              <Switch
-                checked={escalation.enabled}
-                onCheckedChange={(checked) => updateEscalation("enabled", checked)}
-              />
-            </div>
 
-            {escalation.enabled && (
-              <>
-                <Separator />
+              {escalation.enabled && (
+                <>
+                  <Separator />
 
-                <div className="space-y-2">
-                  <Label>Max Unanswered Attempts</Label>
-                  <Select
-                    value={escalation.maxAttempts?.toString() || "3"}
-                    onValueChange={(value) =>
-                      updateEscalation("maxAttempts", parseInt(value))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">After 1 failed attempt</SelectItem>
-                      <SelectItem value="2">After 2 failed attempts</SelectItem>
-                      <SelectItem value="3">After 3 failed attempts</SelectItem>
-                      <SelectItem value="5">After 5 failed attempts</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Transfer to agent after this many questions the AI couldn't answer
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Trigger Phrases</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Immediately escalate when user mentions these phrases
-                  </p>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="e.g., speak to manager"
-                      value={newTriggerPhrase}
-                      onChange={(e) => setNewTriggerPhrase(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && newTriggerPhrase.trim()) {
-                          updateEscalation("triggerPhrases", [
-                            ...(escalation.triggerPhrases || []),
-                            newTriggerPhrase.trim(),
-                          ]);
-                          setNewTriggerPhrase("");
-                        }
-                      }}
-                    />
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        if (newTriggerPhrase.trim()) {
-                          updateEscalation("triggerPhrases", [
-                            ...(escalation.triggerPhrases || []),
-                            newTriggerPhrase.trim(),
-                          ]);
-                          setNewTriggerPhrase("");
-                        }
-                      }}
+                  <div className="space-y-2">
+                    <Label>Max Unanswered Attempts</Label>
+                    <Select
+                      value={escalation.maxAttempts?.toString() || "3"}
+                      onValueChange={(value) =>
+                        updateEscalation("maxAttempts", parseInt(value))
+                      }
                     >
-                      <Plus className="h-4 w-4" />
-                    </Button>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">After 1 failed attempt</SelectItem>
+                        <SelectItem value="2">After 2 failed attempts</SelectItem>
+                        <SelectItem value="3">After 3 failed attempts</SelectItem>
+                        <SelectItem value="5">After 5 failed attempts</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-slate-500">
+                      Transfer to agent after this many questions the AI couldn&apos;t answer
+                    </p>
                   </div>
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {(escalation.triggerPhrases || []).map((phrase, i) => (
-                      <Badge key={i} variant="secondary" className="text-xs">
-                        {phrase}
-                        <button
-                          className="ml-1"
-                          onClick={() =>
-                            updateEscalation(
-                              "triggerPhrases",
-                              escalation.triggerPhrases.filter((_, idx) => idx !== i)
-                            )
-                          }
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
 
-                <div className="space-y-2">
-                  <Label>Escalation Message</Label>
-                  <Textarea
-                    value={escalation.escalationMessage || ""}
-                    onChange={(e) =>
-                      updateEscalation("escalationMessage", e.target.value)
-                    }
-                    rows={2}
-                    placeholder="Let me connect you with a team member who can help you better."
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Message shown to user when transferring to an agent
-                  </p>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
-        <div className="flex justify-end mt-4">
-          <Button
-            onClick={saveBehaviorConfig}
-            disabled={isSavingBehavior}
-          >
-            {isSavingBehavior ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4 mr-2" />
-            )}
-            {isSavingBehavior ? "Saving..." : "Save Escalation Rules"}
-          </Button>
-        </div>
+                  <div className="space-y-2">
+                    <Label>Trigger Phrases</Label>
+                    <p className="text-xs text-slate-500">
+                      Immediately escalate when user mentions these phrases
+                    </p>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="e.g., speak to manager"
+                        value={newTriggerPhrase}
+                        onChange={(e) => setNewTriggerPhrase(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && newTriggerPhrase.trim()) {
+                            updateEscalation("triggerPhrases", [
+                              ...(escalation.triggerPhrases || []),
+                              newTriggerPhrase.trim(),
+                            ]);
+                            setNewTriggerPhrase("");
+                          }
+                        }}
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-slate-200"
+                        onClick={() => {
+                          if (newTriggerPhrase.trim()) {
+                            updateEscalation("triggerPhrases", [
+                              ...(escalation.triggerPhrases || []),
+                              newTriggerPhrase.trim(),
+                            ]);
+                            setNewTriggerPhrase("");
+                          }
+                        }}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {(escalation.triggerPhrases || []).map((phrase, i) => (
+                        <Badge key={i} variant="secondary" className="text-xs">
+                          {phrase}
+                          <button
+                            className="ml-1"
+                            onClick={() =>
+                              updateEscalation(
+                                "triggerPhrases",
+                                escalation.triggerPhrases.filter((_, idx) => idx !== i)
+                              )
+                            }
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Escalation Message</Label>
+                    <Textarea
+                      value={escalation.escalationMessage || ""}
+                      onChange={(e) =>
+                        updateEscalation("escalationMessage", e.target.value)
+                      }
+                      rows={2}
+                      placeholder="Let me connect you with a team member who can help you better."
+                    />
+                    <p className="text-xs text-slate-500">
+                      Message shown to user when transferring to an agent
+                    </p>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+          <div className="flex justify-end">
+            <Button
+              onClick={saveBehaviorConfig}
+              disabled={isSavingBehavior}
+              className="bg-[#007BFF] hover:bg-[#0069d9] text-white"
+            >
+              {isSavingBehavior ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4 mr-2" />
+              )}
+              {isSavingBehavior ? "Saving..." : "Save Escalation Rules"}
+            </Button>
+          </div>
         </div>
       )}
 
       {activeSection === "test" && (
-        <Card>
+        <Card className="rounded-xl border border-slate-200 bg-white">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Sparkles className="h-4 w-4" />
+            <CardTitle className="text-base flex items-center gap-2 text-slate-800">
+              <Sparkles className="h-4 w-4 text-[#007BFF]" />
               Test AI Chat
             </CardTitle>
             <CardDescription>
@@ -1257,12 +1370,12 @@ export default function AITrainingPanel({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="border rounded-lg overflow-hidden">
+            <div className="border border-slate-200 rounded-xl overflow-hidden">
               <ScrollArea className="h-[350px] p-3">
                 {testMessages.length === 0 && (
-                  <div className="flex items-center justify-center h-full text-center text-muted-foreground">
+                  <div className="flex items-center justify-center h-[300px] text-center text-slate-500">
                     <div>
-                      <Sparkles className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <Sparkles className="h-8 w-8 mx-auto mb-2 opacity-50 text-[#007BFF]" />
                       <p className="text-sm">Send a message to test the AI</p>
                       <p className="text-xs mt-1">
                         Uses your actual training data and system prompt
@@ -1281,16 +1394,17 @@ export default function AITrainingPanel({
                       <div
                         className={`max-w-[85%] rounded-xl px-3 py-2 ${
                           msg.role === "user"
-                            ? "bg-primary text-primary-foreground"
+                            ? "bg-[#007BFF] text-white"
                             : msg.role === "error"
-                            ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-                            : "bg-muted"
+                              ? "bg-red-100 text-red-800"
+                              : "bg-slate-100 text-slate-800"
                         }`}
                       >
                         <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
                         {msg.context && (
                           <div className="mt-2 pt-2 border-t border-white/20 text-xs opacity-70">
-                            Context: {msg.context.chunksFound} chunks, {msg.context.qaPairsFound} Q&A pairs used
+                            Context: {msg.context.chunksFound} chunks,{" "}
+                            {msg.context.qaPairsFound} Q&A pairs used
                           </div>
                         )}
                       </div>
@@ -1298,14 +1412,14 @@ export default function AITrainingPanel({
                   ))}
                   {isTesting && (
                     <div className="flex justify-start">
-                      <div className="bg-muted rounded-xl px-3 py-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
+                      <div className="bg-slate-100 rounded-xl px-3 py-2">
+                        <Loader2 className="h-4 w-4 animate-spin text-[#007BFF]" />
                       </div>
                     </div>
                   )}
                 </div>
               </ScrollArea>
-              <div className="border-t p-2 flex gap-2">
+              <div className="border-t border-slate-200 p-2 flex gap-2">
                 <Input
                   placeholder="Type a test message..."
                   value={testMessage}
@@ -1317,6 +1431,7 @@ export default function AITrainingPanel({
                   size="icon"
                   onClick={sendTestMessage}
                   disabled={!testMessage.trim() || isTesting}
+                  className="bg-[#007BFF] hover:bg-[#0069d9] text-white"
                 >
                   <Send className="h-4 w-4" />
                 </Button>
@@ -1326,7 +1441,7 @@ export default function AITrainingPanel({
               <Button
                 variant="outline"
                 size="sm"
-                className="mt-2"
+                className="mt-2 border-slate-200"
                 onClick={() => setTestMessages([])}
               >
                 Clear Chat
@@ -1338,10 +1453,10 @@ export default function AITrainingPanel({
 
       {activeSection === "preview" && (
         <div className="space-y-4">
-          <Card>
+          <Card className="rounded-xl border border-slate-200 bg-white">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Eye className="h-4 w-4" />
+              <CardTitle className="text-base flex items-center gap-2 text-slate-800">
+                <Eye className="h-4 w-4 text-[#007BFF]" />
                 Training Data Overview
               </CardTitle>
               <CardDescription>
@@ -1349,8 +1464,9 @@ export default function AITrainingPanel({
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {!preview || (preview.sources.length === 0 && preview.qaPairs.length === 0) ? (
-                <div className="text-center py-6 text-muted-foreground">
+              {!preview ||
+              (preview.sources.length === 0 && preview.qaPairs.length === 0) ? (
+                <div className="text-center py-6 text-slate-500">
                   <Database className="h-8 w-8 mx-auto mb-2 opacity-50" />
                   <p className="text-sm">No training data yet</p>
                   <p className="text-xs mt-1">
@@ -1361,21 +1477,21 @@ export default function AITrainingPanel({
                 <div className="space-y-4">
                   {preview.sources.length > 0 && (
                     <div>
-                      <h4 className="text-sm font-medium mb-2">
+                      <h4 className="text-sm font-medium mb-2 text-slate-800">
                         Sources ({preview.sources.length})
                       </h4>
                       <div className="space-y-2">
                         {preview.sources.map((source) => (
                           <div
                             key={source.id}
-                            className="flex items-center gap-2 p-2 bg-muted rounded text-sm"
+                            className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-200 rounded-xl text-sm"
                           >
                             {getStatusIcon(source.status)}
                             <span className="font-medium">{source.name}</span>
-                            <Badge variant="outline" className="text-xs ml-auto">
+                            <Badge variant="outline" className="text-xs ml-auto border-slate-200">
                               {source.type}
                             </Badge>
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-xs text-slate-500">
                               {source.chunkCount} chunks
                             </span>
                           </div>
@@ -1386,7 +1502,7 @@ export default function AITrainingPanel({
 
                   {preview.chunks.length > 0 && (
                     <div>
-                      <h4 className="text-sm font-medium mb-2">
+                      <h4 className="text-sm font-medium mb-2 text-slate-800">
                         Content Chunks ({preview.chunks.length})
                       </h4>
                       <ScrollArea className="max-h-[250px]">
@@ -1394,26 +1510,24 @@ export default function AITrainingPanel({
                           {preview.chunks.slice(0, 20).map((chunk) => (
                             <div
                               key={chunk.id}
-                              className="p-2 border rounded text-xs"
+                              className="p-2 border border-slate-200 rounded-xl text-xs"
                             >
                               <div className="flex items-center gap-1 mb-1">
                                 {chunk.hasEmbedding ? (
-                                  <Badge className="text-[10px] bg-green-100 text-green-700">
+                                  <Badge className="text-[10px] bg-green-100 text-green-700 hover:bg-green-100">
                                     Embedded
                                   </Badge>
                                 ) : (
-                                  <Badge variant="outline" className="text-[10px]">
+                                  <Badge variant="outline" className="text-[10px] border-slate-200">
                                     Text Only
                                   </Badge>
                                 )}
                               </div>
-                              <p className="text-muted-foreground">
-                                {chunk.contentPreview}
-                              </p>
+                              <p className="text-slate-500">{chunk.contentPreview}</p>
                             </div>
                           ))}
                           {preview.chunks.length > 20 && (
-                            <p className="text-xs text-center text-muted-foreground py-2">
+                            <p className="text-xs text-center text-slate-500 py-2">
                               + {preview.chunks.length - 20} more chunks
                             </p>
                           )}
@@ -1424,16 +1538,17 @@ export default function AITrainingPanel({
 
                   {preview.qaPairs.length > 0 && (
                     <div>
-                      <h4 className="text-sm font-medium mb-2">
+                      <h4 className="text-sm font-medium mb-2 text-slate-800">
                         Q&A Pairs ({preview.qaPairs.length})
                       </h4>
                       <div className="space-y-2">
-                        {preview.qaPairs.map((qa: any) => (
-                          <div key={qa.id} className="p-2 border rounded text-sm">
-                            <p className="font-medium">Q: {qa.question}</p>
-                            <p className="text-muted-foreground text-xs mt-1">
-                              A: {qa.answer}
-                            </p>
+                        {preview.qaPairs.map((qa) => (
+                          <div
+                            key={qa.id}
+                            className="p-2 border border-slate-200 rounded-xl text-sm"
+                          >
+                            <p className="font-medium text-slate-800">Q: {qa.question}</p>
+                            <p className="text-slate-500 text-xs mt-1">A: {qa.answer}</p>
                           </div>
                         ))}
                       </div>

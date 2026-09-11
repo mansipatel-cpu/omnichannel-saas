@@ -25,7 +25,7 @@ import type { Express } from "express";
 import { storage } from 'server/storage';
 import OpenAI from 'openai';
 import { requireAuth } from 'server/middlewares/auth.middleware';
-import { aiSettings, insertSiteSchema, panelConfig, sites, trainingQaPairs } from '@shared/whatsapp-schema';
+import { aiSettings, insertSiteSchema, panelConfig, sites, trainingQaPairs, knowledgeCategories, knowledgeArticles } from '@shared/whatsapp-schema';
 import { requireSubscription } from 'server/middlewares/requireSubscription';
 import { eq, and } from 'drizzle-orm';
 import { db } from 'server/db';
@@ -60,19 +60,77 @@ function rateLimitWidget(limit: number, bucketScope: (req: any) => string) {
 }
 
 
-function buildAIClient(aiSetting) {
+function buildAIClient(aiSetting: {
+  provider?: string | null;
+  apiKey?: string | null;
+  endpoint?: string | null;
+}) {
   if (aiSetting.provider === "openai") {
     return new OpenAI({
-      apiKey: aiSetting.apiKey,
+      apiKey: aiSetting.apiKey || undefined,
       baseURL: aiSetting.endpoint || "https://api.openai.com/v1",
     });
   }
 
   // Future provider support (Anthropic, Gemini, etc.)
   return new OpenAI({
-    apiKey: aiSetting.apiKey,
+    apiKey: aiSetting.apiKey || undefined,
     baseURL: aiSetting.endpoint || "https://api.openai.com/v1",
   });
+}
+
+async function getKnowledgeCategories(siteId: string) {
+  return db
+    .select()
+    .from(knowledgeCategories)
+    .where(eq(knowledgeCategories.siteId, siteId));
+}
+
+async function getKnowledgeCategoriesTree(siteId: string) {
+  const all = await getKnowledgeCategories(siteId);
+  const byParent = new Map<string | null, typeof all>();
+  for (const cat of all) {
+    const key = cat.parentId ?? null;
+    const list = byParent.get(key) || [];
+    list.push(cat);
+    byParent.set(key, list);
+  }
+  const build = (parentId: string | null): any[] =>
+    (byParent.get(parentId) || []).map((cat) => ({
+      ...cat,
+      subcategories: build(cat.id),
+    }));
+  return build(null);
+}
+
+async function getKnowledgeArticles(categoryId: string) {
+  return db
+    .select()
+    .from(knowledgeArticles)
+    .where(
+      and(
+        eq(knowledgeArticles.categoryId, categoryId),
+        eq(knowledgeArticles.published, true)
+      )
+    );
+}
+
+async function getKnowledgeArticle(articleId: string) {
+  const [article] = await db
+    .select()
+    .from(knowledgeArticles)
+    .where(eq(knowledgeArticles.id, articleId))
+    .limit(1);
+  return article;
+}
+
+async function getKnowledgeCategory(categoryId: string) {
+  const [category] = await db
+    .select()
+    .from(knowledgeCategories)
+    .where(eq(knowledgeCategories.id, categoryId))
+    .limit(1);
+  return category;
 }
 
 
@@ -136,12 +194,12 @@ res.json({
         return res.status(404).json({ error: "Widget not available" });
       }
       
-      const categoriesTree = await storage.getKnowledgeCategoriesTree(req.params.siteId);
-      const allCategories = await storage.getKnowledgeCategories(req.params.siteId);
-      const articlesMap = new Map();
+      const categoriesTree = await getKnowledgeCategoriesTree(req.params.siteId);
+      const allCategories = await getKnowledgeCategories(req.params.siteId);
+      const articlesMap = new Map<string, Awaited<ReturnType<typeof getKnowledgeArticles>>>();
       
       for (const category of allCategories) {
-        const articles = await storage.getKnowledgeArticles(category.id);
+        const articles = await getKnowledgeArticles(category.id);
         articlesMap.set(category.id, articles);
       }
       
@@ -151,7 +209,7 @@ res.json({
           name: cat.name,
           icon: cat.icon,
           articleCount: articlesMap.get(cat.id)?.length || 0,
-          articles: (articlesMap.get(cat.id) || []).map(article => ({
+          articles: (articlesMap.get(cat.id) || []).map((article: { id: string; title: string; content: string }) => ({
             id: article.id,
             title: article.title,
             preview: article.content.replace(/<[^>]*>/g, '').substring(0, 150) + '...',
@@ -207,12 +265,12 @@ res.json({
   // Get article
   app.get("/api/whatsapp/widget/article/:articleId", async (req, res) => {
     try {
-      const article = await storage.getKnowledgeArticle(req.params.articleId);
+      const article = await getKnowledgeArticle(req.params.articleId);
       if (!article) {
         return res.status(404).json({ error: "Article not found" });
       }
       
-      const category = await storage.getKnowledgeCategory(article.categoryId);
+      const category = await getKnowledgeCategory(article.categoryId);
       if (!category) {
         return res.status(404).json({ error: "Category not found" });
       }
@@ -248,8 +306,11 @@ res.json({
       // return  console.log("site", site ,contact)
       
       if (!contact) {
+        if (!site.channelId) {
+          return res.status(400).json({ error: "Site has no channel configured" });
+        }
         contact = await storage.createContact({
-          channelId: site?.channelId || null,
+          channelId: site.channelId,
           name,
           email,
           phone,
@@ -299,9 +360,12 @@ app.post(
       const contacts = await storage.getContactByEmail(visitorInfo.email);
       contact = contacts?.[0] || null;
       if (!contact) {
+        const contactChannelId = channelId || site.channelId;
+        if (!contactChannelId) {
+          return res.status(400).json({ error: "Channel ID required" });
+        }
         contact = await storage.createContact({
-          tenantId: site.tenantId,
-          channelId: channelId || site.tenantId,
+          channelId: contactChannelId,
           name: visitorInfo.name || "Anonymous",
           email: visitorInfo.email,
           phone: visitorInfo.mobile || "",
@@ -780,7 +844,7 @@ ${triggerPhrases.length > 0 ? `- If the user mentions any of these phrases, esca
           ? (rawMessages as any).messages 
           : []);
       
-      const formattedMessages = messages.map(msg => ({
+      const formattedMessages = messages.map((msg: any) => ({
         id: msg.id,
         content: msg.content,
         fromUser: msg.fromUser,
@@ -798,6 +862,7 @@ ${triggerPhrases.length > 0 ? `- If the user mentions any of these phrases, esca
   // Request human agent
   app.post("/api/whatsapp/widget/request-agent", async (req, res) => {
     try {
+      const io = (global as any).io;
       const { conversationId, siteId } = req.body;
 
       if (!conversationId) {
@@ -893,9 +958,9 @@ ${triggerPhrases.length > 0 ? `- If the user mentions any of these phrases, esca
         return res.status(400).json({ message: "No Channel fount" });
       }
 
-      const [site] = await storage.getSitesByChannel(channelId);
+      const [site] = await storage.getSitesByChannel(String(channelId));
       // console.log("site" , site)
-      res.json(site);
+      res.json(site ?? null);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
@@ -918,10 +983,6 @@ ${triggerPhrases.length > 0 ? `- If the user mentions any of these phrases, esca
   app.post("/api/whatsapp/sites", requireAuth, async (req, res) => {
     try {
       const validated = insertSiteSchema.parse(req.body);
-      // Ensure site belongs to user's tenant
-      if (validated.tenantId !== req.user?.tenantId && req.user?.role !== "super_admin") {
-        return res.status(403).json({ message: "Access denied" });
-      }
       const site = await storage.createSite(validated);
       res.json(site);
     } catch (error: any) {
@@ -931,16 +992,13 @@ ${triggerPhrases.length > 0 ? `- If the user mentions any of these phrases, esca
 
   app.patch("/api/whatsapp/sites/:id", requireAuth, async (req, res) => {
     try {
-      // Verify site belongs to user's tenant
+      // Verify site exists
       const site = await storage.getSite(req.params.id);
       if (!site) {
         return res.status(404).json({ message: "Site not found" });
       }
-      if (site.tenantId !== req.user?.tenantId && req.user?.role !== "admin") {
-        return res.status(403).json({ message: "Access denied" });
-      }
       
-      // Whitelist only safe fields to prevent tenantId/id manipulation
+      // Whitelist only safe fields to prevent id manipulation
       const safeData: any = {};
       if (req.body.name !== undefined) safeData.name = req.body.name;
       if (req.body.domain !== undefined) safeData.domain = req.body.domain;
@@ -1003,30 +1061,18 @@ app.post('/api/whatsapp/widget/upload-logo', requireAuth, logoUpload.single('log
 app.post('/api/whatsapp/sites/create_or_update', requireAuth, async (req, res) => {
   try {
     const validated = insertSiteSchema.parse(req.body);
-    const userRole     = req.user?.role;
-    // console.log("userRoleee", userRole)
-    // console.log("body-site", req.body)
 
-    // if (validated.tenantId !== userTenantId && userRole !== 'super_admin') {
-    //   return res.status(403).json({ message: 'Access denied: invalid tenant' });
-    // }
-
-    const [existingSite]: any | undefined = await storage.getSitesByChannel(req.body.channelId);
+    const [existingSite] = await storage.getSitesByChannel(req.body.channelId);
 
     let site: any;
 
     if (existingSite) {
-      // if (existingSite.tenantId !== userTenantId && userRole !== 'admin') {
-      //   return res.status(403).json({ message: 'Access denied: cannot update' });
-      // }
-
       const safeData: any = {};
       if (validated.name              !== undefined) safeData.name              = validated.name;
       if (validated.domain            !== undefined) safeData.domain            = validated.domain;
       if (validated.widgetEnabled     !== undefined) safeData.widgetEnabled     = validated.widgetEnabled;
       if (validated.widgetConfig      !== undefined) safeData.widgetConfig      = validated.widgetConfig;
       if (validated.aiTrainingConfig  !== undefined) safeData.aiTrainingConfig  = validated.aiTrainingConfig;
-      // if (validated.systemPrompt      !== undefined) safeData.systemPrompt      = validated.systemPrompt;
       
       site = await storage.updateSite(existingSite.id, safeData);
     } else {
