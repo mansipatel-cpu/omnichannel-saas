@@ -239,66 +239,6 @@ function daysUntilPurge(deletedAt: Date) {
   return Math.max(0, differenceInDays(addDays(deletedAt, PURGE_DAYS), new Date()));
 }
 
-/** Sample rows so the Deleted Campaigns UI matches the shared design when no soft-deleted campaigns exist yet. */
-const SAMPLE_DELETED_ROWS: DeletedRow[] = [
-  {
-    id: "sample-wa-1",
-    name: "Summer Sale Announcement",
-    code: "CMP-9082-WA",
-    channel: "whatsapp",
-    channelLabel: "WhatsApp Broadcast",
-    subtype: "Rich Media",
-    audience: 4200,
-    segment: "VIP Segment",
-    deletedAt: subDays(new Date(), 2),
-    deletedBy: "Admin User",
-    deletedByInitials: "AU",
-    isSample: true,
-  },
-  {
-    id: "sample-ac-1",
-    name: "Q3 Product Feedback",
-    code: "CMP-4410-AC",
-    channel: "calling",
-    channelLabel: "Auto Calling",
-    subtype: "IVR Survey",
-    audience: 1850,
-    segment: "Active Users",
-    deletedAt: subDays(new Date(), 5),
-    deletedBy: "Alex Verma",
-    deletedByInitials: "AV",
-    isSample: true,
-  },
-  {
-    id: "sample-wa-2",
-    name: "Flash Deal Reminder",
-    code: "CMP-7721-WA",
-    channel: "whatsapp",
-    channelLabel: "WhatsApp Broadcast",
-    subtype: "Text + CTA",
-    audience: 9800,
-    segment: "Cart Abandoners",
-    deletedAt: subDays(new Date(), 12),
-    deletedBy: "Admin User",
-    deletedByInitials: "AU",
-    isSample: true,
-  },
-  {
-    id: "sample-ac-2",
-    name: "Payment Overdue Nudge",
-    code: "CMP-3301-AC",
-    channel: "calling",
-    channelLabel: "Auto Calling",
-    subtype: "AI Voice",
-    audience: 640,
-    segment: "Billing List",
-    deletedAt: subDays(new Date(), 20),
-    deletedBy: "Priya Shah",
-    deletedByInitials: "PS",
-    isSample: true,
-  },
-];
-
 interface Row {
   id: string;
   name: string;
@@ -515,7 +455,7 @@ export default function Campaigns() {
         deletedByInitials: initialsFromName(actor),
       };
     });
-    return fromApi.length > 0 ? fromApi : SAMPLE_DELETED_ROWS;
+    return fromApi;
   }, [deletedCampaigns, user?.name]);
 
   const rows = tab === "whatsapp" ? waRows : voiceRows;
@@ -678,7 +618,7 @@ export default function Campaigns() {
   };
 
   const filterTriggerClass = "h-10 w-full sm:w-[160px] bg-white border-slate-200";
-  const deletedCount = deletedCampaigns.length > 0 ? deletedCampaigns.length : SAMPLE_DELETED_ROWS.length;
+  const deletedCount = deletedCampaigns.length;
 
   return (
     <div className="space-y-5 pb-8">
