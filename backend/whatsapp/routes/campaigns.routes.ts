@@ -25,7 +25,7 @@ import { requireSubscription } from "server/middlewares/requireSubscription";
 
 export function registerCampaignRoutes(app: Express) {
   // Get all campaigns
-  app.get("/api/whatsapp/campaigns", 
+  app.get("/api/whatsapp/campaigns",
     extractChannelId,
     requireAuth,
     requirePermission(PERMISSIONS.CAMPAIGNS_VIEW),
@@ -33,8 +33,8 @@ export function registerCampaignRoutes(app: Express) {
   );
 
   // Get campaign by ID
-  app.get("/api/whatsapp/campaigns/:id",  requireAuth,
-  requirePermission(PERMISSIONS.CAMPAIGNS_VIEW), 
+  app.get("/api/whatsapp/campaigns/:id", requireAuth,
+    requirePermission(PERMISSIONS.CAMPAIGNS_VIEW),
     campaignsController.getCampaign
   );
 
@@ -47,8 +47,8 @@ export function registerCampaignRoutes(app: Express) {
 
 
 
-  app.post("/api/whatsapp/campaigns",   requireAuth,
-  requirePermission(PERMISSIONS.CAMPAIGNS_CREATE), 
+  app.post("/api/whatsapp/campaigns", requireAuth,
+    requirePermission(PERMISSIONS.CAMPAIGNS_CREATE),
     campaignsController.createCampaign
   );
 
@@ -57,17 +57,17 @@ export function registerCampaignRoutes(app: Express) {
 
   app.post("/api/whatsapp/getCampaignsByUserId", requireAuth, campaignsController.getCampaignByUserID);
 
-   
+
 
   // Update campaign status
   app.patch("/api/whatsapp/campaigns/:id/status", requireAuth,
-  requirePermission(PERMISSIONS.CAMPAIGNS_EDIT),
+    requirePermission(PERMISSIONS.CAMPAIGNS_EDIT),
     campaignsController.updateCampaignStatus
   );
 
   // Delete campaign
   app.delete("/api/whatsapp/campaigns/:id", requireAuth,
-  requirePermission(PERMISSIONS.CAMPAIGNS_DELETE),
+    requirePermission(PERMISSIONS.CAMPAIGNS_DELETE),
     campaignsController.deleteCampaign
   );
 
@@ -85,7 +85,7 @@ export function registerCampaignRoutes(app: Express) {
 
   // API campaign endpoint
   app.post("/api/whatsapp/campaigns/send/:apiKey", requireAuth,
-  requirePermission(PERMISSIONS.CAMPAIGNS_SEND),
+    requirePermission(PERMISSIONS.CAMPAIGNS_SEND),
     campaignsController.sendApiCampaign
   );
 }

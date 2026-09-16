@@ -331,8 +331,8 @@ export default function Campaigns() {
           diffHours < 1
             ? "less than an hour ago"
             : diffHours < 24
-            ? `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`
-            : `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+              ? `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`
+              : `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
         lastCheckedHint = ` Last checked ${ago} — go to Channel Settings to run a health check and refresh your tier.`;
       } else {
         lastCheckedHint = " Go to Channel Settings and run a health check to confirm your current tier.";
@@ -467,11 +467,10 @@ export default function Campaigns() {
                     <button
                       key={pageNumber}
                       onClick={() => setPage(pageNumber)}
-                      className={`px-3 py-1 border rounded-md ${
-                        pageNumber === page
+                      className={`px-3 py-1 border rounded-md ${pageNumber === page
                           ? "bg-green-600 text-white"
                           : "bg-white hover:bg-gray-50"
-                      } transition`}
+                        } transition`}
                     >
                       {pageNumber}
                     </button>

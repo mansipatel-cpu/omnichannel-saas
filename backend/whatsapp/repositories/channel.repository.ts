@@ -142,7 +142,7 @@ export class ChannelRepository {
       // channel but have no FK cascade to channel — wipe in one pass via IN.
       await tx.execute(sql`
         DELETE FROM automation_executions
-        WHERE contact_id IN (SELECT id FROM contacts WHERE channel_id = ${id})
+        WHERE contact_id IN (SELECT id FROM wa_contacts WHERE channel_id = ${id})
            OR conversation_id IN (SELECT id FROM conversations WHERE channel_id = ${id})
       `);
 

@@ -16,13 +16,13 @@
  */
 
 import { db } from "../db";
-import { eq, desc, sql, lte } from "drizzle-orm";
-import { 
-  campaigns, 
+import { eq, desc, sql, lte, ne, and } from "drizzle-orm";
+import {
+  campaigns,
   users,
   templates,
-  type Campaign, 
-  type InsertCampaign 
+  type Campaign,
+  type InsertCampaign
 } from "@shared/whatsapp-schema";
 
 
@@ -30,74 +30,74 @@ import {
 
 export class CampaignRepository {
   async getAllold(page: number = 1, limit: number = 10): Promise<{
-  data: Campaign[];
-  total: number;
-  page: number;
-  limit: number;
-}> {
-  const offset = (page - 1) * limit;
+    data: Campaign[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const offset = (page - 1) * limit;
 
-  // Fetch paginated campaign list
-  const campaignsList = await db
-    .select()
-    .from(campaigns)
-    .orderBy(desc(campaigns.createdAt))
-    .limit(limit)
-    .offset(offset);
+    // Fetch paginated campaign list
+    const campaignsList = await db
+      .select()
+      .from(campaigns)
+      .orderBy(desc(campaigns.createdAt))
+      .limit(limit)
+      .offset(offset);
 
-  // Fetch total count
-  const totalResult = await db
-    .select({ total: sql<number>`COUNT(*)` })
-    .from(campaigns);
+    // Fetch total count
+    const totalResult = await db
+      .select({ total: sql<number>`COUNT(*)` })
+      .from(campaigns);
 
-  return {
-    data: campaignsList,
-    total: totalResult[0]?.total ?? 0,
-    page,
-    limit,
-  };
-}
-
-
+    return {
+      data: campaignsList,
+      total: totalResult[0]?.total ?? 0,
+      page,
+      limit,
+    };
+  }
 
 
 
-async getAll(
-  page: number = 1,
-  limit: number = 10
-) {
-  const offset = (page - 1) * limit;
-
-  // const campaignsList = await db
-  //   .select({
-  //     id: campaigns.id,
-  //     name: campaigns.name,
-  //     createdBy: campaigns.createdBy,
-  //     createdByName: sql<string>`
-  //       CONCAT(
-  //         COALESCE(${users.firstName}, ''), ' ', COALESCE(${users.lastName}, '')
-  //       )
-  //     `.as("createdByName"),
-  //     status: campaigns.status,
-  //     createdAt: campaigns.createdAt,
-  //     updatedAt: campaigns.updatedAt,
-  //   })
-  //   .from(campaigns)
-  //   // 👇 Cast campaigns.createdBy uuid → text for join
-  //   .leftJoin(users, eq(users.id, sql`${campaigns.createdBy}::text`))
-  //   .orderBy(desc(campaigns.createdAt))
-  //   .limit(limit)
-  //   .offset(offset);
 
 
- const campaignsList = await db
-  .select({
-    id: campaigns.id,
-    name: campaigns.name,
+  async getAll(
+    page: number = 1,
+    limit: number = 10
+  ) {
+    const offset = (page - 1) * limit;
 
-    createdBy: campaigns.createdBy,
+    // const campaignsList = await db
+    //   .select({
+    //     id: campaigns.id,
+    //     name: campaigns.name,
+    //     createdBy: campaigns.createdBy,
+    //     createdByName: sql<string>`
+    //       CONCAT(
+    //         COALESCE(${users.firstName}, ''), ' ', COALESCE(${users.lastName}, '')
+    //       )
+    //     `.as("createdByName"),
+    //     status: campaigns.status,
+    //     createdAt: campaigns.createdAt,
+    //     updatedAt: campaigns.updatedAt,
+    //   })
+    //   .from(campaigns)
+    //   // 👇 Cast campaigns.createdBy uuid → text for join
+    //   .leftJoin(users, eq(users.id, sql`${campaigns.createdBy}::text`))
+    //   .orderBy(desc(campaigns.createdAt))
+    //   .limit(limit)
+    //   .offset(offset);
 
-    createdByName: sql<string>`
+
+    const campaignsList = await db
+      .select({
+        id: campaigns.id,
+        name: campaigns.name,
+
+        createdBy: campaigns.createdBy,
+
+        createdByName: sql<string>`
       CONCAT(
         COALESCE(${users.firstName}, ''),
         ' ',
@@ -105,45 +105,47 @@ async getAll(
       )
     `.as("createdByName"),
 
-    status: campaigns.status,
+        status: campaigns.status,
 
-    // TEMPLATE
-    templateId: campaigns.templateId,
-    templateName: templates.name,
+        // TEMPLATE
+        templateId: campaigns.templateId,
+        templateName: templates.name,
 
-    // COUNTS
-    recipientCount: campaigns.recipientCount,
-    sentCount: campaigns.sentCount,
-    deliveredCount: campaigns.deliveredCount,
-    readCount: campaigns.readCount,
-    failedCount: campaigns.failedCount,
-    repliedCount: campaigns.repliedCount,
+        // COUNTS
+        recipientCount: campaigns.recipientCount,
+        sentCount: campaigns.sentCount,
+        deliveredCount: campaigns.deliveredCount,
+        readCount: campaigns.readCount,
+        failedCount: campaigns.failedCount,
+        repliedCount: campaigns.repliedCount,
 
-    createdAt: campaigns.createdAt,
-    updatedAt: campaigns.updatedAt,
-  })
-  .from(campaigns)
+        createdAt: campaigns.createdAt,
+        updatedAt: campaigns.updatedAt,
+      })
+      .from(campaigns)
 
-  .leftJoin(users, eq(users.id, sql`${campaigns.createdBy}::text`))
+      .leftJoin(users, eq(users.id, sql`${campaigns.createdBy}::text`))
 
-  // ✅ TEMPLATE JOIN
-  .leftJoin(templates, eq(templates.id, campaigns.templateId))
+      // ✅ TEMPLATE JOIN
+      .leftJoin(templates, eq(templates.id, campaigns.templateId))
 
-  .orderBy(desc(campaigns.createdAt))
-  .limit(limit)
-  .offset(offset);
+      .where(ne(campaigns.status, 'deleted'))
+      .orderBy(desc(campaigns.createdAt))
+      .limit(limit)
+      .offset(offset);
 
-  const totalResult = await db
-    .select({ total: sql<number>`COUNT(*)` })
-    .from(campaigns);
+    const totalResult = await db
+      .select({ total: sql<number>`COUNT(*)` })
+      .from(campaigns)
+      .where(ne(campaigns.status, 'deleted'));
 
-  return {
-    data: campaignsList,
-    total: totalResult[0]?.total ?? 0,
-    page,
-    limit,
-  };
-}
+    return {
+      data: campaignsList,
+      total: totalResult[0]?.total ?? 0,
+      page,
+      limit,
+    };
+  }
 
 
   // async getByChannel(channelId: string): Promise<Campaign[]> {
@@ -156,38 +158,38 @@ async getAll(
 
 
   async getByChannel(
-  channelId: string,
-  page: number = 1,
-  limit: number = 10
-): Promise<{ data: Campaign[]; total: number; page: number; limit: number }> {
-  const offset = (page - 1) * limit;
+    channelId: string,
+    page: number = 1,
+    limit: number = 10
+  ): Promise<{ data: Campaign[]; total: number; page: number; limit: number }> {
+    const offset = (page - 1) * limit;
 
-  // Fetch paginated campaigns
-  const data = await db
-    .select()
-    .from(campaigns)
-    .where(eq(campaigns.channelId, channelId))
-    .orderBy(desc(campaigns.createdAt))
-    .limit(limit)
-    .offset(offset);
+    // Fetch paginated campaigns
+    const data = await db
+      .select()
+      .from(campaigns)
+      .where(and(eq(campaigns.channelId, channelId), ne(campaigns.status, 'deleted')))
+      .orderBy(desc(campaigns.createdAt))
+      .limit(limit)
+      .offset(offset);
 
-  // Fetch total count
-  const [{ count }] = await db
-    .select({ count: sql<number>`COUNT(*)` })
-    .from(campaigns)
-    .where(eq(campaigns.channelId, channelId));
+    // Fetch total count
+    const [{ count }] = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(campaigns)
+      .where(and(eq(campaigns.channelId, channelId), ne(campaigns.status, 'deleted')));
 
-  return {
-    data,
-    total: Number(count),
-    page,
-    limit,
-  };
-}
+    return {
+      data,
+      total: Number(count),
+      page,
+      limit,
+    };
+  }
 
 
   async getById(id: string): Promise<Campaign | undefined> {
-    const [campaign] = await db.select().from(campaigns).where(eq(campaigns.id, id));
+    const [campaign] = await db.select().from(campaigns).where(and(eq(campaigns.id, id), ne(campaigns.status, 'deleted')));
     return campaign || undefined;
   }
 
@@ -197,29 +199,29 @@ async getAll(
   //   return campaign || []
   // }
 
- async getCampaignByUserId(
-  userId: string,
-  page: number = 1,
-  limit: number = 10
-) {
-  const offset = (page - 1) * limit;
+  async getCampaignByUserId(
+    userId: string,
+    page: number = 1,
+    limit: number = 10
+  ) {
+    const offset = (page - 1) * limit;
 
-  // const campaignsList = await db
-  //   .select()
-  //   .from(campaigns)
-  //   .where(eq(campaigns.createdBy, userId))
-  //   .orderBy(desc(campaigns.createdAt))
-  //   .limit(Number(limit))
-  //   .offset(Number(offset));
+    // const campaignsList = await db
+    //   .select()
+    //   .from(campaigns)
+    //   .where(eq(campaigns.createdBy, userId))
+    //   .orderBy(desc(campaigns.createdAt))
+    //   .limit(Number(limit))
+    //   .offset(Number(offset));
 
- const campaignsList = await db
-  .select({
-    id: campaigns.id,
-    name: campaigns.name,
+    const campaignsList = await db
+      .select({
+        id: campaigns.id,
+        name: campaigns.name,
 
-    createdBy: campaigns.createdBy,
+        createdBy: campaigns.createdBy,
 
-    createdByName: sql<string>`
+        createdByName: sql<string>`
       CONCAT(
         COALESCE(${users.firstName}, ''),
         ' ',
@@ -227,51 +229,51 @@ async getAll(
       )
     `.as("createdByName"),
 
-    status: campaigns.status,
+        status: campaigns.status,
 
-    // TEMPLATE
-    templateId: campaigns.templateId,
-    templateName: templates.name,
+        // TEMPLATE
+        templateId: campaigns.templateId,
+        templateName: templates.name,
 
-    audienceType: campaigns.audienceType,
-    platform: campaigns.platform,
+        audienceType: campaigns.audienceType,
+        platform: campaigns.platform,
 
-    // COUNTS
-    recipientCount: campaigns.recipientCount,
-    sentCount: campaigns.sentCount,
-    deliveredCount: campaigns.deliveredCount,
-    readCount: campaigns.readCount,
-    failedCount: campaigns.failedCount,
-    repliedCount: campaigns.repliedCount,
+        // COUNTS
+        recipientCount: campaigns.recipientCount,
+        sentCount: campaigns.sentCount,
+        deliveredCount: campaigns.deliveredCount,
+        readCount: campaigns.readCount,
+        failedCount: campaigns.failedCount,
+        repliedCount: campaigns.repliedCount,
 
-    createdAt: campaigns.createdAt,
-    updatedAt: campaigns.updatedAt,
-  })
-  .from(campaigns)
+        createdAt: campaigns.createdAt,
+        updatedAt: campaigns.updatedAt,
+      })
+      .from(campaigns)
 
-  .leftJoin(users, eq(users.id, sql`${campaigns.createdBy}::text`))
+      .leftJoin(users, eq(users.id, sql`${campaigns.createdBy}::text`))
 
-  .leftJoin(templates, eq(templates.id, campaigns.templateId))
+      .leftJoin(templates, eq(templates.id, campaigns.templateId))
 
-  // ✅ IMPORTANT
-  .where(eq(campaigns.createdBy, userId))
+      // ✅ IMPORTANT
+      .where(and(eq(campaigns.createdBy, userId), ne(campaigns.status, 'deleted')))
 
-  .orderBy(desc(campaigns.createdAt))
-  .limit(limit)
-  .offset(offset);   
+      .orderBy(desc(campaigns.createdAt))
+      .limit(limit)
+      .offset(offset);
 
-  const totalResult = await db
-    .select({ total: sql<number>`COUNT(*)` })
-    .from(campaigns)
-    .where(eq(campaigns.createdBy, userId));
+    const totalResult = await db
+      .select({ total: sql<number>`COUNT(*)` })
+      .from(campaigns)
+      .where(and(eq(campaigns.createdBy, userId), ne(campaigns.status, 'deleted')));
 
-  return {
-    data: campaignsList,
-    total: totalResult[0]?.total ?? 0,
-    page,
-    limit
-  };
-}
+    return {
+      data: campaignsList,
+      total: totalResult[0]?.total ?? 0,
+      page,
+      limit
+    };
+  }
 
 
 
@@ -286,7 +288,7 @@ async getAll(
     return campaign;
   }
 
- async getScheduledCampaigns(now: Date) {
+  async getScheduledCampaigns(now: Date) {
     return db
       .select()
       .from(campaigns)
@@ -299,7 +301,7 @@ async getAll(
       )
       .orderBy(campaigns.scheduledAt);
   }
-  
+
 
   async update(id: string, campaign: Partial<Campaign>): Promise<Campaign | undefined> {
     const [updated] = await db
@@ -325,13 +327,13 @@ async getAll(
   }
 
   async delete(id: string): Promise<boolean> {
-    const result = await db.delete(campaigns).where(eq(campaigns.id, id)).returning();
+    const result = await db.update(campaigns).set({ status: 'deleted' }).where(eq(campaigns.id, id)).returning();
     return result.length > 0;
   }
 
 
-   async getAllCampaignCount(): Promise<number> {
-    const campaignsList = await db.select().from(campaigns);
+  async getAllCampaignCount(): Promise<number> {
+    const campaignsList = await db.select().from(campaigns).where(ne(campaigns.status, 'deleted'));
     return campaignsList.length;
   }
 }

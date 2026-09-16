@@ -29,9 +29,9 @@ import { WebhookConfigRepository } from "./repositories/webhook-config.repositor
 import { MessageQueueRepository } from "./repositories/message-queue.repository";
 import { ApiLogRepository } from "./repositories/api-log.repository";
 import { WhatsappChannelRepository } from "./repositories/whatsapp-channel.repository";
-import {getActivePaidUsersCount} from "./controllers/subscriptions.controller";
+import { getActivePaidUsersCount } from "./controllers/subscriptions.controller";
 
-import { templates as templatesTable} from "@shared/whatsapp-schema";
+import { templates as templatesTable } from "@shared/whatsapp-schema";
 import {
   type User,
   type InsertUser,
@@ -99,24 +99,24 @@ export class DatabaseStorage implements IStorage {
   private messageQueueRepo = new MessageQueueRepository();
   private apiLogRepo = new ApiLogRepository();
   private whatsappChannelRepo = new WhatsappChannelRepository();
- 
 
 
 
 
 
-  
+
+
 
   // Sites
-  
+
   async getSite(id: string): Promise<Site | undefined> {
     const [site] = await db.select().from(sites).where(eq(sites.id, id));
     return site || undefined;
   }
 
   async getScheduledCampaigns(now: Date): Promise<Campaign[]> {
-  return this.campaignRepo.getScheduledCampaigns(now);
-}
+    return this.campaignRepo.getScheduledCampaigns(now);
+  }
 
   async getSites(): Promise<Site[]> {
     return await db.select().from(sites);
@@ -137,42 +137,42 @@ export class DatabaseStorage implements IStorage {
         .returning();
 
       const defaultFaqs = [
-      {
-        siteId: site.id,
-        channelId: insertSite.channelId || null,
-        question: "How do I get started with your platform?",
-        answer: "Getting started is easy! Simply create an account, connect your WhatsApp Business API, and you'll be ready to send messages and manage conversations within minutes. Our setup wizard will guide you through each step.",
-        category: "Getting Started",
-      },
-      {
-        siteId: site.id,
-        channelId: insertSite.channelId || null,
-        question: "What are your support hours?",
-        answer: "Our support team is available Monday through Friday, 9 AM to 6 PM (EST). For urgent issues outside business hours, you can reach us via email and we'll respond within 24 hours.",
-        category: "Support",
-      },
-      {
-        siteId: site.id,
-        channelId: insertSite.channelId || null,
-        question: "How can I track my campaign performance?",
-        answer: "Navigate to the Analytics dashboard to view real-time metrics including delivery rates, open rates, click-through rates, and customer engagement. You can filter by date range, campaign type, and audience segments.",
-        category: "Analytics",
-      },
-      {
-        siteId: site.id,
-        channelId: insertSite.channelId || null,
-        question: "Can I automate my WhatsApp messages?",
-        answer: "Yes! Our automation engine lets you create message flows with triggers, conditions, and actions. Set up welcome messages, follow-ups, appointment reminders, and more using our visual flow builder.",
-        category: "Automation",
-      },
-      {
-        siteId: site.id,
-        channelId: insertSite.channelId || null,
-        question: "How do I manage my contact lists?",
-        answer: "You can import contacts via CSV, add them manually, or sync from your CRM. Organize contacts into groups, apply tags, and segment your audience for targeted campaigns.",
-        category: "Contacts",
-      },
-    ];
+        {
+          siteId: site.id,
+          channelId: insertSite.channelId || null,
+          question: "How do I get started with your platform?",
+          answer: "Getting started is easy! Simply create an account, connect your WhatsApp Business API, and you'll be ready to send messages and manage conversations within minutes. Our setup wizard will guide you through each step.",
+          category: "Getting Started",
+        },
+        {
+          siteId: site.id,
+          channelId: insertSite.channelId || null,
+          question: "What are your support hours?",
+          answer: "Our support team is available Monday through Friday, 9 AM to 6 PM (EST). For urgent issues outside business hours, you can reach us via email and we'll respond within 24 hours.",
+          category: "Support",
+        },
+        {
+          siteId: site.id,
+          channelId: insertSite.channelId || null,
+          question: "How can I track my campaign performance?",
+          answer: "Navigate to the Analytics dashboard to view real-time metrics including delivery rates, open rates, click-through rates, and customer engagement. You can filter by date range, campaign type, and audience segments.",
+          category: "Analytics",
+        },
+        {
+          siteId: site.id,
+          channelId: insertSite.channelId || null,
+          question: "Can I automate my WhatsApp messages?",
+          answer: "Yes! Our automation engine lets you create message flows with triggers, conditions, and actions. Set up welcome messages, follow-ups, appointment reminders, and more using our visual flow builder.",
+          category: "Automation",
+        },
+        {
+          siteId: site.id,
+          channelId: insertSite.channelId || null,
+          question: "How do I manage my contact lists?",
+          answer: "You can import contacts via CSV, add them manually, or sync from your CRM. Organize contacts into groups, apply tags, and segment your audience for targeted campaigns.",
+          category: "Contacts",
+        },
+      ];
 
       await tx.insert(trainingQaPairs).values(defaultFaqs);
 
@@ -187,29 +187,29 @@ export class DatabaseStorage implements IStorage {
 
 
   // Returns statistics of message queue
-async getMessageQueueStats(): Promise<Record<string, number>> {
-  return { queued: 0, processing: 0, sent: 0, delivered: 0, failed: 0 };
-}
+  async getMessageQueueStats(): Promise<Record<string, number>> {
+    return { queued: 0, processing: 0, sent: 0, delivered: 0, failed: 0 };
+  }
 
-// Returns queued messages
-async getQueuedMessages(limit: number = 10): Promise<MessageQueue[]> {
-  return [];
-}
+  // Returns queued messages
+  async getQueuedMessages(limit: number = 10): Promise<MessageQueue[]> {
+    return [];
+  }
 
-// Returns message queue object (stub)
-async getMessageQueue(): Promise<MessageQueue> {
-  return {} as MessageQueue;
-}
+  // Returns message queue object (stub)
+  async getMessageQueue(): Promise<MessageQueue> {
+    return {} as MessageQueue;
+  }
 
-// Logs API request
-async logApiRequest(log: InsertApiLog): Promise<ApiLog | null> {
-  return null;
-}
+  // Logs API request
+  async logApiRequest(log: InsertApiLog): Promise<ApiLog | null> {
+    return null;
+  }
 
- async getAutomationByChannel(channelId: string): Promise<{ id: string; name: string; createdAt: Date | null; updatedAt: Date | null; channelId: string | null; description: string | null; trigger: string; triggerConfig: unknown; status: string | null; executionCount: number | null; lastExecutedAt: Date | null; createdBy: string | null; }[]> {
+  async getAutomationByChannel(channelId: string): Promise<{ id: string; name: string; createdAt: Date | null; updatedAt: Date | null; channelId: string | null; description: string | null; trigger: string; triggerConfig: unknown; status: string | null; executionCount: number | null; lastExecutedAt: Date | null; createdBy: string | null; }[]> {
     // implement your logic
     return [];
-}
+  }
 
 
   async getWhatsappChannels(): Promise<WhatsappChannel[]> {
@@ -238,26 +238,26 @@ async logApiRequest(log: InsertApiLog): Promise<ApiLog | null> {
     return store;
   }
 
- async getShopifyStoreByShopDomain(
-  shopDomain: string
-): Promise<ShopifyStore | undefined> {
-  const [store] = await db
-    .select()
-    .from(shopifyStores)
-    .where(eq(shopifyStores.shopDomain, shopDomain));
+  async getShopifyStoreByShopDomain(
+    shopDomain: string
+  ): Promise<ShopifyStore | undefined> {
+    const [store] = await db
+      .select()
+      .from(shopifyStores)
+      .where(eq(shopifyStores.shopDomain, shopDomain));
 
-  return store;
-}
+    return store;
+  }
 
 
-async getShopifyStoreById(id: string) {
-  const [store] = await db
-    .select()
-    .from(shopifyStores)
-    .where(eq(shopifyStores.id, id));
+  async getShopifyStoreById(id: string) {
+    const [store] = await db
+      .select()
+      .from(shopifyStores)
+      .where(eq(shopifyStores.id, id));
 
-  return store;
-}
+    return store;
+  }
 
 
   // async getShopifyStoresByUser(
@@ -270,20 +270,20 @@ async getShopifyStoreById(id: string) {
   // }
 
   async getShopifyStoresByUser(
-  userId: string,
-  channelId: string
-): Promise<ShopifyStore[]> {
-  return await db
-    .select()
-    .from(shopifyStores)
-    .where(
-      and(
-        eq(shopifyStores.userId, userId),
-        eq(shopifyStores.channelId, channelId),
-        eq(shopifyStores.isActive, true)
-      )
-    );
-}
+    userId: string,
+    channelId: string
+  ): Promise<ShopifyStore[]> {
+    return await db
+      .select()
+      .from(shopifyStores)
+      .where(
+        and(
+          eq(shopifyStores.userId, userId),
+          eq(shopifyStores.channelId, channelId),
+          eq(shopifyStores.isActive, true)
+        )
+      );
+  }
 
   async updateShopifyStore(
     id: string,
@@ -312,202 +312,202 @@ async getShopifyStoreById(id: string) {
   }
 
   async getContactByExternalId(
-  storeId: string,
-  externalId: string
-): Promise<Contact | undefined> {
-  const [contact] = await db
-    .select()
-    .from(contacts)
-    .where(
-      and(
-        eq(contacts.storeId, storeId),
-        eq(contacts.externalId, externalId)
-      )
-    );
+    storeId: string,
+    externalId: string
+  ): Promise<Contact | undefined> {
+    const [contact] = await db
+      .select()
+      .from(contacts)
+      .where(
+        and(
+          eq(contacts.storeId, storeId),
+          eq(contacts.externalId, externalId)
+        )
+      );
 
-  return contact;
-}
-
-
-async getShopifyStoreByDomain(
-  shopDomain: string
-): Promise<ShopifyStore | undefined> {
-  const [store] = await db
-    .select()
-    .from(shopifyStores)
-    .where(
-      eq(
-        shopifyStores.shopDomain,
-        shopDomain
-      )
-    );
-
-  return store;
-}
+    return contact;
+  }
 
 
+  async getShopifyStoreByDomain(
+    shopDomain: string
+  ): Promise<ShopifyStore | undefined> {
+    const [store] = await db
+      .select()
+      .from(shopifyStores)
+      .where(
+        eq(
+          shopifyStores.shopDomain,
+          shopDomain
+        )
+      );
 
-// ==========================
-// ABANDONED CART METHODS
-// ==========================
-
-async createAbandonedCart(
-  data: InsertAbandonedCart
-): Promise<AbandonedCart> {
-  const [cart] = await db
-    .insert(abandonedCarts)
-    .values(data)
-    .returning();
-
-  return cart;
-}
+    return store;
+  }
 
 
 
-async getAbandonedCartByToken(
-  checkoutToken: string
-): Promise<AbandonedCart | undefined> {
-  const [cart] = await db
-    .select()
-    .from(abandonedCarts)
-    .where(
-      eq(
-        abandonedCarts.checkoutToken,
-        checkoutToken
-      )
-    );
+  // ==========================
+  // ABANDONED CART METHODS
+  // ==========================
 
-  return cart;
-}
+  async createAbandonedCart(
+    data: InsertAbandonedCart
+  ): Promise<AbandonedCart> {
+    const [cart] = await db
+      .insert(abandonedCarts)
+      .values(data)
+      .returning();
 
-
-
-async updateAbandonedCart(
-  id: string,
-  data: Partial<AbandonedCart>
-): Promise<AbandonedCart | undefined> {
-  const [cart] = await db
-    .update(abandonedCarts)
-    .set({
-      ...data,
-      updatedAt: new Date(),
-    })
-    .where(eq(abandonedCarts.id, id))
-    .returning();
-
-  return cart;
-}
+    return cart;
+  }
 
 
 
-async getPendingAbandonedCarts(): Promise<
-  AbandonedCart[]
-> {
-  return await db
-    .select()
-    .from(abandonedCarts)
-    .where(
-      eq(abandonedCarts.status, "pending")
-    );
-}
+  async getAbandonedCartByToken(
+    checkoutToken: string
+  ): Promise<AbandonedCart | undefined> {
+    const [cart] = await db
+      .select()
+      .from(abandonedCarts)
+      .where(
+        eq(
+          abandonedCarts.checkoutToken,
+          checkoutToken
+        )
+      );
+
+    return cart;
+  }
 
 
 
-async getAbandonedCarts(): Promise<
-  AbandonedCart[]
-> {
-  return db
-    .select()
-    .from(abandonedCarts)
-    .orderBy(
-      desc(
-        abandonedCarts.createdAt
-      )
-    );
-}
+  async updateAbandonedCart(
+    id: string,
+    data: Partial<AbandonedCart>
+  ): Promise<AbandonedCart | undefined> {
+    const [cart] = await db
+      .update(abandonedCarts)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(abandonedCarts.id, id))
+      .returning();
+
+    return cart;
+  }
+
+
+
+  async getPendingAbandonedCarts(): Promise<
+    AbandonedCart[]
+  > {
+    return await db
+      .select()
+      .from(abandonedCarts)
+      .where(
+        eq(abandonedCarts.status, "pending")
+      );
+  }
+
+
+
+  async getAbandonedCarts(): Promise<
+    AbandonedCart[]
+  > {
+    return db
+      .select()
+      .from(abandonedCarts)
+      .orderBy(
+        desc(
+          abandonedCarts.createdAt
+        )
+      );
+  }
 
 
 
 
 
-// async getAbandonedCartsWithReminders(
-//   page: number = 1,
-//   limit: number = 20
-// ) {
-//   const offset = (page - 1) * limit;
+  // async getAbandonedCartsWithReminders(
+  //   page: number = 1,
+  //   limit: number = 20
+  // ) {
+  //   const offset = (page - 1) * limit;
 
-//   const [{ count }] = await db
-//     .select({
-//       count: sql<number>`count(*)`,
-//     })
-//     .from(abandonedCarts);
+  //   const [{ count }] = await db
+  //     .select({
+  //       count: sql<number>`count(*)`,
+  //     })
+  //     .from(abandonedCarts);
 
-//   const carts = await db
-//     .select()
-//     .from(abandonedCarts)
-//     .limit(limit)
-//     .offset(offset)
-//     .orderBy(desc(abandonedCarts.createdAt));
+  //   const carts = await db
+  //     .select()
+  //     .from(abandonedCarts)
+  //     .limit(limit)
+  //     .offset(offset)
+  //     .orderBy(desc(abandonedCarts.createdAt));
 
-//   const cartIds = carts.map(c => c.id);
+  //   const cartIds = carts.map(c => c.id);
 
-//   const reminders =
-//     cartIds.length > 0
-//       ? await db
-//           .select()
-//           .from(abandonedCartReminders)
-//           .where(
-//             inArray(
-//               abandonedCartReminders.cartId,
-//               cartIds
-//             )
-//           )
-//       : [];
+  //   const reminders =
+  //     cartIds.length > 0
+  //       ? await db
+  //           .select()
+  //           .from(abandonedCartReminders)
+  //           .where(
+  //             inArray(
+  //               abandonedCartReminders.cartId,
+  //               cartIds
+  //             )
+  //           )
+  //       : [];
 
-//   return {
-//     data: carts.map(cart => ({
-//       ...cart,
-//       reminders: reminders.filter(
-//         r => r.cartId === cart.id
-//       ),
-//     })),
-//     pagination: {
-//       page,
-//       limit,
-//       total: Number(count),
-//       totalPages: Math.ceil(Number(count) / limit),
-//     },
-//   };
-// }
+  //   return {
+  //     data: carts.map(cart => ({
+  //       ...cart,
+  //       reminders: reminders.filter(
+  //         r => r.cartId === cart.id
+  //       ),
+  //     })),
+  //     pagination: {
+  //       page,
+  //       limit,
+  //       total: Number(count),
+  //       totalPages: Math.ceil(Number(count) / limit),
+  //     },
+  //   };
+  // }
 
 
-async getAbandonedCartsWithReminders(
-  channelId: string,
-  page: number = 1,
-  limit: number = 20
-) {
-  const offset = (page - 1) * limit;
+  async getAbandonedCartsWithReminders(
+    channelId: string,
+    page: number = 1,
+    limit: number = 20
+  ) {
+    const offset = (page - 1) * limit;
 
-  const [{ count }] = await db
-    .select({
-      count: sql<number>`count(*)`,
-    })
-    .from(abandonedCarts)
-    .where(eq(abandonedCarts.channelId, channelId));   // 👈 NEW
+    const [{ count }] = await db
+      .select({
+        count: sql<number>`count(*)`,
+      })
+      .from(abandonedCarts)
+      .where(eq(abandonedCarts.channelId, channelId));   // 👈 NEW
 
-  const carts = await db
-    .select()
-    .from(abandonedCarts)
-    .where(eq(abandonedCarts.channelId, channelId))    // 👈 NEW
-    .limit(limit)
-    .offset(offset)
-    .orderBy(desc(abandonedCarts.createdAt));
+    const carts = await db
+      .select()
+      .from(abandonedCarts)
+      .where(eq(abandonedCarts.channelId, channelId))    // 👈 NEW
+      .limit(limit)
+      .offset(offset)
+      .orderBy(desc(abandonedCarts.createdAt));
 
-  const cartIds = carts.map(c => c.id);
+    const cartIds = carts.map(c => c.id);
 
-  const reminders =
-    cartIds.length > 0
-      ? await db
+    const reminders =
+      cartIds.length > 0
+        ? await db
           .select()
           .from(abandonedCartReminders)
           .where(
@@ -516,535 +516,535 @@ async getAbandonedCartsWithReminders(
               cartIds
             )
           )
-      : [];
+        : [];
 
-  return {
-    data: carts.map(cart => ({
-      ...cart,
-      reminders: reminders.filter(
-        r => r.cartId === cart.id
-      ),
-    })),
-    pagination: {
-      page,
-      limit,
-      total: Number(count),
-      totalPages: Math.ceil(Number(count) / limit),
-    },
-  };
-}
+    return {
+      data: carts.map(cart => ({
+        ...cart,
+        reminders: reminders.filter(
+          r => r.cartId === cart.id
+        ),
+      })),
+      pagination: {
+        page,
+        limit,
+        total: Number(count),
+        totalPages: Math.ceil(Number(count) / limit),
+      },
+    };
+  }
 
 
-async getAbandonedCartById(
-  id: string
-): Promise<
-  AbandonedCart | undefined
-> {
-  const [cart] = await db
-    .select()
-    .from(abandonedCarts)
-    .where(
-      eq(
-        abandonedCarts.id,
-        id
+  async getAbandonedCartById(
+    id: string
+  ): Promise<
+    AbandonedCart | undefined
+  > {
+    const [cart] = await db
+      .select()
+      .from(abandonedCarts)
+      .where(
+        eq(
+          abandonedCarts.id,
+          id
+        )
+      );
+
+    return cart;
+  }
+
+
+
+  async getAutomationsByTrigger(
+    channelId: string,
+    trigger: string
+  ): Promise<Automation[]> {
+    return await db
+      .select()
+      .from(automations)
+      .where(
+        and(
+          eq(automations.channelId, channelId),
+          eq(automations.trigger, trigger),
+          eq(automations.status, "active")
+        )
+      );
+  }
+
+
+  async getAbandonedCartReminder(
+    cartId: string,
+    reminderId: string
+  ) {
+    const [row] = await db
+      .select()
+      .from(abandonedCartReminders)
+      .where(
+        and(
+          eq(abandonedCartReminders.cartId, cartId),
+          eq(abandonedCartReminders.reminderId, reminderId)
+        )
+      );
+
+    return row;
+  }
+
+
+  async getEcommerceSettings(
+    provider: string
+  ): Promise<EcommerceSettings | undefined> {
+    const [settings] = await db
+      .select()
+      .from(ecommerceSettings)
+      .where(
+        eq(
+          ecommerceSettings.provider,
+          provider
+        )
+      );
+
+    return settings;
+  }
+
+
+
+  async createEcommerceSettings(
+    data: InsertEcommerceSettings
+  ): Promise<EcommerceSettings> {
+    const [settings] = await db
+      .insert(ecommerceSettings)
+      .values(data)
+      .returning();
+
+    return settings;
+  }
+
+
+
+
+
+
+  async updateEcommerceSettings(
+    provider: string,
+    data: Partial<InsertEcommerceSettings>
+  ): Promise<EcommerceSettings | undefined> {
+    const [settings] = await db
+      .update(ecommerceSettings)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(
+        eq(
+          ecommerceSettings.provider,
+          provider
+        )
       )
-    );
+      .returning();
 
-  return cart;
-}
+    return settings;
+  }
+
+
+  async createAbandonedCartReminder(
+    reminder: InsertAbandonedCartReminder
+  ): Promise<AbandonedCartReminder> {
+    const [result] = await db
+      .insert(abandonedCartReminders)
+      .values(reminder)
+      .returning();
+
+    return result;
+  }
+
+
+  async markCartRemindersSkipped(
+    cartId: string
+  ): Promise<void> {
+    await db
+      .update(abandonedCartReminders)
+      .set({
+        status: "skipped",
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(abandonedCartReminders.cartId, cartId),
+          eq(abandonedCartReminders.status, "pending")
+        )
+      );
+  }
 
 
 
-async getAutomationsByTrigger(
-  channelId: string,
-  trigger: string
-): Promise<Automation[]> {
-  return await db
-    .select()
-    .from(automations)
-    .where(
-      and(
-        eq(automations.channelId, channelId),
-        eq(automations.trigger, trigger),
-        eq(automations.status, "active")
+
+  async createWooCommerceStore(
+    data: InsertWooCommerceStore
+  ): Promise<WooCommerceStore> {
+    const [store] = await db
+      .insert(woocommerceStores)
+      .values(data)
+      .returning();
+
+    return store;
+  }
+
+
+  async getWooCommerceStoresByUser(
+    userId: string,
+    channelId: string
+  ): Promise<WooCommerceStore[]> {
+    return await db
+      .select()
+      .from(woocommerceStores)
+      .where(
+        and(
+          eq(woocommerceStores.userId, userId),
+          eq(woocommerceStores.channelId, channelId),
+          eq(woocommerceStores.isActive, true)
+        )
+      );
+  }
+
+
+
+  async getWooCommerceStoreById(
+    id: string
+  ): Promise<WooCommerceStore | undefined> {
+    const [store] = await db
+      .select()
+      .from(woocommerceStores)
+      .where(eq(woocommerceStores.id, id));
+
+    return store;
+  }
+
+
+
+  async updateWooCommerceStore(
+    id: string,
+    data: Partial<WooCommerceStore>
+  ): Promise<WooCommerceStore | undefined> {
+    const [store] = await db
+      .update(woocommerceStores)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(woocommerceStores.id, id))
+      .returning();
+
+    return store;
+  }
+
+
+
+  async deleteWooCommerceStore(
+    id: string
+  ): Promise<boolean> {
+    await db
+      .delete(woocommerceStores)
+      .where(eq(woocommerceStores.id, id));
+
+    return true;
+  }
+
+
+
+  async findContactByPhone(channelId: string, phone: string) {
+    const normalizedPhone = phone.replace(/\D/g, "");
+
+    const [contact] = await db
+      .select()
+      .from(contacts)
+      .where(
+        and(
+          eq(contacts.channelId, channelId),
+          sql`regexp_replace(${contacts.phone}, '[^0-9]', '', 'g') = ${normalizedPhone}`
+        )
       )
-    );
-}
-
-
-async getAbandonedCartReminder(
-  cartId: string,
-  reminderId: string
-) {
-  const [row] = await db
-    .select()
-    .from(abandonedCartReminders)
-    .where(
-      and(
-        eq(abandonedCartReminders.cartId, cartId),
-        eq(abandonedCartReminders.reminderId, reminderId)
-      )
-    );
-
-  return row;
-}
-
-
-async getEcommerceSettings(
-  provider: string
-): Promise<EcommerceSettings | undefined> {
-  const [settings] = await db
-    .select()
-    .from(ecommerceSettings)
-    .where(
-      eq(
-        ecommerceSettings.provider,
-        provider
-      )
-    );
-
-  return settings;
-}
-
-
-
-async createEcommerceSettings(
-  data: InsertEcommerceSettings
-): Promise<EcommerceSettings> {
-  const [settings] = await db
-    .insert(ecommerceSettings)
-    .values(data)
-    .returning();
-
-  return settings;
-}
-
-
-
-
-
-
-async updateEcommerceSettings(
-  provider: string,
-  data: Partial<InsertEcommerceSettings>
-): Promise<EcommerceSettings | undefined> {
-  const [settings] = await db
-    .update(ecommerceSettings)
-    .set({
-      ...data,
-      updatedAt: new Date(),
-    })
-    .where(
-      eq(
-        ecommerceSettings.provider,
-        provider
-      )
-    )
-    .returning();
-
-  return settings;
-}
-
-
-async createAbandonedCartReminder(
-  reminder: InsertAbandonedCartReminder
-): Promise<AbandonedCartReminder> {
-  const [result] = await db
-    .insert(abandonedCartReminders)
-    .values(reminder)
-    .returning();
-
-  return result;
-}
-
-
-async markCartRemindersSkipped(
-  cartId: string
-): Promise<void> {
-  await db
-    .update(abandonedCartReminders)
-    .set({
-      status: "skipped",
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(abandonedCartReminders.cartId, cartId),
-        eq(abandonedCartReminders.status, "pending")
-      )
-    );
-}
-
-
-
-
-async createWooCommerceStore(
-  data: InsertWooCommerceStore
-): Promise<WooCommerceStore> {
-  const [store] = await db
-    .insert(woocommerceStores)
-    .values(data)
-    .returning();
-
-  return store;
-}
-
-
-async getWooCommerceStoresByUser(
-  userId: string,
-  channelId: string
-): Promise<WooCommerceStore[]> {
-  return await db
-    .select()
-    .from(woocommerceStores)
-    .where(
-      and(
-        eq(woocommerceStores.userId, userId),
-        eq(woocommerceStores.channelId, channelId),
-        eq(woocommerceStores.isActive, true)
-      )
-    );
-}
-
-
-
-async getWooCommerceStoreById(
-  id: string
-): Promise<WooCommerceStore | undefined> {
-  const [store] = await db
-    .select()
-    .from(woocommerceStores)
-    .where(eq(woocommerceStores.id, id));
-
-  return store;
-}
-
-
-
-async updateWooCommerceStore(
-  id: string,
-  data: Partial<WooCommerceStore>
-): Promise<WooCommerceStore | undefined> {
-  const [store] = await db
-    .update(woocommerceStores)
-    .set({
-      ...data,
-      updatedAt: new Date(),
-    })
-    .where(eq(woocommerceStores.id, id))
-    .returning();
-
-  return store;
-}
-
-
-
-async deleteWooCommerceStore(
-  id: string
-): Promise<boolean> {
-  await db
-    .delete(woocommerceStores)
-    .where(eq(woocommerceStores.id, id));
-
-  return true;
-}
-
-
-
-async findContactByPhone(channelId: string, phone: string) {
-  const normalizedPhone = phone.replace(/\D/g, "");
-
-  const [contact] = await db
-    .select()
-    .from(contacts)
-    .where(
-      and(
-        eq(contacts.channelId, channelId),
-        sql`regexp_replace(${contacts.phone}, '[^0-9]', '', 'g') = ${normalizedPhone}`
-      )
-    )
-    .limit(1);
-
-  return contact;
-}
-
-
-
-
-// async findOrCreateContact(data: {
-//   channelId: string;
-//   storeId?: string;
-//   phone: string;
-//   email?: string;
-//   name?: string;
-//   createdBy?: string;
-//   externalId?: string;
-//   source?: string;
-// }): Promise<Contact> {
-//   const {
-//     channelId,
-//     storeId,
-//     email,
-//     name,
-//     createdBy,
-//     externalId,
-//     source = "shopify"
-//   } = data;
-
-//   const phone = data.phone.replace(/\D/g, "");
-
-//   const [existing] = await db
-//     .select()
-//     .from(contacts)
-//     .where(
-//       and(
-//         eq(contacts.channelId, channelId),
-//         sql`regexp_replace(${contacts.phone}, '[^0-9]', '', 'g') = ${phone}`
-//       )
-//     )
-//     .limit(1);
-
-//   if (existing) {
-//     const existingPhone = existing.phone.replace(/\D/g, "");
-
-//     const updateData: Partial<typeof contacts.$inferInsert> = {};
-
-//     if (name && (!existing.name || existing.name !== name)) {
-//       updateData.name = name;
-//     }
-
-//     if (email && (!existing.email || existing.email !== email)) {
-//       updateData.email = email;
-//     }
-
-//     if (storeId && existing.storeId !== storeId) {
-//       updateData.storeId = storeId;
-//     }
-
-//     if (createdBy && existing.createdBy !== createdBy) {
-//       updateData.createdBy = createdBy;
-//     }
-
-//     if (externalId && existing.externalId !== externalId) {
-//       updateData.externalId = externalId;
-//     }
-
-//     if (existingPhone !== phone) {
-//       updateData.phone = phone;
-//     }
-
-//     // Always update last contact
-//     updateData.lastContact = new Date();
-
-//     if (Object.keys(updateData).length > 0) {
-//       updateData.updatedAt = new Date();
-
-//       const [updated] = await db
-//         .update(contacts)
-//         .set(updateData)
-//         .where(eq(contacts.id, existing.id))
-//         .returning();
-
-//       return updated;
-//     }
-
-//     return existing;
-//   }
-
-//   const [contact] = await db
-//     .insert(contacts)
-//     .values({
-//       channelId,
-//       storeId,
-//       name: name || phone,
-//       phone,
-//       email,
-//       source,
-//       status: "active",
-//       createdBy,
-//       externalId,
-//       lastContact: new Date(),
-//       createdAt: new Date(),
-//       updatedAt: new Date(),
-//     })
-//     .returning();
-
-//   return contact;
-// }
-
-
-
-async findOrCreateContact(data: {
-  channelId: string;
-  storeId?: string;
-  phone: string;
-  email?: string;
-  name?: string;
-  createdBy?: string;
-  externalId?: string;
-  source?: string;
-}): Promise<Contact> {
-  const { channelId, storeId, email, name, createdBy, externalId, source = "shopify" } = data;
-  const phone = data.phone.replace(/\D/g, "");
-
-  const [existing] = await db
-    .select()
-    .from(contacts)
-    .where(
-      and(
-        eq(contacts.channelId, channelId),
-        sql`(
+      .limit(1);
+
+    return contact;
+  }
+
+
+
+
+  // async findOrCreateContact(data: {
+  //   channelId: string;
+  //   storeId?: string;
+  //   phone: string;
+  //   email?: string;
+  //   name?: string;
+  //   createdBy?: string;
+  //   externalId?: string;
+  //   source?: string;
+  // }): Promise<Contact> {
+  //   const {
+  //     channelId,
+  //     storeId,
+  //     email,
+  //     name,
+  //     createdBy,
+  //     externalId,
+  //     source = "shopify"
+  //   } = data;
+
+  //   const phone = data.phone.replace(/\D/g, "");
+
+  //   const [existing] = await db
+  //     .select()
+  //     .from(contacts)
+  //     .where(
+  //       and(
+  //         eq(contacts.channelId, channelId),
+  //         sql`regexp_replace(${contacts.phone}, '[^0-9]', '', 'g') = ${phone}`
+  //       )
+  //     )
+  //     .limit(1);
+
+  //   if (existing) {
+  //     const existingPhone = existing.phone.replace(/\D/g, "");
+
+  //     const updateData: Partial<typeof contacts.$inferInsert> = {};
+
+  //     if (name && (!existing.name || existing.name !== name)) {
+  //       updateData.name = name;
+  //     }
+
+  //     if (email && (!existing.email || existing.email !== email)) {
+  //       updateData.email = email;
+  //     }
+
+  //     if (storeId && existing.storeId !== storeId) {
+  //       updateData.storeId = storeId;
+  //     }
+
+  //     if (createdBy && existing.createdBy !== createdBy) {
+  //       updateData.createdBy = createdBy;
+  //     }
+
+  //     if (externalId && existing.externalId !== externalId) {
+  //       updateData.externalId = externalId;
+  //     }
+
+  //     if (existingPhone !== phone) {
+  //       updateData.phone = phone;
+  //     }
+
+  //     // Always update last contact
+  //     updateData.lastContact = new Date();
+
+  //     if (Object.keys(updateData).length > 0) {
+  //       updateData.updatedAt = new Date();
+
+  //       const [updated] = await db
+  //         .update(contacts)
+  //         .set(updateData)
+  //         .where(eq(contacts.id, existing.id))
+  //         .returning();
+
+  //       return updated;
+  //     }
+
+  //     return existing;
+  //   }
+
+  //   const [contact] = await db
+  //     .insert(contacts)
+  //     .values({
+  //       channelId,
+  //       storeId,
+  //       name: name || phone,
+  //       phone,
+  //       email,
+  //       source,
+  //       status: "active",
+  //       createdBy,
+  //       externalId,
+  //       lastContact: new Date(),
+  //       createdAt: new Date(),
+  //       updatedAt: new Date(),
+  //     })
+  //     .returning();
+
+  //   return contact;
+  // }
+
+
+
+  async findOrCreateContact(data: {
+    channelId: string;
+    storeId?: string;
+    phone: string;
+    email?: string;
+    name?: string;
+    createdBy?: string;
+    externalId?: string;
+    source?: string;
+  }): Promise<Contact> {
+    const { channelId, storeId, email, name, createdBy, externalId, source = "shopify" } = data;
+    const phone = data.phone.replace(/\D/g, "");
+
+    const [existing] = await db
+      .select()
+      .from(contacts)
+      .where(
+        and(
+          eq(contacts.channelId, channelId),
+          sql`(
           regexp_replace(${contacts.phone}, '[^0-9]', '', 'g') = ${phone}
           OR (${email}::text IS NOT NULL AND lower(${contacts.email}) = lower(${email}))
         )`
+        )
       )
-    )
-    .limit(1);
+      .limit(1);
 
-  if (existing) {
-    const [updated] = await db
-      .update(contacts)
-      .set({
-        name: name || existing.name,
-        email: email || existing.email,
+    if (existing) {
+      const [updated] = await db
+        .update(contacts)
+        .set({
+          name: name || existing.name,
+          email: email || existing.email,
+          phone,
+          storeId: storeId || existing.storeId,
+          createdBy: createdBy || existing.createdBy,
+          externalId: externalId || existing.externalId,
+          lastContact: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(contacts.id, existing.id))
+        .returning();
+
+      return updated;
+    }
+
+    const [contact] = await db
+      .insert(contacts)
+      .values({
+        channelId,
+        storeId,
+        name: name || phone,
         phone,
-        storeId: storeId || existing.storeId,
-        createdBy: createdBy || existing.createdBy,
-        externalId: externalId || existing.externalId,
+        email,
+        source,
+        status: "active",
+        createdBy,
+        externalId,
         lastContact: new Date(),
+        createdAt: new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(contacts.id, existing.id))
       .returning();
 
-    return updated;
+    return contact;
   }
 
-  const [contact] = await db
-    .insert(contacts)
-    .values({
-      channelId,
-      storeId,
-      name: name || phone,
-      phone,
-      email,
-      source,
-      status: "active",
-      createdBy,
-      externalId,
-      lastContact: new Date(),
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .returning();
-
-  return contact;
-}
-
-async getAbandonedCartReminders(
-  cartId: string
-): Promise<AbandonedCartReminder[]> {
-  return await db
-    .select()
-    .from(abandonedCartReminders)
-    .where(
-      eq(
-        abandonedCartReminders.cartId,
-        cartId
+  async getAbandonedCartReminders(
+    cartId: string
+  ): Promise<AbandonedCartReminder[]> {
+    return await db
+      .select()
+      .from(abandonedCartReminders)
+      .where(
+        eq(
+          abandonedCartReminders.cartId,
+          cartId
+        )
       )
-    )
-    .orderBy(
-      abandonedCartReminders.scheduledAt
-    );
-}
+      .orderBy(
+        abandonedCartReminders.scheduledAt
+      );
+  }
 
 
-async getPendingAbandonedCartReminders(): Promise<
-  AbandonedCartReminder[]
-> {
-  const now = new Date();
+  async getPendingAbandonedCartReminders(): Promise<
+    AbandonedCartReminder[]
+  > {
+    const now = new Date();
 
-  console.log("NOW:", now.toISOString());
+    console.log("NOW:", now.toISOString());
 
-  const reminders = await db
-    .select()
-    .from(abandonedCartReminders)
-    .where(
-      and(
-        eq(abandonedCartReminders.status, "pending"),
-        lte(abandonedCartReminders.scheduledAt, now)
-      )
+    const reminders = await db
+      .select()
+      .from(abandonedCartReminders)
+      .where(
+        and(
+          eq(abandonedCartReminders.status, "pending"),
+          lte(abandonedCartReminders.scheduledAt, now)
+        )
+      );
+
+    console.log(
+      "Due reminders:",
+      reminders.map(r => ({
+        id: r.id,
+        scheduledAt: r.scheduledAt,
+        status: r.status,
+      }))
     );
 
-  console.log(
-    "Due reminders:",
-    reminders.map(r => ({
-      id: r.id,
-      scheduledAt: r.scheduledAt,
-      status: r.status,
-    }))
-  );
+    return reminders;
+  }
 
-  return reminders;
-}
-
-async markAbandonedCartReminderSent(
-  id: string
-): Promise<void> {
-  await db
-    .update(abandonedCartReminders)
-    .set({
-      status: "sent",
-      sentAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(eq(abandonedCartReminders.id, id));
-}
+  async markAbandonedCartReminderSent(
+    id: string
+  ): Promise<void> {
+    await db
+      .update(abandonedCartReminders)
+      .set({
+        status: "sent",
+        sentAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(abandonedCartReminders.id, id));
+  }
 
 
-async markAbandonedCartReminderSkipped(
-  id: string
-): Promise<void> {
-  await db
-    .update(abandonedCartReminders)
-    .set({
-      status: "skipped",
-      updatedAt: new Date(),
-    })
-    .where(eq(abandonedCartReminders.id, id));
-}
+  async markAbandonedCartReminderSkipped(
+    id: string
+  ): Promise<void> {
+    await db
+      .update(abandonedCartReminders)
+      .set({
+        status: "skipped",
+        updatedAt: new Date(),
+      })
+      .where(eq(abandonedCartReminders.id, id));
+  }
 
-async markAbandonedCartReminderFailed(
-  id: string,
-  error: string
-): Promise<void> {
-  await db
-    .update(abandonedCartReminders)
-    .set({
-      status: "failed",
-      error,
-      updatedAt: new Date(),
-    })
-    .where(eq(abandonedCartReminders.id, id));
-}
+  async markAbandonedCartReminderFailed(
+    id: string,
+    error: string
+  ): Promise<void> {
+    await db
+      .update(abandonedCartReminders)
+      .set({
+        status: "failed",
+        error,
+        updatedAt: new Date(),
+      })
+      .where(eq(abandonedCartReminders.id, id));
+  }
 
 
-async updateAbandonedCartReminder(
-  id: string,
-  data: Partial<AbandonedCartReminder>
-): Promise<AbandonedCartReminder | undefined> {
-  const [result] = await db
-    .update(abandonedCartReminders)
-    .set({
-      ...data,
-      updatedAt: new Date(),
-    })
-    .where(eq(abandonedCartReminders.id, id))
-    .returning();
+  async updateAbandonedCartReminder(
+    id: string,
+    data: Partial<AbandonedCartReminder>
+  ): Promise<AbandonedCartReminder | undefined> {
+    const [result] = await db
+      .update(abandonedCartReminders)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(abandonedCartReminders.id, id))
+      .returning();
 
-  return result;
-}
-  
+    return result;
+  }
+
 
   // Users
   async getUser(id: string): Promise<User | undefined> {
@@ -1054,7 +1054,7 @@ async updateAbandonedCartReminder(
   async getPermissions(id: string): Promise<string[] | undefined> {
     return this.userRepo.getByPermissions(id); // this now makes sense
   }
-  
+
 
   async getUserByUsername(username: string): Promise<User | undefined> {
     return this.userRepo.getByUsername(username);
@@ -1073,21 +1073,21 @@ async updateAbandonedCartReminder(
     return this.contactRepo.getAll();
   }
 
- 
-async getContactsByUser(
-  userId: string,
-  page: number = 1,
-  limit: number = 10,
-  filters: { group?: string; channelId?: string } = {}
-): Promise<{
-  data: Contact[];
-  total: number;
-  totalPages: number;
-  page: number;
-  limit: number;
-}> {
-  return this.contactRepo.getContactsByUserId(userId, page, limit, filters);
-}
+
+  async getContactsByUser(
+    userId: string,
+    page: number = 1,
+    limit: number = 10,
+    filters: { group?: string; channelId?: string } = {}
+  ): Promise<{
+    data: Contact[];
+    total: number;
+    totalPages: number;
+    page: number;
+    limit: number;
+  }> {
+    return this.contactRepo.getContactsByUserId(userId, page, limit, filters);
+  }
 
 
 
@@ -1131,12 +1131,12 @@ async getContactsByUser(
 
 
   async createContact(insertContact: InsertContact & { channelId?: string }): Promise<Contact> {
-  if (!insertContact.channelId) {
-    throw new Error("Cannot create contact without a channel. Please create a channel first.");
-  }
+    if (!insertContact.channelId) {
+      throw new Error("Cannot create contact without a channel. Please create a channel first.");
+    }
 
-  return this.contactRepo.create(insertContact);
-}
+    return this.contactRepo.create(insertContact);
+  }
 
 
   async updateContact(
@@ -1169,27 +1169,27 @@ async getContactsByUser(
 
   // Campaigns
   async getCampaigns(
-  page: number = 1,
-  limit: number = 10
-): Promise<{
-  data: Campaign[];
-  total: number;
-  page: number;
-  limit: number;
-}> {
-  return this.campaignRepo.getAll(page, limit);
-}
+    page: number = 1,
+    limit: number = 10
+  ): Promise<{
+    data: Campaign[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    return this.campaignRepo.getAll(page, limit);
+  }
 
 
 
 
- async getCampaignsByChannel(
-  channelId: string,
-  page: number = 1,
-  limit: number = 10
-) {
-  return this.campaignRepo.getByChannel(channelId, page, limit);
-}
+  async getCampaignsByChannel(
+    channelId: string,
+    page: number = 1,
+    limit: number = 10
+  ) {
+    return this.campaignRepo.getByChannel(channelId, page, limit);
+  }
 
 
   async getCampaign(id: string): Promise<Campaign | undefined> {
@@ -1221,14 +1221,14 @@ async getContactsByUser(
 
   async deleteCampaign(id: string): Promise<boolean> {
 
-  // delete dependent queue records first
-  await db
-    .delete(messageQueue)
-    .where(eq(messageQueue.campaignId, id));
+    // delete dependent queue records first
+    await db
+      .delete(messageQueue)
+      .where(eq(messageQueue.campaignId, id));
 
-  // then delete campaign
-  return this.campaignRepo.delete(id);
-}
+    // then delete campaign
+    return this.campaignRepo.delete(id);
+  }
   // Channels
   async getChannels(): Promise<Channel[]> {
     return this.channelRepo.getAll();
@@ -1238,26 +1238,26 @@ async getContactsByUser(
     return this.channelRepo.getById(id);
   }
 
-  
-async getChannelsByUserId(userId: string): Promise<Channel[]> {
-  return this.channelRepo.getAllByUserId(userId);
-}
+
+  async getChannelsByUserId(userId: string): Promise<Channel[]> {
+    return this.channelRepo.getAllByUserId(userId);
+  }
 
 
-async getActiveChannelByUserId(userId: string): Promise<Channel | undefined> {
-  return this.channelRepo.getActiveByUserId(userId);
-}
+  async getActiveChannelByUserId(userId: string): Promise<Channel | undefined> {
+    return this.channelRepo.getActiveByUserId(userId);
+  }
 
-   async getChannelsByUser(
-  userId: string,
-  page: number = 1,
-  limit: number = 10
-): Promise<{
-  data: Channel[];
-  pagination: { page: number; limit: number; total: number; totalPages: number };
-}> {
-  return this.channelRepo.getByUser(userId, page, limit);
-}
+  async getChannelsByUser(
+    userId: string,
+    page: number = 1,
+    limit: number = 10
+  ): Promise<{
+    data: Channel[];
+    pagination: { page: number; limit: number; total: number; totalPages: number };
+  }> {
+    return this.channelRepo.getByUser(userId, page, limit);
+  }
 
 
 
@@ -1298,76 +1298,76 @@ async getActiveChannelByUserId(userId: string): Promise<Channel | undefined> {
 
   // database-storage.ts
 
-async getTemplates(page = 1, limit = 10): Promise<{
-  data: Template[];
-  pagination: { total: number; totalPages: number; page: number; limit: number };
-}> {
-  const result = await this.templateRepo.getAll(page, limit);
-  return {
-    data: result.data,
-    pagination: result.pagination,
-  };
-}
+  async getTemplates(page = 1, limit = 10): Promise<{
+    data: Template[];
+    pagination: { total: number; totalPages: number; page: number; limit: number };
+  }> {
+    const result = await this.templateRepo.getAll(page, limit);
+    return {
+      data: result.data,
+      pagination: result.pagination,
+    };
+  }
 
 
   async getTemplatesByUserId(
-  userId: string,
-  page: number = 1,
-  limit: number = 10
-): Promise<{ data: Template[]; total: number; page: number; limit: number }> {
-  return this.templateRepo.getTemplateByUserID(userId, page, limit);
-}
-
-
-  
-async getTemplatesByChannelAndUser(channelId: string, userId: string): Promise<Template[]> {
-  const channel = await this.getChannel(channelId);
-  if (!channel || channel.createdBy !== userId) {
-    return [];
+    userId: string,
+    page: number = 1,
+    limit: number = 10
+  ): Promise<{ data: Template[]; total: number; page: number; limit: number }> {
+    return this.templateRepo.getTemplateByUserID(userId, page, limit);
   }
 
-  return await db
-    .select()
-    .from(templatesTable)
-    .where(eq(templatesTable.channelId, channelId))
-    .orderBy(desc(templatesTable.createdAt));
-}
 
 
-// in DatabaseStorage
-async getAllTemplatesByChannel(channelId: string): Promise<Template[]> {
-  return await db
-    .select()
-    .from(templatesTable)
-    .where(eq(templatesTable.channelId, channelId));
-}
+  async getTemplatesByChannelAndUser(channelId: string, userId: string): Promise<Template[]> {
+    const channel = await this.getChannel(channelId);
+    if (!channel || channel.createdBy !== userId) {
+      return [];
+    }
+
+    return await db
+      .select()
+      .from(templatesTable)
+      .where(eq(templatesTable.channelId, channelId))
+      .orderBy(desc(templatesTable.createdAt));
+  }
 
 
-  
+  // in DatabaseStorage
+  async getAllTemplatesByChannel(channelId: string): Promise<Template[]> {
+    return await db
+      .select()
+      .from(templatesTable)
+      .where(eq(templatesTable.channelId, channelId));
+  }
+
+
+
 
   async getTemplatesByChannelOLd(channelId: string): Promise<Template[]> {
     return this.templateRepo.getByChannel(channelId);
   }
 
   async getTemplatesByChannel(
-  channelId: string,
-  page: number = 1,
-  limit: number = 10
-): Promise<{ data: Template[]; total: number }> {
-  return this.templateRepo.getByChannel(channelId, page, limit);
-}
+    channelId: string,
+    page: number = 1,
+    limit: number = 10
+  ): Promise<{ data: Template[]; total: number }> {
+    return this.templateRepo.getByChannel(channelId, page, limit);
+  }
 
 
   async getTemplatesByName(name: string): Promise<Template[]> {
     const templates = await this.templateRepo.getByName(name);
-  
+
     return templates ? (Array.isArray(templates) ? templates : [templates]) : [];
   }
 
   async getTemplateByNameAndChannel(name: string, channelId: string): Promise<Template | undefined> {
     return this.templateRepo.getByNameAndChannel(name, channelId);
   }
-  
+
 
   async getTemplate(id: string): Promise<Template | undefined> {
     return this.templateRepo.getById(id);
@@ -1494,8 +1494,8 @@ async getAllTemplatesByChannel(channelId: string): Promise<Template[]> {
   }
 
   async getAutomationWithNodes(id: string) {
-  return this.automationRepo.findByIdWithNodes(id);
-}
+    return this.automationRepo.findByIdWithNodes(id);
+  }
 
   async createAutomation(
     insertAutomation: InsertAutomation
@@ -1666,18 +1666,18 @@ async getAllTemplatesByChannel(channelId: string): Promise<Template[]> {
 
     const totalBlockedUsers = ((await this.userRepo.getAll().then(users => users.filter(user => user.role === "admin" && user.status === 'blocked'))).length)
     const today = new Date();
-    today.setHours(0, 0, 0, 0); 
+    today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1); 
+    tomorrow.setDate(today.getDate() + 1);
 
     const users = await this.userRepo.getAll();
     const todaySignups = users.filter(user =>
-  user.role === "admin" &&
-  new Date(user.createdAt) >= today &&
-  new Date(user.createdAt) < tomorrow
-).length;
+      user.role === "admin" &&
+      new Date(user.createdAt) >= today &&
+      new Date(user.createdAt) < tomorrow
+    ).length;
 
-const totalChannels = await this.channelRepo.getAll()
+    const totalChannels = await this.channelRepo.getAll()
       .then((c) => c.length);
 
     const totalPaidUsers = await getActivePaidUsersCount()
@@ -1727,7 +1727,7 @@ const totalChannels = await this.channelRepo.getAll()
       totalTemplates,
       totalChannels,
       totalTeamMembers,
-      totalTemplatesByUserId:totalTemplatesByUserId.total,
+      totalTemplatesByUserId: totalTemplatesByUserId.total,
       ...messageStats,
     };
   }

@@ -64,7 +64,7 @@ const PAGE_HEADERS: Array<{ test: (path: string) => boolean; title: string; subt
   { test: (p) => p === "/campaigns" || p.startsWith("/whatsapp/campaigns"), title: "Campaigns", subtitle: "Create and manage your WhatsApp and automated calling campaigns." },
   { test: (p) => p.startsWith("/calls/"), title: "Call Details", subtitle: "Review the transcript and outcome of this call." },
   { test: (p) => p === "/calls", title: "Calls", subtitle: "Browse inbound and outbound call history." },
-  { test: (p) => p === "/analytics", title: "Analytics", subtitle: "Track voice and WhatsApp performance." },
+  { test: (p) => p.startsWith("/analytics"), title: "Analytics", subtitle: "Track WhatsApp and Auto Calling performance." },
   { test: (p) => p === "/agents", title: "Agents", subtitle: "Create and manage your voice agents." },
   { test: (p) => p === "/knowledge-base", title: "Knowledge Base", subtitle: "Upload documents your agents can use." },
   { test: (p) => p === "/voices", title: "Voice", subtitle: "Choose and preview voices for calling." },

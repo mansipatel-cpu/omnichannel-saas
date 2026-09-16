@@ -18,8 +18,8 @@ const ROUTES: Record<OmniSection, { voice: string; whatsapp: string }> = {
     whatsapp: "/whatsapp/dashboard",
   },
   analytics: {
-    voice: "/analytics",
-    whatsapp: "/whatsapp/analytics",
+    voice: "/analytics?channel=calling",
+    whatsapp: "/analytics?channel=whatsapp",
   },
 };
 
@@ -89,7 +89,15 @@ export function ChannelToggle({
 export function OmniChannelSwitch({ section }: { section: OmniSection }) {
   const path = useAppPath();
   const routes = ROUTES[section];
-  const isWhatsApp = path.startsWith("/whatsapp");
+  const channelParam =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("channel")
+      : null;
+
+  const activeIsWhatsApp =
+    section === "analytics"
+      ? (channelParam || "whatsapp") !== "calling"
+      : path.startsWith("/whatsapp");
 
   return (
     <div className={switchClass} data-testid={`omni-channel-switch-${section}`}>
@@ -97,7 +105,7 @@ export function OmniChannelSwitch({ section }: { section: OmniSection }) {
         href={`~${routes.voice}`}
         className={cn(
           tabClass,
-          !isWhatsApp
+          !activeIsWhatsApp
             ? "bg-background text-foreground shadow-sm"
             : "text-muted-foreground hover:text-foreground",
         )}
@@ -109,7 +117,7 @@ export function OmniChannelSwitch({ section }: { section: OmniSection }) {
         href={`~${routes.whatsapp}`}
         className={cn(
           tabClass,
-          isWhatsApp
+          activeIsWhatsApp
             ? "bg-background text-foreground shadow-sm"
             : "text-muted-foreground hover:text-foreground",
         )}

@@ -7,7 +7,6 @@ import Inbox from "@wa/pages/inbox";
 import Contacts from "@wa/pages/contacts/Contacts";
 import Campaigns from "@wa/pages/campaigns";
 import Automations from "@wa/pages/automations";
-import Analytics from "@wa/pages/analytics";
 import Dashboard from "@wa/pages/dashboard";
 import Settings from "@wa/pages/settings";
 import Team from "@wa/pages/team";
@@ -32,7 +31,6 @@ import AutoResponses from "@wa/pages/AutoResponses";
 import MultiNumber from "@wa/pages/MultiNumber";
 import QRCodes from "@wa/pages/QRCodes";
 import Segmentation from "@wa/pages/Segmentation";
-import CampaignAnalytics from "@wa/pages/campaign-analytics";
 import NotFound from "@wa/pages/not-found";
 
 function WhatsAppRoutes() {
@@ -47,8 +45,12 @@ function WhatsAppRoutes() {
       <Route path="/templates/new">{() => <Redirect to="~/templates/new" />}</Route>
       <Route path="/templates">{() => <Redirect to="~/templates" />}</Route>
       <Route path="/automation" component={Automations} />
-      <Route path="/analytics/campaign/:campaignId" component={CampaignAnalytics} />
-      <Route path="/analytics" component={Analytics} />
+      <Route path="/analytics/campaign/:campaignId">
+        <Redirect to="~/analytics?channel=whatsapp" />
+      </Route>
+      <Route path="/analytics">
+        <Redirect to="~/analytics?channel=whatsapp" />
+      </Route>
       <Route path="/team" component={Team} />
       <Route path="/groups" component={GroupsUI} />
       <Route path="/chatbot-builder" component={ChatbotBuilder} />

@@ -207,7 +207,7 @@ export interface IStorage {
 
 
 
-   // SHOPIFY
+  // SHOPIFY
   createShopifyStore(
     data: InsertShopifyStore
   ): Promise<ShopifyStore>;
@@ -220,10 +220,10 @@ export interface IStorage {
     id: string
   ): Promise<ShopifyStore | undefined>;
 
- getShopifyStoresByUser(
-  userId: string,
-  channelId: string
-): Promise<ShopifyStore[]>;
+  getShopifyStoresByUser(
+    userId: string,
+    channelId: string
+  ): Promise<ShopifyStore[]>;
 
   updateShopifyStore(
     id: string,
@@ -235,148 +235,148 @@ export interface IStorage {
   ): Promise<boolean>;
 
   getContactByExternalId(
-  storeId: string,
-  externalId: string
-): Promise<Contact | undefined>;
+    storeId: string,
+    externalId: string
+  ): Promise<Contact | undefined>;
 
-getShopifyStoreByDomain(
-  shopDomain: string
-): Promise<ShopifyStore | undefined>;
-
-
-
-// SHOPIFY ABANDONED CARTS
-
-createAbandonedCart(
-  data: InsertAbandonedCart
-): Promise<AbandonedCart>;
-
-getAbandonedCartByToken(
-  checkoutToken: string
-): Promise<AbandonedCart | undefined>;
-
-updateAbandonedCart(
-  id: string,
-  data: Partial<AbandonedCart>
-): Promise<AbandonedCart | undefined>;
-
-getPendingAbandonedCarts(): Promise<
-  AbandonedCart[]
->;
-
-getAbandonedCarts(): Promise<
-  AbandonedCart[]
->;
-
-getAbandonedCartReminders(
-  cartId: string
-): Promise<AbandonedCartReminder[]>;
-
-getAbandonedCartById(
-  id: string
-): Promise<
-  AbandonedCart | undefined
->;
-
-// getAutomationsByTrigger(
-//   trigger: string
-// ): Promise<Automation[]>;
-
-
-getEcommerceSettings(
-  provider: string
-): Promise<EcommerceSettings | undefined>;
-
-createEcommerceSettings(
-  data: InsertEcommerceSettings
-): Promise<EcommerceSettings>;
-
-updateEcommerceSettings(
-  provider: string,
-  data: Partial<InsertEcommerceSettings>
-): Promise<EcommerceSettings | undefined>;
-
-
-createAbandonedCartReminder(
-  reminder: InsertAbandonedCartReminder
-): Promise<AbandonedCartReminder>;
-
-getPendingAbandonedCartReminders(): Promise<
-  AbandonedCartReminder[]
->;
-
-markAbandonedCartReminderSent(
-  id: string
-): Promise<void>;
-
-markAbandonedCartReminderSkipped(
-  id: string
-): Promise<void>;
-
-markCartRemindersSkipped(
-  cartId: string
-): Promise<void>;
-
-markAbandonedCartReminderFailed(
-  id: string,
-  error: string
-): Promise<void>;
-
-updateAbandonedCartReminder(
-  id: string,
-  data: Partial<AbandonedCartReminder>
-): Promise<AbandonedCartReminder | undefined>;
-
-getAbandonedCartReminder(
-  cartId: string,
-  reminderId: string
-): Promise<AbandonedCartReminder | undefined>;
-
-getAutomationsByTrigger(
-  channelId: string,
-  trigger: string
-): Promise<Automation[]>;
+  getShopifyStoreByDomain(
+    shopDomain: string
+  ): Promise<ShopifyStore | undefined>;
 
 
 
+  // SHOPIFY ABANDONED CARTS
 
-createWooCommerceStore(
-  data: InsertWooCommerceStore
-): Promise<WooCommerceStore>;
+  createAbandonedCart(
+    data: InsertAbandonedCart
+  ): Promise<AbandonedCart>;
 
-getWooCommerceStoresByUser(
-  userId: string,
-  channelId: string
-): Promise<WooCommerceStore[]>;
+  getAbandonedCartByToken(
+    checkoutToken: string
+  ): Promise<AbandonedCart | undefined>;
 
-getWooCommerceStoreById(
-  id: string
-): Promise<WooCommerceStore | undefined>;
+  updateAbandonedCart(
+    id: string,
+    data: Partial<AbandonedCart>
+  ): Promise<AbandonedCart | undefined>;
 
-updateWooCommerceStore(
-  id: string,
-  data: Partial<WooCommerceStore>
-): Promise<WooCommerceStore | undefined>;
+  getPendingAbandonedCarts(): Promise<
+    AbandonedCart[]
+  >;
 
-deleteWooCommerceStore(
-  id: string
-): Promise<boolean>;
+  getAbandonedCarts(): Promise<
+    AbandonedCart[]
+  >;
+
+  getAbandonedCartReminders(
+    cartId: string
+  ): Promise<AbandonedCartReminder[]>;
+
+  getAbandonedCartById(
+    id: string
+  ): Promise<
+    AbandonedCart | undefined
+  >;
+
+  // getAutomationsByTrigger(
+  //   trigger: string
+  // ): Promise<Automation[]>;
+
+
+  getEcommerceSettings(
+    provider: string
+  ): Promise<EcommerceSettings | undefined>;
+
+  createEcommerceSettings(
+    data: InsertEcommerceSettings
+  ): Promise<EcommerceSettings>;
+
+  updateEcommerceSettings(
+    provider: string,
+    data: Partial<InsertEcommerceSettings>
+  ): Promise<EcommerceSettings | undefined>;
+
+
+  createAbandonedCartReminder(
+    reminder: InsertAbandonedCartReminder
+  ): Promise<AbandonedCartReminder>;
+
+  getPendingAbandonedCartReminders(): Promise<
+    AbandonedCartReminder[]
+  >;
+
+  markAbandonedCartReminderSent(
+    id: string
+  ): Promise<void>;
+
+  markAbandonedCartReminderSkipped(
+    id: string
+  ): Promise<void>;
+
+  markCartRemindersSkipped(
+    cartId: string
+  ): Promise<void>;
+
+  markAbandonedCartReminderFailed(
+    id: string,
+    error: string
+  ): Promise<void>;
+
+  updateAbandonedCartReminder(
+    id: string,
+    data: Partial<AbandonedCartReminder>
+  ): Promise<AbandonedCartReminder | undefined>;
+
+  getAbandonedCartReminder(
+    cartId: string,
+    reminderId: string
+  ): Promise<AbandonedCartReminder | undefined>;
+
+  getAutomationsByTrigger(
+    channelId: string,
+    trigger: string
+  ): Promise<Automation[]>;
 
 
 
-findOrCreateContact(data: {
-  channelId: string;
-  phone: string;
-  email?: string;
-  name?: string;
-  createdBy?: string;
-  externalId?: string;
-}): Promise<Contact>;
 
-getAutomationWithNodes(
-  id: string
-): Promise<any>;
-  
+  createWooCommerceStore(
+    data: InsertWooCommerceStore
+  ): Promise<WooCommerceStore>;
+
+  getWooCommerceStoresByUser(
+    userId: string,
+    channelId: string
+  ): Promise<WooCommerceStore[]>;
+
+  getWooCommerceStoreById(
+    id: string
+  ): Promise<WooCommerceStore | undefined>;
+
+  updateWooCommerceStore(
+    id: string,
+    data: Partial<WooCommerceStore>
+  ): Promise<WooCommerceStore | undefined>;
+
+  deleteWooCommerceStore(
+    id: string
+  ): Promise<boolean>;
+
+
+
+  findOrCreateContact(data: {
+    channelId: string;
+    phone: string;
+    email?: string;
+    name?: string;
+    createdBy?: string;
+    externalId?: string;
+  }): Promise<Contact>;
+
+  getAutomationWithNodes(
+    id: string
+  ): Promise<any>;
+
 }
 
 export class MemStorage implements IStorage {
@@ -1284,7 +1284,7 @@ export class MemStorage implements IStorage {
     }
   }
 
-  
+
 }
 
 // export const storage = new MemStorage();

@@ -100,6 +100,9 @@ function pathMatches(location: string, url: string) {
   if (url === "/contacts") {
     return location === "/contacts" || location.startsWith("/contacts/");
   }
+  if (url === "/analytics") {
+    return location === "/analytics" || location.startsWith("/analytics") || location.startsWith("/whatsapp/analytics");
+  }
   if (url === "/templates") {
     return location === "/templates" || location.startsWith("/templates/") || location.startsWith("/whatsapp/templates") || location === "/prompt-templates";
   }
