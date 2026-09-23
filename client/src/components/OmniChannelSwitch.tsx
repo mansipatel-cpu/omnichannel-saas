@@ -2,17 +2,9 @@ import { Link, useLocation } from "wouter";
 import { Phone, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type OmniSection = "contacts" | "campaigns" | "dashboard" | "analytics";
+export type OmniSection = "dashboard" | "analytics";
 
 const ROUTES: Record<OmniSection, { voice: string; whatsapp: string }> = {
-  contacts: {
-    voice: "/contacts",
-    whatsapp: "/whatsapp/contacts",
-  },
-  campaigns: {
-    voice: "/campaigns",
-    whatsapp: "/whatsapp/campaigns",
-  },
   dashboard: {
     voice: "/dashboard",
     whatsapp: "/whatsapp/dashboard",

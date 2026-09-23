@@ -30,7 +30,6 @@ import NotFound from "@wa/pages/not-found";
 import LoginPage from "@wa/pages/login";
 import Dashboard from "@wa/pages/dashboard";
 import Contacts from "@wa/pages/contacts";
-import Campaigns from "@wa/pages/campaigns";
 import Inbox from "@wa/pages/inbox";
 import Automations from "@wa/pages/automations";
 import Analytics from "@wa/pages/analytics";
@@ -115,7 +114,6 @@ const ROUTE_PERMISSIONS: Record<string, string> = {
   "/contacts": "contacts.view",
   "/users": "",
   "/channels-management": "",
-  "/campaigns": "campaigns.view",
   "/templates": "templates.view",
   "/inbox": "inbox.view",
   "/plans": "",
@@ -349,10 +347,7 @@ function ProtectedRoutes() {
             />
           </Route>
           <Route path="/campaigns">
-            <PermissionRoute
-              component={Campaigns}
-              requiredPermission="campaigns:view"
-            />
+            {() => <Redirect to="~/campaigns" />}
           </Route>
           <Route path="/templates/agentlab/new">
             {() => <Redirect to="~/templates/agentlab/new" />}

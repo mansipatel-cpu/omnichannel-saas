@@ -22,34 +22,19 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  Plus, 
-  Search, 
-  Edit, 
-  Trash2, 
-  FileText, 
-  Users, 
-  Sparkles, 
-  Copy, 
-  Check, 
-  Globe, 
-  Megaphone,
-  Calendar,
-  MessageSquare,
-  Shield,
+import {
+  Search,
+  Sparkles,
+  CheckCircle2,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  BookOpen,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface PromptTemplate {
   id: string;
@@ -69,133 +54,66 @@ interface PromptTemplate {
 }
 
 interface PromptTemplatesLibraryProps {
-  onSelectTemplate?: (template: { 
-    systemPrompt: string; 
+  onSelectTemplate?: (template: {
+    systemPrompt: string;
     firstMessage?: string;
     suggestedVoiceTone?: string;
     suggestedPersonality?: string;
   }) => void;
-  mode?: 'browse' | 'select';
+  /** @deprecated Always select-only; kept for call-site compatibility */
+  mode?: "browse" | "select";
 }
 
 const CATEGORIES = [
-  { value: 'all', label: 'All Templates', icon: FileText, color: 'text-slate-500' },
-  { value: 'agent_preset', label: 'Agent Presets', icon: Sparkles, color: 'text-indigo-500' },
-  { value: 'sales', label: 'Sales', icon: Megaphone, color: 'text-emerald-500' },
-  { value: 'support', label: 'Support', icon: Users, color: 'text-blue-500' },
-  { value: 'appointment', label: 'Appointment', icon: Calendar, color: 'text-purple-500' },
-  { value: 'survey', label: 'Survey', icon: MessageSquare, color: 'text-amber-500' },
-  { value: 'general', label: 'General', icon: Globe, color: 'text-slate-500' },
+  { value: "all", label: "All Templates" },
+  { value: "agent_preset", label: "Agent Presets" },
+  { value: "sales", label: "Sales" },
+  { value: "support", label: "Support" },
+  { value: "appointment", label: "Appointment" },
+  { value: "survey", label: "Survey" },
+  { value: "general", label: "General" },
 ];
-
-const getCategoryColor = (category: string) => {
-  const colors: Record<string, string> = {
-    agent_preset: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20',
-    sales: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
-    support: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
-    appointment: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
-    survey: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
-    general: 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20',
-  };
-  return colors[category] || colors.general;
-};
 
 const ITEMS_PER_PAGE = 6;
 
-export default function PromptTemplatesLibrary({ onSelectTemplate, mode = 'browse' }: PromptTemplatesLibraryProps) {
+export default function PromptTemplatesLibrary({
+  onSelectTemplate,
+}: PromptTemplatesLibraryProps) {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("all");
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState<PromptTemplate | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState("agent_preset");
   const [variableDialogOpen, setVariableDialogOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<PromptTemplate | null>(null);
   const [variableValues, setVariableValues] = useState<Record<string, string>>({});
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [templateToDelete, setTemplateToDelete] = useState<PromptTemplate | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
 
   const { data: templates = [], isLoading } = useQuery<PromptTemplate[]>({
-    queryKey: ['/api/prompt-templates', selectedCategory],
+    queryKey: ["/api/prompt-templates"],
     queryFn: async () => {
-      const url = selectedCategory === 'all' 
-        ? '/api/prompt-templates' 
-        : `/api/prompt-templates?category=${selectedCategory}`;
       const headers: Record<string, string> = {};
       const authHeader = AuthStorage.getAuthHeader();
       if (authHeader) {
-        headers['Authorization'] = authHeader;
+        headers["Authorization"] = authHeader;
       }
-      const res = await fetch(url, { headers });
-      if (!res.ok) throw new Error('Failed to fetch templates');
+      const res = await fetch("/api/prompt-templates", { headers });
+      if (!res.ok) throw new Error("Failed to fetch templates");
       return res.json();
     },
   });
-
-  const createMutation = useMutation({
-    mutationFn: async (data: Partial<PromptTemplate>) => {
-      const res = await apiRequest('POST', '/api/prompt-templates', data);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/prompt-templates'] });
-      setCreateDialogOpen(false);
-      toast({ title: "Template created successfully" });
-    },
-    onError: (error: any) => {
-      toast({ title: "Failed to create template", description: error.message, variant: "destructive" });
-    }
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<PromptTemplate> }) => {
-      const res = await apiRequest('PATCH', `/api/prompt-templates/${id}`, data);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/prompt-templates'] });
-      setEditingTemplate(null);
-      toast({ title: "Template updated successfully" });
-    },
-    onError: (error: any) => {
-      toast({ title: "Failed to update template", description: error.message, variant: "destructive" });
-    }
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await apiRequest('DELETE', `/api/prompt-templates/${id}`);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/prompt-templates'] });
-      setDeleteDialogOpen(false);
-      setTemplateToDelete(null);
-      toast({ title: "Template deleted successfully" });
-    },
-    onError: (error: any) => {
-      toast({ title: "Failed to delete template", description: error.message, variant: "destructive" });
-    }
-  });
-
-  const handleDeleteClick = (template: PromptTemplate) => {
-    setTemplateToDelete(template);
-    setDeleteDialogOpen(true);
-  };
-
-  const confirmDelete = () => {
-    if (templateToDelete) {
-      deleteMutation.mutate(templateToDelete.id);
-    }
-  };
 
   const useMutation_template = useMutation({
-    mutationFn: async ({ id, variableValues }: { id: string; variableValues: Record<string, string> }) => {
-      const res = await apiRequest('POST', `/api/prompt-templates/${id}/use`, { variableValues });
+    mutationFn: async ({
+      id,
+      variableValues,
+    }: {
+      id: string;
+      variableValues: Record<string, string>;
+    }) => {
+      const res = await apiRequest("POST", `/api/prompt-templates/${id}/use`, { variableValues });
       return res.json();
     },
     onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/prompt-templates'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/prompt-templates"] });
       if (onSelectTemplate) {
         onSelectTemplate({
           systemPrompt: data.systemPrompt,
@@ -210,23 +128,27 @@ export default function PromptTemplatesLibrary({ onSelectTemplate, mode = 'brows
       toast({ title: "Template applied successfully" });
     },
     onError: (error: any) => {
-      toast({ title: "Failed to apply template", description: error.message, variant: "destructive" });
-    }
+      toast({
+        title: "Failed to apply template",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
-  const filteredTemplates = templates.filter(t => {
-    const matchesSearch = !searchQuery || 
+  const filteredTemplates = templates.filter((t) => {
+    const matchesCategory = selectedCategory === "all" || t.category === selectedCategory;
+    const matchesSearch =
+      !searchQuery ||
       t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       t.description?.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
+    return matchesCategory && matchesSearch;
   });
 
-  // Pagination calculations
   const totalPages = Math.ceil(filteredTemplates.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const paginatedTemplates = filteredTemplates.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
-  // Reset to page 1 when search or category changes
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
     setCurrentPage(1);
@@ -247,252 +169,182 @@ export default function PromptTemplatesLibrary({ onSelectTemplate, mode = 'brows
     }
   };
 
-  const getCategoryIcon = (category: string) => {
-    const cat = CATEGORIES.find(c => c.value === category);
-    return cat?.icon || FileText;
-  };
-
   return (
-    <div className="space-y-6">
-      {/* Header Section */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+    <div className="space-y-5">
+      <div className="flex flex-col xl:flex-row xl:items-center gap-3">
+        <div className="relative w-full xl:max-w-xs shrink-0">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
-            placeholder="Search templates by name or description..."
+            placeholder="Search templates by name..."
             value={searchQuery}
             onChange={(e) => handleSearchChange(e.target.value)}
-            className="pl-10 h-11"
+            className="pl-10 h-10 rounded-lg border-slate-200 bg-white"
             data-testid="input-template-search"
           />
         </div>
-        {mode === 'browse' && (
-          <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="h-11 shrink-0" data-testid="button-create-template">
-                <Plus className="h-4 w-4 mr-2" />
-                New Template
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col p-0">
-              <div className="flex flex-col flex-1 overflow-hidden">
-                <TemplateForm 
-                  onSubmit={(data) => createMutation.mutate(data)}
-                  isLoading={createMutation.isPending}
-                />
-              </div>
-            </DialogContent>
-          </Dialog>
-        )}
+
+        <div className="flex flex-wrap items-center gap-2 flex-1">
+          {CATEGORIES.filter((cat) => cat.value !== "general").map((cat) => {
+            const active = selectedCategory === cat.value;
+            return (
+              <button
+                key={cat.value}
+                type="button"
+                onClick={() => handleCategoryChange(cat.value)}
+                data-testid={`tab-category-${cat.value}`}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors border",
+                  active
+                    ? "bg-[#2F6BFF] text-white border-[#2F6BFF] shadow-sm"
+                    : "bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50",
+                )}
+              >
+                {cat.value === "agent_preset" && (
+                  <Sparkles className={cn("h-3.5 w-3.5", active ? "text-white" : "text-[#2F6BFF]")} />
+                )}
+                {cat.value === "all" ? `All Templates (${templates.length})` : cat.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Category Tabs - Single Row */}
-      <Tabs value={selectedCategory} onValueChange={handleCategoryChange}>
-        <TabsList className="w-full h-auto p-1 flex flex-nowrap gap-1 bg-muted/50 overflow-x-auto">
-          {CATEGORIES.map((cat) => (
-            <TabsTrigger 
-              key={cat.value} 
-              value={cat.value} 
-              className="flex items-center gap-1.5 px-3 py-1.5 shrink-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
-              data-testid={`tab-category-${cat.value}`}
-            >
-              <cat.icon className={`h-3.5 w-3.5 ${cat.color}`} />
-              <span className="text-xs font-medium whitespace-nowrap">{cat.label}</span>
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
-
-      {/* Templates Grid */}
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <Card key={i} className="overflow-hidden">
-              <CardHeader className="p-3 space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <Skeleton className="h-4 w-32" />
-                  <Skeleton className="h-5 w-16" />
-                </div>
-                <Skeleton className="h-3 w-full" />
+            <Card key={i} className="overflow-hidden rounded-xl border-slate-200">
+              <CardHeader className="p-4 space-y-2">
+                <Skeleton className="h-5 w-24" />
+                <Skeleton className="h-5 w-40" />
+                <Skeleton className="h-12 w-full" />
               </CardHeader>
-              <CardContent className="p-3 pt-0">
-                <Skeleton className="h-16 w-full rounded" />
-                <div className="flex gap-1.5 mt-2">
-                  <Skeleton className="h-4 w-20" />
-                  <Skeleton className="h-4 w-16" />
-                </div>
-              </CardContent>
-              <CardFooter className="p-2 border-t">
-                <Skeleton className="h-4 w-16" />
+              <CardFooter className="p-4 pt-0">
+                <Skeleton className="h-10 w-full" />
               </CardFooter>
             </Card>
           ))}
         </div>
       ) : filteredTemplates.length === 0 ? (
-        <Card className="border-dashed">
+        <Card className="border-dashed border-slate-200 rounded-xl">
           <CardContent className="flex flex-col items-center justify-center py-16">
-            <div className="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center mb-4">
-              <FileText className="h-8 w-8 text-muted-foreground" />
+            <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+              <BookOpen className="h-8 w-8 text-slate-400" />
             </div>
-            <h3 className="text-lg font-semibold mb-1">
+            <h3 className="text-lg font-semibold text-slate-900 mb-1">
               {searchQuery ? "No templates found" : "No templates available"}
             </h3>
-            <p className="text-sm text-muted-foreground text-center max-w-sm mb-6">
-              {searchQuery 
-                ? "Try adjusting your search query or browse different categories" 
-                : "Get started by creating your first prompt template"}
+            <p className="text-sm text-slate-500 text-center max-w-sm">
+              {searchQuery
+                ? "Try adjusting your search query or browse different categories"
+                : "Manage templates from the Templates page"}
             </p>
-            {mode === 'browse' && !searchQuery && (
-              <Button onClick={() => setCreateDialogOpen(true)} data-testid="button-create-first-template">
-                <Plus className="h-4 w-4 mr-2" />
-                Create Your First Template
-              </Button>
-            )}
           </CardContent>
         </Card>
       ) : (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {paginatedTemplates.map((template) => {
-              const CategoryIcon = getCategoryIcon(template.category);
+              const styleParts = [template.suggestedVoiceTone, template.suggestedPersonality].filter(
+                Boolean,
+              );
+              const styleText = styleParts.length ? styleParts.join(", ") : null;
+
               return (
-                <Card 
-                  key={template.id} 
-                  className="group overflow-hidden hover-elevate transition-all duration-200" 
+                <Card
+                  key={template.id}
+                  className="group flex flex-col overflow-hidden rounded-xl border-slate-200 shadow-sm hover:shadow-md transition-shadow"
                   data-testid={`card-template-${template.id}`}
                 >
-                  <CardHeader className="p-3 pb-2">
+                  <CardHeader className="p-4 pb-2 space-y-2">
                     <div className="flex items-start justify-between gap-2">
-                      <CardTitle className="text-sm font-semibold leading-tight truncate flex-1">
-                        {template.name}
-                      </CardTitle>
-                      <div className="flex flex-col items-end gap-1 shrink-0">
-                        <Badge 
-                          variant="outline" 
-                          className={`text-[10px] px-1.5 py-0 font-medium border ${getCategoryColor(template.category)}`}
+                      <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] px-1.5 py-0 font-medium rounded-md bg-slate-100 text-slate-600 border-slate-200"
                         >
-                          <CategoryIcon className="h-2.5 w-2.5 mr-0.5" />
                           {template.category}
                         </Badge>
                         {template.isSystemTemplate && (
-                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                            <Shield className="h-2.5 w-2.5 mr-0.5" />
+                          <Badge className="text-[10px] px-1.5 py-0 font-medium rounded-md bg-[#2F6BFF]/10 text-[#2F6BFF] border-0 hover:bg-[#2F6BFF]/10">
                             System
                           </Badge>
                         )}
                       </div>
+                      <span className="text-[11px] text-slate-400 shrink-0">
+                        {template.usageCount}x used
+                      </span>
                     </div>
-                    <CardDescription className="text-xs line-clamp-1 mt-1">
-                      {template.description || "No description"}
+
+                    <CardTitle className="text-[15px] font-semibold leading-snug text-slate-900">
+                      {template.name}
+                    </CardTitle>
+                    <CardDescription className="text-sm text-slate-500 leading-relaxed line-clamp-3">
+                      {template.description ||
+                        template.systemPrompt.substring(0, 140) +
+                          (template.systemPrompt.length > 140 ? "..." : "")}
                     </CardDescription>
                   </CardHeader>
-                  
-                  <CardContent className="p-3 pt-0">
-                    <div className="bg-muted/40 dark:bg-muted/20 rounded p-2 border border-border/50">
-                      <p className="text-[10px] text-muted-foreground font-mono leading-relaxed line-clamp-3">
-                        {template.systemPrompt.substring(0, 120)}
-                        {template.systemPrompt.length > 120 && '...'}
-                      </p>
-                    </div>
-                    
+
+                  <CardContent className="p-4 pt-2 space-y-2.5 flex-1">
                     {template.variables && template.variables.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        <span className="text-[10px] text-muted-foreground">Variables:</span>
-                        {template.variables.slice(0, 2).map((v) => (
-                          <Badge 
-                            key={v} 
-                            variant="outline" 
-                            className="text-[10px] px-1 py-0 font-mono bg-primary/5 border-primary/20 text-primary"
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-xs font-semibold text-slate-800">Variables:</span>
+                        {template.variables.slice(0, 3).map((v) => (
+                          <Badge
+                            key={v}
+                            variant="outline"
+                            className="text-[11px] px-1.5 py-0 font-mono rounded-md bg-slate-50 text-slate-600 border-slate-200"
                           >
                             {`{{${v}}}`}
                           </Badge>
                         ))}
-                        {template.variables.length > 2 && (
-                          <Badge variant="outline" className="text-[10px] px-1 py-0">
-                            +{template.variables.length - 2} more
+                        {template.variables.length > 3 && (
+                          <Badge variant="outline" className="text-[11px] px-1.5 py-0 rounded-md">
+                            +{template.variables.length - 3}
                           </Badge>
                         )}
                       </div>
                     )}
 
-                    {template.suggestedVoiceTone && (
-                      <div className="flex items-center gap-1 mt-2 text-[10px] text-muted-foreground">
-                        <Sparkles className="h-2.5 w-2.5" />
-                        <span className="truncate">{template.suggestedVoiceTone}</span>
+                    {styleText && (
+                      <div className="text-sm text-slate-600">
+                        <span className="font-semibold text-slate-800">Style:</span>{" "}
+                        <span>{styleText}</span>
                       </div>
                     )}
                   </CardContent>
-                  
-                  <CardFooter className="flex justify-between items-center p-2 border-t bg-muted/20">
-                    <span className="text-[10px] text-muted-foreground">
-                      {template.usageCount}x used
-                    </span>
-                    <div className="flex gap-0.5">
-                      {mode === 'select' && onSelectTemplate && (
-                        <Button 
-                          size="sm" 
-                          className="h-7 text-xs px-2"
-                          onClick={() => handleSelectTemplate(template)}
-                          data-testid={`button-use-template-${template.id}`}
-                        >
-                          <Check className="h-3 w-3 mr-1" />
-                          Use
-                        </Button>
-                      )}
-                      {mode === 'browse' && !template.isSystemTemplate && (
-                        <>
-                          <Button 
-                            size="icon" 
-                            variant="ghost"
-                            className="h-7 w-7"
-                            onClick={() => setEditingTemplate(template)}
-                            data-testid={`button-edit-template-${template.id}`}
-                          >
-                            <Edit className="h-3 w-3" />
-                          </Button>
-                          <Button 
-                            size="icon" 
-                            variant="ghost"
-                            className="h-7 w-7 text-destructive hover:text-destructive"
-                            onClick={() => handleDeleteClick(template)}
-                            data-testid={`button-delete-template-${template.id}`}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </>
-                      )}
-                      {mode === 'browse' && (
-                        <Button 
-                          size="icon" 
-                          variant="ghost"
-                          className="h-7 w-7"
-                          onClick={() => {
-                            navigator.clipboard.writeText(template.systemPrompt);
-                            toast({ title: "Copied to clipboard" });
-                          }}
-                          data-testid={`button-copy-template-${template.id}`}
-                        >
-                          <Copy className="h-3 w-3" />
-                        </Button>
-                      )}
-                    </div>
+
+                  <CardFooter className="p-4 pt-0 flex flex-col gap-2">
+                    {onSelectTemplate && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full h-10 rounded-lg border-slate-200 text-slate-800 hover:bg-slate-50 hover:text-slate-900 gap-2"
+                        onClick={() => handleSelectTemplate(template)}
+                        data-testid={`button-use-template-${template.id}`}
+                      >
+                        <CheckCircle2 className="h-4 w-4 text-slate-500" />
+                        Use Template
+                      </Button>
+                    )}
                   </CardFooter>
                 </Card>
               );
             })}
           </div>
 
-          {/* Pagination Controls */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between pt-4 border-t">
-              <p className="text-sm text-muted-foreground">
-                Showing {startIndex + 1}-{Math.min(startIndex + ITEMS_PER_PAGE, filteredTemplates.length)} of {filteredTemplates.length} templates
+            <div className="flex items-center justify-between pt-2">
+              <p className="text-sm text-slate-500">
+                Showing {startIndex + 1}-
+                {Math.min(startIndex + ITEMS_PER_PAGE, filteredTemplates.length)} of{" "}
+                {filteredTemplates.length} templates
               </p>
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
                   data-testid="button-prev-page"
                 >
@@ -505,7 +357,10 @@ export default function PromptTemplatesLibrary({ onSelectTemplate, mode = 'brows
                       key={page}
                       variant={currentPage === page ? "default" : "outline"}
                       size="sm"
-                      className="w-8 h-8 p-0"
+                      className={cn(
+                        "w-8 h-8 p-0",
+                        currentPage === page && "bg-[#2F6BFF] hover:bg-[#2558d9] text-white border-transparent",
+                      )}
                       onClick={() => setCurrentPage(page)}
                       data-testid={`button-page-${page}`}
                     >
@@ -516,7 +371,7 @@ export default function PromptTemplatesLibrary({ onSelectTemplate, mode = 'brows
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
                   data-testid="button-next-page"
                 >
@@ -529,27 +384,11 @@ export default function PromptTemplatesLibrary({ onSelectTemplate, mode = 'brows
         </>
       )}
 
-      {/* Edit Template Dialog */}
-      <Dialog open={!!editingTemplate} onOpenChange={(open) => !open && setEditingTemplate(null)}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col p-0">
-          <div className="flex flex-col flex-1 overflow-hidden">
-            {editingTemplate && (
-              <TemplateForm 
-                template={editingTemplate}
-                onSubmit={(data) => updateMutation.mutate({ id: editingTemplate.id, data })}
-                isLoading={updateMutation.isPending}
-              />
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Variable Input Dialog */}
       <Dialog open={variableDialogOpen} onOpenChange={setVariableDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-primary" />
+              <Sparkles className="h-5 w-5 text-[#2F6BFF]" />
               Fill in Variables
             </DialogTitle>
             <DialogDescription>
@@ -566,8 +405,10 @@ export default function PromptTemplatesLibrary({ onSelectTemplate, mode = 'brows
                   <Input
                     id={`var-${variable}`}
                     placeholder={`Enter ${variable}...`}
-                    value={variableValues[variable] || ''}
-                    onChange={(e) => setVariableValues(prev => ({ ...prev, [variable]: e.target.value }))}
+                    value={variableValues[variable] || ""}
+                    onChange={(e) =>
+                      setVariableValues((prev) => ({ ...prev, [variable]: e.target.value }))
+                    }
                     className="h-11"
                     data-testid={`input-variable-${variable}`}
                   />
@@ -579,7 +420,8 @@ export default function PromptTemplatesLibrary({ onSelectTemplate, mode = 'brows
             <Button variant="outline" onClick={() => setVariableDialogOpen(false)}>
               Cancel
             </Button>
-            <Button 
+            <Button
+              className="bg-[#2F6BFF] hover:bg-[#2558d9] text-white border-transparent"
               onClick={() => {
                 if (selectedTemplate) {
                   useMutation_template.mutate({ id: selectedTemplate.id, variableValues });
@@ -588,259 +430,11 @@ export default function PromptTemplatesLibrary({ onSelectTemplate, mode = 'brows
               disabled={useMutation_template.isPending}
               data-testid="button-apply-template"
             >
-              {useMutation_template.isPending ? 'Applying...' : 'Apply Template'}
+              {useMutation_template.isPending ? "Applying..." : "Apply Template"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={(open) => {
-        setDeleteDialogOpen(open);
-        if (!open) setTemplateToDelete(null);
-      }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Template</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete "{templateToDelete?.name}"? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-delete">
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={confirmDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={deleteMutation.isPending}
-              data-testid="button-confirm-delete"
-            >
-              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
-  );
-}
-
-interface TemplateFormProps {
-  template?: PromptTemplate;
-  onSubmit: (data: Partial<PromptTemplate>) => void;
-  isLoading?: boolean;
-}
-
-function TemplateForm({ template, onSubmit, isLoading }: TemplateFormProps) {
-  const [formData, setFormData] = useState({
-    name: template?.name || '',
-    description: template?.description || '',
-    category: template?.category || 'general',
-    systemPrompt: template?.systemPrompt || '',
-    firstMessage: template?.firstMessage || '',
-    suggestedVoiceTone: template?.suggestedVoiceTone || '',
-    suggestedPersonality: template?.suggestedPersonality || '',
-    isPublic: template?.isPublic || false,
-  });
-
-  const extractVariables = (text: string) => {
-    const matches = text.match(/\{\{(\w+)\}\}/g) || [];
-    return Array.from(new Set(matches.map(m => m.replace(/\{\{|\}\}/g, ''))));
-  };
-
-  const allVariables = [
-    ...extractVariables(formData.systemPrompt),
-    ...extractVariables(formData.firstMessage),
-  ].filter((v, i, arr) => arr.indexOf(v) === i);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSubmit(formData);
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
-      <DialogHeader className="shrink-0 px-6 pt-6 pb-4 border-b">
-        <DialogTitle className="flex items-center gap-2">
-          <FileText className="h-5 w-5 text-primary" />
-          {template ? 'Edit Template' : 'Create New Template'}
-        </DialogTitle>
-        <DialogDescription>
-          Create reusable prompt templates with variable placeholders like {`{{company}}`} or {`{{product}}`}.
-        </DialogDescription>
-      </DialogHeader>
-
-      <div className="flex-1 overflow-y-auto px-6">
-        <div className="space-y-5 py-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="name" className="text-sm font-medium">Template Name</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="e.g., Sales Pitch Template"
-                className="h-11"
-                required
-                data-testid="input-template-name"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="category" className="text-sm font-medium">Category</Label>
-              <Select value={formData.category} onValueChange={(v) => setFormData(prev => ({ ...prev, category: v }))}>
-                <SelectTrigger className="h-11" data-testid="select-template-category">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="agent_preset">
-                    <span className="flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-indigo-500" />
-                      Agent Preset
-                    </span>
-                  </SelectItem>
-                  <SelectItem value="sales">
-                    <span className="flex items-center gap-2">
-                      <Megaphone className="h-4 w-4 text-emerald-500" />
-                      Sales
-                    </span>
-                  </SelectItem>
-                  <SelectItem value="support">
-                    <span className="flex items-center gap-2">
-                      <Users className="h-4 w-4 text-blue-500" />
-                      Support
-                    </span>
-                  </SelectItem>
-                  <SelectItem value="appointment">
-                    <span className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-purple-500" />
-                      Appointment
-                    </span>
-                  </SelectItem>
-                  <SelectItem value="survey">
-                    <span className="flex items-center gap-2">
-                      <MessageSquare className="h-4 w-4 text-amber-500" />
-                      Survey
-                    </span>
-                  </SelectItem>
-                  <SelectItem value="general">
-                    <span className="flex items-center gap-2">
-                      <Globe className="h-4 w-4 text-slate-500" />
-                      General
-                    </span>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="description" className="text-sm font-medium">Description</Label>
-            <Input
-              id="description"
-              value={formData.description}
-              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              placeholder="Brief description of what this template is for..."
-              className="h-11"
-              data-testid="input-template-description"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="systemPrompt" className="text-sm font-medium">System Prompt</Label>
-            <p className="text-xs text-muted-foreground">
-              Use {`{{variableName}}`} for placeholders that will be filled in when using the template.
-            </p>
-            <Textarea
-              id="systemPrompt"
-              value={formData.systemPrompt}
-              onChange={(e) => setFormData(prev => ({ ...prev, systemPrompt: e.target.value }))}
-              placeholder={`You are a helpful sales assistant for {{company}}. Your goal is to explain the benefits of {{product}} to potential customers...`}
-              rows={8}
-              className="font-mono text-sm"
-              required
-              data-testid="textarea-template-prompt"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="firstMessage" className="text-sm font-medium">First Message (Optional)</Label>
-            <Textarea
-              id="firstMessage"
-              value={formData.firstMessage}
-              onChange={(e) => setFormData(prev => ({ ...prev, firstMessage: e.target.value }))}
-              placeholder={`Hello! Welcome to {{company}}. How can I help you today?`}
-              rows={3}
-              className="font-mono text-sm"
-              data-testid="textarea-template-first-message"
-            />
-          </div>
-
-          {allVariables.length > 0 && (
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Detected Variables</Label>
-              <div className="flex flex-wrap gap-2 p-3 bg-muted/50 rounded-lg border">
-                {allVariables.map((v) => (
-                  <Badge 
-                    key={v} 
-                    variant="outline" 
-                    className="font-mono bg-primary/5 border-primary/20 text-primary"
-                  >
-                    {`{{${v}}}`}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="suggestedVoiceTone" className="text-sm font-medium">Suggested Voice Tone</Label>
-              <Input
-                id="suggestedVoiceTone"
-                value={formData.suggestedVoiceTone}
-                onChange={(e) => setFormData(prev => ({ ...prev, suggestedVoiceTone: e.target.value }))}
-                placeholder="e.g., Professional, Friendly"
-                className="h-11"
-                data-testid="input-template-voice-tone"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="suggestedPersonality" className="text-sm font-medium">Suggested Personality</Label>
-              <Input
-                id="suggestedPersonality"
-                value={formData.suggestedPersonality}
-                onChange={(e) => setFormData(prev => ({ ...prev, suggestedPersonality: e.target.value }))}
-                placeholder="e.g., Enthusiastic, Helpful"
-                className="h-11"
-                data-testid="input-template-personality"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 p-4 rounded-lg border bg-muted/30">
-            <Switch
-              id="isPublic"
-              checked={formData.isPublic}
-              onCheckedChange={(v) => setFormData(prev => ({ ...prev, isPublic: v }))}
-              data-testid="switch-template-public"
-            />
-            <div className="space-y-0.5">
-              <Label htmlFor="isPublic" className="text-sm font-medium cursor-pointer">
-                Make this template public
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Public templates can be used by other users on the platform
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <DialogFooter className="shrink-0 px-6 py-4 border-t">
-        <Button type="submit" disabled={isLoading} className="min-w-[120px]" data-testid="button-save-template">
-          {isLoading ? 'Saving...' : template ? 'Update Template' : 'Create Template'}
-        </Button>
-      </DialogFooter>
-    </form>
   );
 }

@@ -382,7 +382,7 @@ export default function GroupsUI() {
   };
 
   const goToCampaignWithGroup = (group: GroupRow) => {
-    setLocation(`/campaigns?createWith=group:${encodeURIComponent(group.id)}`);
+    setLocation(`~/campaigns?createWith=group:${encodeURIComponent(group.id)}`);
   };
 
   return (

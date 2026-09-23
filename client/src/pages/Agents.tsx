@@ -14,7 +14,7 @@
  * Respect the author's rights and Envato licensing terms.
  * ============================================================
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -25,15 +25,13 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
-import { Plus, Search, Trash2, Edit, Bot, Upload, Sparkles, GitBranch, CheckCircle2, XCircle, Mic, Brain, Settings2, Wrench, Check, FileText, History, Info, Loader2, Video, Play } from "lucide-react";
-import { AuthStorage } from "@/lib/auth-storage";
+import { Plus, Search, Trash2, Edit, Bot, Sparkles, GitBranch, CheckCircle2, Mic, Brain, Settings2, Wrench, Check, Info, Loader2, Video, Play, FlaskConical, ArrowUpDown } from "lucide-react";
 import { useDemoMode } from "@/components/DemoModeBanner";
 import PromptTemplatesLibrary from "@/components/PromptTemplatesLibrary";
-import Voices from "@/pages/Voices";
 import AgentVersionHistory from "@/components/AgentVersionHistory";
 import { useToast } from "@/hooks/use-toast";
+import { useAppHeaderOptional } from "@/components/AppPageHeader";
 import {
   Dialog,
   DialogContent,
@@ -70,14 +68,6 @@ import { Wand2 } from "lucide-react";
 import { SUPPORTED_LANGUAGES, getLanguageLabel, isProviderSupported } from "@/lib/languages";
 import { LanguageOptionLabel } from "@/components/LanguageProviderBadges";
 import { usePluginStatus } from "@/hooks/use-plugin-status";
-
-interface SipPhoneNumber {
-  id: string;
-  phoneNumber: string;
-  label?: string;
-  trunkId: string;
-  engine: string;
-}
 
 const formatModelName = (modelName: string) => {
   if (!modelName) return '';
@@ -133,7 +123,7 @@ const openaiVoices = [
   { value: "marin", label: "Marin", description: "Fresh and lively" },
 ];
 
-export const customVoiceEngineVoices = [
+const customVoiceEngineVoices = [
   // Deepgram
   { value: "aura-asteria-en", label: "Asteria (Deepgram)", description: "English - Female", provider: "deepgram" as const },
   { value: "aura-luna-en", label: "Luna (Deepgram)", description: "English - Female", provider: "deepgram" as const },
@@ -266,47 +256,6 @@ const MODEL_COSTS: Record<string, { llm: number; name: string; speed: string }> 
 
 const VOICE_COST = 0.10; // $0.10 per minute for voice service
 
-function EstimatedCost({ model }: { model: string }) {
-  const { t } = useTranslation();
-  const modelInfo = MODEL_COSTS[model];
-
-  // Fetch LLM margin from admin settings
-  const { data: marginData } = useQuery<{ llm_margin_percentage: number }>({
-    queryKey: ["/api/settings/llm-margin"],
-  });
-
-  if (!modelInfo) return null;
-
-  const marginPercentage = marginData?.llm_margin_percentage || 30;
-  const baseLlmCost = modelInfo.llm;
-  const llmCostWithMargin = baseLlmCost * (1 + marginPercentage / 100);
-  const totalCost = VOICE_COST + llmCostWithMargin;
-
-  return (
-    <div className="mt-2 p-3 bg-secondary/50 rounded-md text-xs">
-      <div className="font-medium mb-1">{t('agents.cost.estimatedBreakdown', { margin: marginPercentage })}</div>
-      <div className="space-y-1">
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">{t('agents.cost.voiceService')}</span>
-          <span>${VOICE_COST.toFixed(3)}/min</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">{t('agents.cost.llm', { model: modelInfo.name })}</span>
-          <span>${llmCostWithMargin.toFixed(3)}/min</span>
-        </div>
-        <div className="h-px bg-border my-2" />
-        <div className="flex justify-between font-medium">
-          <span>{t('agents.cost.totalCost')}</span>
-          <span className="text-primary">${totalCost.toFixed(3)}/min</span>
-        </div>
-        <div className="mt-2 text-muted-foreground">
-          {t('agents.cost.speed')} {modelInfo.speed} • {t('agents.cost.minCall')} ${(totalCost * 60).toFixed(2)}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 const CVE_STT_COSTS: Record<string, number> = {
   "deepgram": 0.0125,
   "nova-2": 0.0125,
@@ -438,14 +387,20 @@ export default function Agents() {
   const { toast } = useToast();
   const { t } = useTranslation();
   const { isDemoMode } = useDemoMode();
+  const appHeader = useAppHeaderOptional();
+  const setPageMeta = appHeader?.setPageMeta;
+
+  useEffect(() => {
+    if (!setPageMeta) return;
+    setPageMeta({ hideTitle: true });
+    return () => setPageMeta(null);
+  }, [setPageMeta]);
+
   const [isVideoOpen, setIsVideoOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'agents' | 'templates' | 'voices'>('agents');
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<'all' | 'incoming' | 'flow' | 'cve'>('all');
   const [engineFilter, setEngineFilter] = useState<'all' | 'twilio' | 'plivo' | 'twilio_openai' | 'elevenlabs-sip' | 'openai-sip'>('all');
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [knowledgeUploadOpen, setKnowledgeUploadOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
   const [deletingAgent, setDeletingAgent] = useState<Agent | null>(null);
   const [formData, setFormData] = useState({
@@ -460,8 +415,6 @@ export default function Agents() {
     firstMessage: "Hello! How can I help you today?",
     temperature: 0.5,
     knowledgeBaseIds: [] as string[],
-    transferNumber: "",
-    transferKeywords: [] as string[],
     // System Tools configuration
     transferEnabled: false,
     transferPhoneNumber: "",
@@ -488,13 +441,6 @@ export default function Agents() {
     sttModel: "",
     ttsProvider: "deepgram",
     ttsModel: "",
-    // SIP phone number selection (for SIP engines)
-    sipPhoneNumberId: "",
-  });
-  const [knowledgeData, setKnowledgeData] = useState({
-    title: "",
-    type: "document",
-    content: "",
   });
 
   // Animation state for success/failure feedback
@@ -510,13 +456,6 @@ export default function Agents() {
   });
   const combinedAgents = agents;
   const combinedLoading = agentsLoading;
-
-  // Fetch metrics data
-  const { data: metricsData } = useQuery<{ success: boolean; data: any }>({
-    queryKey: ["/api/agents/metrics"],
-    // Refresh less frequently to avoid DB strain
-    staleTime: 60000,
-  });
 
   const { data: voices = [] } = useQuery<Voice[]>({
     queryKey: ["/api/elevenlabs/voices"],
@@ -569,7 +508,6 @@ export default function Agents() {
   });
   const activeTtsProvider = cveSettings?.data?.tts?.activeProvider || "deepgram";
   const activeSttProvider = cveSettings?.data?.stt?.activeProvider || "deepgram";
-  const activeLlmProvider = cveSettings?.data?.llm?.activeProvider || "openrouter";
   const allowedTtsProviders = cveSettings?.data?.tts?.allowedProviders || [activeTtsProvider];
   const allowedSttProviders = cveSettings?.data?.stt?.allowedProviders || [activeSttProvider];
 
@@ -616,13 +554,6 @@ export default function Agents() {
   const [orSearch, setOrSearch] = useState("");
 
 
-
-  // Fetch SIP phone numbers when SIP plugin is enabled
-  const { data: sipPhoneNumbersResponse } = useQuery<{ success: boolean; data: SipPhoneNumber[] }>({
-    queryKey: ["/api/sip/phone-numbers"],
-    enabled: isSipPluginEnabled,
-  });
-  const sipPhoneNumbers = sipPhoneNumbersResponse?.data || [];
 
   const hasAlternateEngines = isPlivoEnabled || isTwilioOpenaiEnabled || isElevenLabsSipAllowed || isOpenAISipAllowed || isCustomVoiceEngineEnabled;
 
@@ -751,71 +682,6 @@ export default function Agents() {
     });
   }, [openaiModelsData]);
 
-  const createMutation = useMutation({
-    mutationFn: async (data: typeof formData) => {
-      if (data.telephonyProvider === "custom-voice-engine") {
-        const payload = {
-          name: data.name,
-          description: "",
-          systemPrompt: data.systemPrompt,
-          firstMessage: data.firstMessage || "Hello! How can I help you today?",
-          language: data.language || "en",
-          llmModel: data.llmModel || "openai/gpt-4o-mini",
-          temperature: data.temperature ?? 0.7,
-          maxTokens: 500,
-          ttsVoice: data.openaiVoice || "aura-asteria-en",
-          ttsProvider: data.ttsProvider || "deepgram",
-          sttProvider: data.sttProvider || "deepgram",
-          sttModel: data.sttModel || "",
-          ttsModel: data.ttsModel || "",
-          interruptible: true,
-          silenceTimeoutMs: 5000,
-          maxDurationSeconds: data.maxDurationSeconds ?? 600,
-          endCallOnSilence: false,
-          businessRules: [],
-          enableMemory: true,
-          memoryRetentionDays: 90,
-          detectLanguageEnabled: data.detectLanguageEnabled || false,
-          knowledgeBaseIds: data.knowledgeBaseIds || [],
-          appointmentBookingEnabled: data.appointmentBookingEnabled || false,
-          endConversationEnabled: data.endConversationEnabled || false,
-          transferEnabled: data.transferEnabled || false,
-          transferPhoneNumber: data.transferPhoneNumber || "",
-          messagingEmailEnabled: data.messagingEmailEnabled || false,
-          messagingWhatsappEnabled: data.messagingWhatsappEnabled || false,
-          messagingEmailTemplate: data.messagingEmailTemplate || "",
-          messagingWhatsappTemplate: data.messagingWhatsappTemplate || "",
-        };
-        const res = await apiRequest("POST", "/api/voice-engine/agents", payload);
-        return res.json();
-      }
-      const res = await apiRequest("POST", "/api/agents", data);
-      return res.json();
-    },
-    onSuccess: () => {
-      // Trigger success animation
-      setAnimationState('success');
-      setTimeout(() => {
-        setAnimationState('idle');
-        queryClient.invalidateQueries({ queryKey: ["/api/agents"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/voice-engine/agents"] });
-        setCreateDialogOpen(false);
-        resetForm();
-      }, 1500);
-      toast({ title: t('agents.toast.created') });
-    },
-    onError: (error: any) => {
-      // Trigger error animation
-      setAnimationState('error');
-      setTimeout(() => setAnimationState('idle'), 600);
-      toast({
-        title: t('agents.toast.createFailed'),
-        description: error.message || t('agents.toast.tryAgain'),
-        variant: "destructive",
-      });
-    },
-  });
-
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<typeof formData> }) => {
       const isCve = editingAgent?.telephonyProvider === "custom-voice-engine";
@@ -913,26 +779,6 @@ export default function Agents() {
     },
   });
 
-  const uploadKnowledgeMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/knowledge-base", knowledgeData);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/knowledge-base"] });
-      setKnowledgeUploadOpen(false);
-      setKnowledgeData({ title: "", type: "document", content: "" });
-      toast({ title: t('agents.toast.knowledgeUploaded') });
-    },
-    onError: (error: any) => {
-      toast({
-        title: t('agents.toast.knowledgeUploadFailed'),
-        description: error.message || t('agents.toast.tryAgain'),
-        variant: "destructive",
-      });
-    },
-  });
-
   const resetForm = () => {
     setFormData({
       type: "incoming" as 'incoming' | 'flow' | 'custom_engine',
@@ -946,8 +792,6 @@ export default function Agents() {
       firstMessage: "Hello! How can I help you today?",
       temperature: 0.5,
       knowledgeBaseIds: [],
-      transferNumber: "",
-      transferKeywords: [],
       // System Tools configuration
       transferEnabled: false,
       transferPhoneNumber: "",
@@ -969,102 +813,11 @@ export default function Agents() {
       // Telephony Provider selection
       telephonyProvider: "twilio" as "twilio" | "plivo" | "twilio_openai" | "elevenlabs-sip" | "openai-sip" | "custom-voice-engine",
       openaiVoice: "alloy",
-      sipPhoneNumberId: "",
       sttProvider: "deepgram",
       sttModel: "",
       ttsProvider: "deepgram",
       ttsModel: "",
     });
-  };
-
-  const handleCreate = () => {
-    if (!formData.name) {
-      toast({
-        title: t('agents.toast.missingFields'),
-        description: t('agents.toast.pleaseEnterName'),
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Incoming Agent validation
-    if (formData.type === 'incoming') {
-      // Voice validation depends on telephony provider
-      const isOpenAIVoiceOrCve = formData.telephonyProvider === "plivo" || formData.telephonyProvider === "twilio_openai" || formData.telephonyProvider === "openai-sip" || formData.telephonyProvider === "custom-voice-engine";
-      const hasValidVoice = isOpenAIVoiceOrCve
-        ? !!formData.openaiVoice
-        : !!formData.elevenLabsVoiceId;
-      // Note: SIP phone number selection moved to campaign level
-      if (!hasValidVoice) {
-        toast({
-          title: t('agents.toast.missingFields'),
-          description: t('agents.toast.pleaseSelectVoice'),
-          variant: "destructive",
-        });
-        return;
-      }
-      if (!formData.systemPrompt) {
-        toast({
-          title: t('agents.toast.missingFields'),
-          description: t('agents.toast.systemPromptRequired'),
-          variant: "destructive",
-        });
-        return;
-      }
-      // Validate call transfer configuration
-      if (formData.transferEnabled && !formData.transferPhoneNumber.trim()) {
-        toast({
-          title: t('agents.toast.missingTransferPhone'),
-          description: t('agents.toast.transferPhoneRequired'),
-          variant: "destructive",
-        });
-        return;
-      }
-      if (formData.messagingEmailEnabled && !formData.messagingEmailTemplate) {
-        toast({
-          title: t('agents.toast.missingFields'),
-          description: "Please select an email template when email sending is enabled.",
-          variant: "destructive",
-        });
-        return;
-      }
-      if (formData.messagingWhatsappEnabled && !formData.messagingWhatsappTemplate) {
-        toast({
-          title: t('agents.toast.missingFields'),
-          description: "Please select a WhatsApp template when WhatsApp sending is enabled.",
-          variant: "destructive",
-        });
-        return;
-      }
-    }
-
-    // Flow Agent validation
-    if (formData.type === 'flow') {
-      if (!formData.flowId) {
-        toast({
-          title: t('agents.toast.missingFields'),
-          description: t('agents.toast.flowRequired'),
-          variant: "destructive",
-        });
-        return;
-      }
-      // Voice validation depends on telephony provider for flow agents
-      const isOpenAIVoiceOrCveFlow = formData.telephonyProvider === "plivo" || formData.telephonyProvider === "twilio_openai" || formData.telephonyProvider === "openai-sip" || formData.telephonyProvider === "custom-voice-engine";
-      const hasValidVoice = isOpenAIVoiceOrCveFlow
-        ? !!formData.openaiVoice
-        : !!formData.elevenLabsVoiceId;
-      // Note: SIP phone number selection moved to campaign level
-      if (!hasValidVoice) {
-        toast({
-          title: t('agents.toast.missingFields'),
-          description: t('agents.toast.pleaseSelectVoice'),
-          variant: "destructive",
-        });
-        return;
-      }
-    }
-
-    createMutation.mutate(formData);
   };
 
   const handleEdit = (agent: Agent) => {
@@ -1081,8 +834,6 @@ export default function Agents() {
       firstMessage: agent.firstMessage || "Hello! How can I help you today?",
       temperature: agent.temperature ?? 0.5,
       knowledgeBaseIds: agent.knowledgeBaseIds || (agent as any).knowledge_base_ids || [],
-      transferNumber: agent.config?.transferRules?.number || "",
-      transferKeywords: agent.config?.transferRules?.keywords || [],
       // System Tools configuration
       transferEnabled: agent.transferEnabled ?? (agent as any).transfer_enabled ?? false,
       transferPhoneNumber: agent.transferPhoneNumber || (agent as any).transfer_phone_number || "",
@@ -1108,7 +859,6 @@ export default function Agents() {
       ttsProvider: (agent as any).tts_provider || (agent as any).config?.ttsProvider || "deepgram",
       sttModel: (agent as any).stt_model || (agent as any).config?.sttModel || (((agent as any).stt_provider || (agent as any).config?.sttProvider) === 'sarvam' ? (currentSttAllowedModels[0] || 'saaras:v3') : ""),
       ttsModel: (agent as any).tts_model || (agent as any).config?.ttsModel || (((agent as any).tts_provider || (agent as any).config?.ttsProvider) === 'sarvam' ? (currentTtsAllowedModels[0] || 'bulbul:v3') : ""),
-      sipPhoneNumberId: (agent as any).sipPhoneNumberId || "",
     });
   };
 
@@ -1187,293 +937,255 @@ export default function Agents() {
   const flowCount = combinedAgents.filter(a => a.type === 'flow' && a.telephonyProvider !== 'custom-voice-engine').length;
 
   return (
-    <div className="space-y-6">
-      {/* Tab Navigation */}
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'agents' | 'templates' | 'voices')} className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-3 mb-6">
-          <TabsTrigger value="agents" className="flex items-center gap-2" data-testid="tab-agents">
-            <Bot className="h-4 w-4" />
-            {t('nav.agents')}
-          </TabsTrigger>
-          <TabsTrigger value="templates" className="flex items-center gap-2" data-testid="tab-templates">
-            <FileText className="h-4 w-4" />
-            {t('nav.promptTemplates')}
-          </TabsTrigger>
-          <TabsTrigger value="voices" className="flex items-center gap-2" data-testid="tab-voices">
-            <Mic className="h-4 w-4" />
-            {t('nav.voices')}
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Prompt Templates Tab */}
-        <TabsContent value="templates" className="mt-0 space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">Pick a prompt for an agent, or manage all templates in one place.</p>
-            <Button variant="outline" onClick={() => setLocation("/templates")}>
-              Manage templates
-            </Button>
-          </div>
-          <PromptTemplatesLibrary mode="browse" />
-        </TabsContent>
-
-        {/* Voices Tab */}
-        <TabsContent value="voices" className="mt-0">
-          <Voices />
-        </TabsContent>
-
-        {/* Agents Tab */}
-        <TabsContent value="agents" className="mt-0 space-y-6">
-          {/* Page Header with Light Gradient */}
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-50 via-indigo-50 to-violet-50 dark:from-blue-950/40 dark:via-indigo-950/40 dark:to-violet-950/40 border border-blue-100 dark:border-blue-900/50 p-6 md:p-8">
-            <div className="absolute inset-0 bg-grid-slate-200/50 dark:bg-grid-slate-700/20 [mask-image:linear-gradient(0deg,transparent,rgba(255,255,255,0.5))]" />
-            <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
-                  <Bot className="h-7 w-7 text-white" />
+    <div className="space-y-5">
+      {/* Page Header */}
+      <div className="rounded-2xl bg-white border border-slate-200/80 shadow-sm p-6 md:p-7">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="h-12 w-12 rounded-xl bg-[#2F6BFF] flex items-center justify-center shadow-sm shrink-0">
+                  <FlaskConical className="h-6 w-6 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-2xl md:text-3xl font-bold text-foreground">{t('agents.title')}</h1>
-                  <p className="text-muted-foreground mt-0.5">{t('agents.description')}</p>
+                  <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+                    {t('agents.title', 'AI Agents')}
+                  </h1>
+                  <p className="text-sm text-slate-500 mt-0.5">
+                    {t('agents.description', 'Create and manage your conversational AI agents')}
+                  </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2.5">
                 {isDemoMode && (
                   <Button
                     variant="outline"
                     onClick={() => setIsVideoOpen(true)}
-                    className="bg-white/80 dark:bg-white/10 hover:bg-white text-blue-900 dark:text-blue-100 border-blue-200 dark:border-blue-800 font-semibold shadow"
+                    className="bg-white hover:bg-slate-50 text-slate-700 border-slate-200 font-medium"
                     data-testid="button-watch-demo-agents"
                   >
-                    <Video className="h-4 w-4 mr-2 text-blue-600 dark:text-blue-400" />
+                    <Video className="h-4 w-4 mr-2 text-[#2F6BFF]" />
                     <span>Watch Demo Video</span>
                   </Button>
                 )}
                 <Button
                   onClick={() => setWizardOpen(true)}
                   variant="outline"
-                  className="border-violet-200 dark:border-violet-800 hover:bg-violet-50 dark:hover:bg-violet-950"
+                  className="bg-white border-[#2F6BFF]/40 text-[#2F6BFF] hover:bg-blue-50 hover:text-[#2F6BFF] font-medium"
                   data-testid="button-wizard-agent"
                 >
-                  <Wand2 className="h-4 w-4 mr-2 text-violet-600 dark:text-violet-400" />
+                  <Wand2 className="h-4 w-4 mr-2" />
                   {t('agents.guidedWizard', 'Guided Wizard')}
                 </Button>
                 <Button
-                  onClick={() => setCreateDialogOpen(true)}
-                  disabled={createDialogOpen}
-                  className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg"
+                  onClick={() => setLocation("/agents/new")}
+                  className="bg-[#2F6BFF] hover:bg-[#1F5AEF] text-white border-transparent shadow-sm font-medium"
                   data-testid="button-create-agent"
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  {t('agents.createNew')}
+                  {t('agents.createNew', 'New Agent')}
                 </Button>
               </div>
             </div>
 
             {/* Stats Row */}
-            <div className="relative mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {/* Total Agents */}
-              <div className="bg-white/70 dark:bg-zinc-900/60 backdrop-blur-md rounded-xl p-6 border border-blue-100/60 dark:border-blue-900/30 hover-elevate transition-all shadow-sm">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-blue-600/70 dark:text-blue-400/70 text-xs font-semibold uppercase tracking-wider">{t('agents.stats.totalAgents')}</span>
-                  <div className="h-8 w-8 rounded-lg bg-blue-100 dark:bg-blue-950/40 flex items-center justify-center text-blue-600 dark:text-blue-400">
-                    <Bot className="h-4 w-4" />
-                  </div>
+            <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="rounded-xl bg-white border border-slate-200/80 px-5 py-4 shadow-sm">
+                <div className="text-3xl font-bold text-[#2F6BFF] tabular-nums leading-none">
+                  {combinedAgents.length}
                 </div>
-                <div className="text-3xl font-extrabold text-blue-700 dark:text-blue-300 mb-2">{combinedAgents.length}</div>
-                <div className="w-full bg-blue-100/50 dark:bg-blue-950/20 h-1.5 rounded-full overflow-hidden">
-                  <div className="bg-gradient-to-r from-blue-500 to-indigo-500 h-full rounded-full" style={{ width: '100%' }} />
+                <div className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  {t('agents.stats.totalAgents', 'Total Agents')}
                 </div>
               </div>
 
-              {/* Incoming Agents */}
-              <div className="bg-white/70 dark:bg-zinc-900/60 backdrop-blur-md rounded-xl p-6 border border-emerald-100/60 dark:border-emerald-900/30 hover-elevate transition-all shadow-sm">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-emerald-600/70 dark:text-emerald-400/70 text-xs font-semibold uppercase tracking-wider">{t('agents.type.incoming')}</span>
-                  <div className="h-8 w-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-                    <Sparkles className="h-4 w-4" />
+              <div className="rounded-xl bg-white border border-slate-200/80 px-5 py-4 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <div className="text-3xl font-bold text-emerald-500 tabular-nums leading-none">
+                    {incomingCount}
                   </div>
+                  <GitBranch className="h-4 w-4 text-emerald-500" />
                 </div>
-                <div className="text-3xl font-extrabold text-emerald-700 dark:text-emerald-300 mb-2">{incomingCount}</div>
-                <div className="w-full bg-emerald-100/50 dark:bg-emerald-950/25 h-1.5 rounded-full overflow-hidden">
-                  <div 
-                    className="bg-emerald-500 h-full rounded-full transition-all duration-500" 
-                    style={{ width: `${combinedAgents.length > 0 ? (incomingCount / combinedAgents.length) * 100 : 0}%` }} 
-                  />
+                <div className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  {t('agents.type.incoming', 'Incoming')}
                 </div>
               </div>
 
-              {/* Flow Agents */}
-              <div className="bg-white/70 dark:bg-zinc-900/60 backdrop-blur-md rounded-xl p-6 border border-violet-100/60 dark:border-violet-900/30 hover-elevate transition-all shadow-sm">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-violet-600/70 dark:text-violet-400/70 text-xs font-semibold uppercase tracking-wider">{t('agents.type.flow')}</span>
-                  <div className="h-8 w-8 rounded-lg bg-violet-100 dark:bg-violet-950/40 flex items-center justify-center text-violet-600 dark:text-violet-400">
-                    <GitBranch className="h-4 w-4" />
+              <div className="rounded-xl bg-white border border-slate-200/80 px-5 py-4 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <div className="text-3xl font-bold text-[#2F6BFF] tabular-nums leading-none">
+                    {flowCount}
                   </div>
+                  <ArrowUpDown className="h-4 w-4 text-[#2F6BFF]" />
                 </div>
-                <div className="text-3xl font-extrabold text-violet-700 dark:text-violet-300 mb-2">{flowCount}</div>
-                <div className="w-full bg-violet-100/50 dark:bg-violet-950/25 h-1.5 rounded-full overflow-hidden">
-                  <div 
-                    className="bg-violet-500 h-full rounded-full transition-all duration-500" 
-                    style={{ width: `${combinedAgents.length > 0 ? (flowCount / combinedAgents.length) * 100 : 0}%` }} 
-                  />
+                <div className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  {t('agents.type.flow', 'Flow')}
                 </div>
               </div>
             </div>
           </div>
 
           {/* Filters and Search Row */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            {/* Type Filter Tabs */}
-            <div className="flex items-center gap-2 p-1 bg-muted/50 rounded-lg">
-              <Button
-                variant={typeFilter === 'all' ? 'default' : 'ghost'}
-                size="sm"
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
+            <div className="flex flex-wrap items-center gap-1 p-1 bg-white border border-slate-200 rounded-md shadow-sm w-fit">
+              <button
+                type="button"
                 onClick={() => setTypeFilter('all')}
-                className={typeFilter === 'all' ? '' : 'text-muted-foreground'}
+                className={`px-3.5 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  typeFilter === 'all'
+                    ? 'bg-slate-800 text-white shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                }`}
                 data-testid="button-filter-all"
               >
-                {t('common.all')} ({agents.length})
-              </Button>
-              <Button
-                variant={typeFilter === 'incoming' ? 'default' : 'ghost'}
-                size="sm"
+                {t('common.all', 'All')} ({combinedAgents.length})
+              </button>
+              <button
+                type="button"
                 onClick={() => setTypeFilter('incoming')}
-                className={typeFilter === 'incoming' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'text-muted-foreground hover:text-emerald-600'}
+                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  typeFilter === 'incoming'
+                    ? 'bg-slate-800 text-white shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                }`}
                 data-testid="button-filter-incoming"
               >
-                <Sparkles className="h-4 w-4 mr-1.5" />
-                {t('agents.type.incoming')} ({incomingCount})
-              </Button>
-              <Button
-                variant={typeFilter === 'flow' ? 'default' : 'ghost'}
-                size="sm"
+                <GitBranch className={`h-3.5 w-3.5 ${typeFilter === 'incoming' ? 'text-white' : 'text-slate-400'}`} />
+                {t('agents.type.incoming', 'Incoming')} ({incomingCount})
+              </button>
+              <button
+                type="button"
                 onClick={() => setTypeFilter('flow')}
-                className={typeFilter === 'flow' ? 'bg-violet-600 hover:bg-violet-700 text-white' : 'text-muted-foreground hover:text-violet-600'}
+                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  typeFilter === 'flow'
+                    ? 'bg-slate-800 text-white shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                }`}
                 data-testid="button-filter-flow"
               >
-                <GitBranch className="h-4 w-4 mr-1.5" />
-                {t('agents.type.flow')} ({flowCount})
-              </Button>
+                <ArrowUpDown className={`h-3.5 w-3.5 ${typeFilter === 'flow' ? 'text-white' : 'text-slate-400'}`} />
+                {t('agents.type.flow', 'Flow')} ({flowCount})
+              </button>
               {isCustomVoiceEngineEnabled && (
-                <Button
-                  variant={typeFilter === 'cve' ? 'default' : 'ghost'}
-                  size="sm"
+                <button
+                  type="button"
                   onClick={() => setTypeFilter('cve')}
-                  className={typeFilter === 'cve' ? 'bg-orange-600 hover:bg-orange-700 text-white' : 'text-muted-foreground hover:text-orange-600'}
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    typeFilter === 'cve'
+                      ? 'bg-slate-800 text-white shadow-sm'
+                      : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                  }`}
                   data-testid="button-filter-cve"
                 >
-                  <Bot className="h-4 w-4 mr-1.5" />
+                  <Bot className={`h-3.5 w-3.5 ${typeFilter === 'cve' ? 'text-white' : 'text-slate-400'}`} />
                   Custom Voice ({cveCount})
-                </Button>
+                </button>
               )}
             </div>
 
-            {/* Engine Filter Dropdown - Show if multiple engines exist */}
-            {hasAlternateEngines && (
-              <Select
-                value={engineFilter}
-                onValueChange={(value) => setEngineFilter(value as typeof engineFilter)}
-              >
-                <SelectTrigger className="w-48" data-testid="select-engine-filter">
-                  <SelectValue placeholder="Filter by engine" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Engines</SelectItem>
-                  <SelectItem value="twilio">
-                    <div className="flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full bg-violet-500" />
-                      ElevenLabs + Twilio
-                    </div>
-                  </SelectItem>
-                  {isTwilioOpenaiEnabled && (
-                    <SelectItem value="twilio_openai">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 lg:ml-auto">
+              {hasAlternateEngines && (
+                <Select
+                  value={engineFilter}
+                  onValueChange={(value) => setEngineFilter(value as typeof engineFilter)}
+                >
+                  <SelectTrigger
+                    className="w-full sm:w-44 h-10 bg-white border-slate-200 rounded-xl shadow-sm"
+                    data-testid="select-engine-filter"
+                  >
+                    <SelectValue placeholder="All Engines" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Engines</SelectItem>
+                    <SelectItem value="twilio">
                       <div className="flex items-center gap-2">
-                        <div className="h-2 w-2 rounded-full bg-brand" />
-                        OpenAI + Twilio
+                        <div className="h-2 w-2 rounded-full bg-violet-500" />
+                        ElevenLabs + Twilio
                       </div>
                     </SelectItem>
-                  )}
-                  {isPlivoEnabled && (
-                    <SelectItem value="plivo">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 w-2 rounded-full bg-emerald-500" />
-                        OpenAI + Plivo
-                      </div>
-                    </SelectItem>
-                  )}
-                  {isElevenLabsSipAllowed && (
-                    <SelectItem value="elevenlabs-sip">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 w-2 rounded-full bg-orange-500" />
-                        ElevenLabs SIP
-                      </div>
-                    </SelectItem>
-                  )}
-                  {isOpenAISipAllowed && (
-                    <SelectItem value="openai-sip">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 w-2 rounded-full bg-pink-500" />
-                        OpenAI SIP
-                      </div>
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            )}
+                    {isTwilioOpenaiEnabled && (
+                      <SelectItem value="twilio_openai">
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 w-2 rounded-full bg-brand" />
+                          OpenAI + Twilio
+                        </div>
+                      </SelectItem>
+                    )}
+                    {isPlivoEnabled && (
+                      <SelectItem value="plivo">
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                          OpenAI + Plivo
+                        </div>
+                      </SelectItem>
+                    )}
+                    {isElevenLabsSipAllowed && (
+                      <SelectItem value="elevenlabs-sip">
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 w-2 rounded-full bg-orange-500" />
+                          ElevenLabs SIP
+                        </div>
+                      </SelectItem>
+                    )}
+                    {isOpenAISipAllowed && (
+                      <SelectItem value="openai-sip">
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 w-2 rounded-full bg-pink-500" />
+                          OpenAI SIP
+                        </div>
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              )}
 
-            {/* Search */}
-            <div className="relative w-full sm:w-72">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder={t('agents.searchPlaceholder')}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-                data-testid="input-search-agents"
-              />
+              <div className="relative w-full sm:w-72">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input
+                  placeholder={t('agents.searchPlaceholder', 'Search agents...')}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 h-10 bg-white border-slate-200 rounded-xl shadow-sm"
+                  data-testid="input-search-agents"
+                />
+              </div>
             </div>
           </div>
 
           {combinedLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {[1, 2, 3].map((i) => (
-                <Card key={i} className="p-6 animate-pulse">
-                  <div className="h-6 bg-muted rounded w-3/4 mb-4" />
-                  <div className="h-4 bg-muted rounded w-full mb-2" />
-                  <div className="h-4 bg-muted rounded w-2/3" />
+                <Card key={i} className="p-5 animate-pulse rounded-2xl border-slate-200">
+                  <div className="h-6 bg-slate-100 rounded w-3/4 mb-4" />
+                  <div className="h-4 bg-slate-100 rounded w-full mb-2" />
+                  <div className="h-4 bg-slate-100 rounded w-2/3" />
                 </Card>
               ))}
             </div>
           ) : filteredAgents.length === 0 ? (
-            <div className="relative overflow-hidden rounded-2xl border border-dashed border-muted-foreground/25 p-12 text-center">
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-violet-500/5" />
-              <div className="relative">
-                <div className="h-16 w-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-blue-500/20 to-violet-500/20 flex items-center justify-center">
-                  <Bot className="h-8 w-8 text-blue-600 dark:text-blue-400" />
-                </div>
-                <h3 className="text-xl font-semibold mb-2">
-                  {searchQuery ? t('agents.noAgentsFound') : t('agents.noAgents')}
-                </h3>
-                <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                  {searchQuery
-                    ? t('agents.noMatchingSearch')
-                    : t('agents.getStarted')}
-                </p>
-                {!searchQuery && (
-                  <Button
-                    onClick={() => setCreateDialogOpen(true)}
-                    disabled={createDialogOpen}
-                    className="bg-gradient-to-r from-blue-600 to-violet-600 text-white"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    {t('agents.createFirstAgent')}
-                  </Button>
-                )}
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center">
+              <div className="h-14 w-14 mx-auto mb-4 rounded-xl bg-blue-50 flex items-center justify-center">
+                <FlaskConical className="h-7 w-7 text-[#2F6BFF]" />
               </div>
+              <h3 className="text-lg font-semibold text-slate-900 mb-2">
+                {searchQuery ? t('agents.noAgentsFound') : t('agents.noAgents')}
+              </h3>
+              <p className="text-sm text-slate-500 mb-6 max-w-md mx-auto">
+                {searchQuery
+                  ? t('agents.noMatchingSearch')
+                  : t('agents.getStarted')}
+              </p>
+              {!searchQuery && (
+                <Button
+                  onClick={() => setLocation("/agents/new")}
+                  className="bg-[#2F6BFF] hover:bg-[#1F5AEF] text-white border-transparent"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  {t('agents.createFirstAgent')}
+                </Button>
+              )}
             </div>
           ) : (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {paginatedItems.map((agent) => {
                   const isCve = agent.telephonyProvider === 'custom-voice-engine';
                   const isOpenAIProvider = agent.telephonyProvider === "plivo" || agent.telephonyProvider === "twilio_openai" || agent.telephonyProvider === "openai-sip";
@@ -1486,53 +1198,50 @@ export default function Agents() {
                   const languageName = agent.language ? t(`agents.languages.${agent.language}`, { defaultValue: getLanguageLabel(agent.language) }) : t('agents.languages.en');
 
                   const isIncoming = agent.type === 'incoming' && !isCve;
-                  const cardGradient = isCve
-                    ? 'from-orange-500/5 via-transparent to-amber-500/5 dark:from-orange-500/10 dark:to-amber-500/10'
-                    : isIncoming
-                      ? 'from-emerald-500/5 via-transparent to-brand/5 dark:from-emerald-500/10 dark:to-brand/10'
-                      : 'from-violet-500/5 via-transparent to-indigo-500/5 dark:from-violet-500/10 dark:to-indigo-500/10';
                   const iconBg = isCve
-                    ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400'
+                    ? 'bg-orange-100 text-orange-600'
                     : isIncoming
-                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                      : 'bg-violet-500/10 text-violet-600 dark:text-violet-400';
-                  const borderColor = isCve
-                    ? 'border-orange-500/20 hover:border-orange-500/40'
+                      ? 'bg-emerald-100 text-emerald-600'
+                      : 'bg-blue-100 text-[#2F6BFF]';
+                  const badgeClass = isCve
+                    ? 'bg-orange-50 text-orange-700 border-orange-100'
                     : isIncoming
-                      ? 'border-emerald-500/20 hover:border-emerald-500/40'
-                      : 'border-violet-500/20 hover:border-violet-500/40';
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                      : 'bg-blue-50 text-[#2F6BFF] border-blue-100';
+
+                  const personaLabel = isCve
+                    ? [voiceName, cveVoiceObj?.description].filter(Boolean).join(' — ')
+                    : [voiceName, agent.voiceTone, agent.personality].filter(Boolean).join(' - ');
+                  const styleTags = isCve
+                    ? [languageName, cveVoiceObj?.provider].filter(Boolean)
+                    : [languageName, agent.voiceTone, agent.personality].filter(Boolean);
 
                   return (
                     <Card
                       key={agent.id}
-                      className={`relative overflow-hidden border ${borderColor} transition-all duration-200 hover-elevate group`}
+                      className="rounded-2xl border border-slate-200/80 bg-white shadow-sm hover:shadow-md transition-shadow duration-200 group"
                       data-testid={`card-agent-${agent.id}`}
                     >
-                      <div className={`absolute inset-0 bg-gradient-to-br ${cardGradient}`} />
-                      <div className="relative p-5">
+                      <div className="p-5">
                         <div className="flex items-start justify-between gap-3 mb-3">
-                          <div className="flex items-start gap-3 flex-1 min-w-0">
-                            <div className={`h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 ${iconBg}`}>
-                              {isCve ? <Bot className="h-5 w-5" /> : isIncoming ? <Sparkles className="h-5 w-5" /> : <GitBranch className="h-5 w-5" />}
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className={`h-9 w-9 rounded-full flex items-center justify-center flex-shrink-0 ${iconBg}`}>
+                              {isCve ? <Bot className="h-4 w-4" /> : isIncoming ? <GitBranch className="h-4 w-4" /> : <ArrowUpDown className="h-4 w-4" />}
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="font-semibold truncate" data-testid="text-agent-name">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <h3 className="font-semibold text-slate-900 truncate" data-testid="text-agent-name">
                                 {agent.name}
                               </h3>
                               <Badge
                                 variant="outline"
-                                className={`mt-1 text-xs ${isCve
-                                  ? 'border-orange-500/50 text-orange-700 dark:text-orange-300 bg-orange-500/10'
-                                  : isIncoming
-                                    ? 'border-emerald-500/50 text-emerald-700 dark:text-emerald-300 bg-emerald-500/10'
-                                    : 'border-violet-500/50 text-violet-700 dark:text-violet-300 bg-violet-500/10'}`}
+                                className={`shrink-0 text-[11px] font-medium rounded-full px-2 py-0 border ${badgeClass}`}
                                 data-testid={`badge-agent-type-${agent.type}`}
                               >
                                 {isCve ? "Custom Voice" : isIncoming ? t('agents.type.incoming') : t('agents.type.flow')}
                               </Badge>
                             </div>
                           </div>
-                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                             <AgentVersionHistory
                               agentId={agent.id}
                               agentName={agent.name}
@@ -1540,7 +1249,7 @@ export default function Agents() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8"
+                              className="h-8 w-8 text-slate-400 hover:text-slate-700"
                               onClick={() => handleEdit(agent)}
                               data-testid="button-edit-agent"
                             >
@@ -1549,40 +1258,45 @@ export default function Agents() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8"
+                              className="h-8 w-8 text-slate-400 hover:text-destructive"
                               onClick={() => setDeletingAgent(agent)}
                               data-testid="button-delete-agent"
                             >
-                              <Trash2 className="h-4 w-4 text-destructive" />
+                              <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
                         </div>
 
-                        <div className="space-y-2 text-sm">
-                          <div className="flex items-center gap-2 text-muted-foreground">
-                            <Mic className="h-3.5 w-3.5" />
-                            <span data-testid="text-agent-voice">{voiceName || t('agents.voiceNotSet')}</span>
-                            <span className="text-muted-foreground/50">•</span>
-                            <span data-testid="text-agent-language">{languageName}</span>
+                        <div className="space-y-1.5 mb-3">
+                          <div className="flex items-center gap-2 text-sm text-slate-500 min-w-0">
+                            <Mic className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                            <span className="truncate" data-testid="text-agent-voice">
+                              {personaLabel || t('agents.voiceNotSet')}
+                            </span>
                           </div>
-                          <div className="flex items-center gap-2 text-muted-foreground">
-                            <span className="capitalize">{isCve ? (cveVoiceObj?.description || 'Custom Voice') : agent.voiceTone}</span>
-                            <span className="text-muted-foreground/50">•</span>
-                            <span className="capitalize">{isCve ? (cveVoiceObj?.provider || 'Voice Engine') : agent.personality}</span>
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-400 pl-5">
+                            {styleTags.map((tag, idx) => (
+                              <span key={`${tag}-${idx}`} className="capitalize" data-testid={idx === 0 ? 'text-agent-language' : undefined}>
+                                {tag}
+                                {idx < styleTags.length - 1 ? <span className="text-slate-300 ml-2">·</span> : null}
+                              </span>
+                            ))}
                           </div>
                           {agent.config?.model && MODEL_COSTS[agent.config.model] && (
-                            <div className={`flex items-center gap-2 text-xs font-medium ${isCve ? 'text-orange-600 dark:text-orange-400' : isIncoming ? 'text-emerald-600 dark:text-emerald-400' : 'text-violet-600 dark:text-violet-400'}`}>
+                            <div className={`flex items-center gap-2 text-xs font-medium pl-5 ${isCve ? 'text-orange-600' : isIncoming ? 'text-emerald-600' : 'text-[#2F6BFF]'}`}>
                               <span>≈ ${(VOICE_COST + MODEL_COSTS[agent.config.model].llm).toFixed(3)}/min</span>
-                              <span className="opacity-50">•</span>
+                              <span className="opacity-40">·</span>
                               <span>{MODEL_COSTS[agent.config.model].speed}</span>
                             </div>
                           )}
                         </div>
 
                         {agent.systemPrompt && (
-                          <p className="mt-3 text-xs text-muted-foreground line-clamp-2 border-t border-border/50 pt-3">
-                            {agent.systemPrompt}
-                          </p>
+                          <div className="rounded-xl bg-slate-50 border border-slate-100 px-3.5 py-3">
+                            <p className="text-xs text-slate-500 leading-relaxed line-clamp-3">
+                              {agent.systemPrompt}
+                            </p>
+                          </div>
                         )}
                       </div>
                     </Card>
@@ -1590,7 +1304,6 @@ export default function Agents() {
                 })}
               </div>
 
-              {/* Pagination */}
               <DataPagination
                 currentPage={currentPage}
                 totalPages={totalPages}
@@ -1604,9 +1317,8 @@ export default function Agents() {
             </div>
           )}
 
-          <Dialog open={createDialogOpen || !!editingAgent} onOpenChange={(open) => {
+          <Dialog open={!!editingAgent} onOpenChange={(open) => {
             if (!open) {
-              setCreateDialogOpen(false);
               setEditingAgent(null);
               resetForm();
             }
@@ -1621,7 +1333,7 @@ export default function Agents() {
                     </div>
                     <div className="text-center">
                       <p className="text-lg font-semibold text-foreground">
-                        {editingAgent ? t('agents.create.agentUpdated') : t('agents.create.agentCreated')}
+                        {t('agents.create.agentUpdated')}
                       </p>
                       <p className="text-sm text-muted-foreground">{t('agents.create.readyToUse')}</p>
                     </div>
@@ -1631,7 +1343,7 @@ export default function Agents() {
 
               {/* Fixed Header */}
               <DialogHeader className="px-6 pt-6 pb-4 border-b flex-shrink-0">
-                <DialogTitle>{editingAgent ? t('agents.create.editTitle') : t('agents.create.title')}</DialogTitle>
+                <DialogTitle>{t('agents.create.editTitle')}</DialogTitle>
                 <DialogDescription>
                   {t('agents.create.dialogDescription')}
                 </DialogDescription>
@@ -3624,7 +3336,6 @@ export default function Agents() {
 
                       {formData.telephonyProvider !== "custom-voice-engine" && (
                         <PromptTemplatesLibrary
-                          mode="select"
                           onSelectTemplate={(template) => {
                             setFormData({
                               ...formData,
@@ -4087,7 +3798,6 @@ export default function Agents() {
                 <Button
                   variant="outline"
                   onClick={() => {
-                    setCreateDialogOpen(false);
                     setEditingAgent(null);
                     resetForm();
                   }}
@@ -4095,15 +3805,13 @@ export default function Agents() {
                   {t('common.cancel')}
                 </Button>
                 <Button
-                  onClick={editingAgent ? handleUpdate : handleCreate}
-                  disabled={createMutation.isPending || updateMutation.isPending}
+                  onClick={handleUpdate}
+                  disabled={updateMutation.isPending}
                   data-testid="button-save-agent"
                 >
-                  {createMutation.isPending || updateMutation.isPending
+                  {updateMutation.isPending
                     ? t('common.saving')
-                    : editingAgent
-                      ? t('agents.create.updateAgent')
-                      : t('agents.create.createAgent')}
+                    : t('agents.create.updateAgent')}
                 </Button>
               </div>
             </DialogContent>
@@ -4128,52 +3836,6 @@ export default function Agents() {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
-
-          <Dialog open={knowledgeUploadOpen} onOpenChange={setKnowledgeUploadOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>{t('agents.knowledge.uploadTitle')}</DialogTitle>
-                <DialogDescription>
-                  {t('agents.knowledge.uploadDescription')}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="knowledge-title">{t('agents.knowledge.titleLabel')} *</Label>
-                  <Input
-                    id="knowledge-title"
-                    placeholder={t('agents.knowledge.titlePlaceholder')}
-                    value={knowledgeData.title}
-                    onChange={(e) => setKnowledgeData({ ...knowledgeData, title: e.target.value })}
-                    data-testid="input-knowledge-title"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="knowledge-content">{t('agents.knowledge.contentLabel')} *</Label>
-                  <Textarea
-                    id="knowledge-content"
-                    placeholder={t('agents.knowledge.contentPlaceholder')}
-                    rows={10}
-                    value={knowledgeData.content}
-                    onChange={(e) => setKnowledgeData({ ...knowledgeData, content: e.target.value })}
-                    data-testid="input-knowledge-content"
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setKnowledgeUploadOpen(false)}>
-                  {t('common.cancel')}
-                </Button>
-                <Button
-                  onClick={() => uploadKnowledgeMutation.mutate()}
-                  disabled={!knowledgeData.title || !knowledgeData.content || uploadKnowledgeMutation.isPending}
-                  data-testid="button-upload-knowledge-submit"
-                >
-                  {uploadKnowledgeMutation.isPending ? t('agents.knowledge.uploading') : t('agents.knowledge.uploadButton')}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
 
           {/* Guided Agent Creation Wizard */}
           <AgentCreationWizard
@@ -4220,8 +3882,6 @@ export default function Agents() {
               </DialogContent>
             </Dialog>
           )}
-        </TabsContent>
-      </Tabs>
     </div>
   );
 }

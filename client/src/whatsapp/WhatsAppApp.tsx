@@ -5,7 +5,6 @@ import { SocketProvider } from "@wa/contexts/socket-context";
 import { SidebarProvider } from "@wa/contexts/sidebar-context";
 import Inbox from "@wa/pages/inbox";
 import Contacts from "@wa/pages/contacts/Contacts";
-import Campaigns from "@wa/pages/campaigns";
 import Automations from "@wa/pages/automations";
 import Dashboard from "@wa/pages/dashboard";
 import Settings from "@wa/pages/settings";
@@ -40,7 +39,7 @@ function WhatsAppRoutes() {
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/inbox" component={Inbox} />
       <Route path="/contacts" component={Contacts} />
-      <Route path="/campaigns" component={Campaigns} />
+      <Route path="/campaigns">{() => <Redirect to="~/campaigns" />}</Route>
       <Route path="/templates/agentlab/new">{() => <Redirect to="~/templates/agentlab/new" />}</Route>
       <Route path="/templates/new">{() => <Redirect to="~/templates/new" />}</Route>
       <Route path="/templates">{() => <Redirect to="~/templates" />}</Route>

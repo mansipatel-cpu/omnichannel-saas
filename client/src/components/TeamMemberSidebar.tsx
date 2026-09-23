@@ -118,13 +118,13 @@ const USER_SECTION_ROUTES: Record<string, { url: string; icon: any; label: strin
     { url: "/billing", icon: CreditCard, label: "Billing & Credits", group: "billing", iconColor: "text-amber-500" },
   ],
   api_keys: [
-    { url: "/api-keys", icon: Key, label: "API Keys", group: "settings", iconColor: "text-slate-500" },
+    { url: "/settings", icon: Key, label: "API Keys", group: "settings", iconColor: "text-slate-500" },
   ],
   settings: [
     { url: "/whatsapp/waba-connection", icon: Settings, label: "Settings", group: "settings" },
   ],
   team: [
-    { url: "/team", icon: Users, label: "Team Management", group: "settings" },
+    { url: "/whatsapp/team", icon: Users, label: "Team Management", group: "settings" },
   ],
 };
 

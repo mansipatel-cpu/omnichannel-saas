@@ -256,7 +256,7 @@ export default function Dashboard() {
         actions={
           user?.role !== "superadmin" ? (
             <Button
-              onClick={() => setLocation("/campaigns")}
+              onClick={() => setLocation("~/campaigns")}
               className="bg-primary text-primary-foreground"
             >
               {t("dashboard.newCampaign")}

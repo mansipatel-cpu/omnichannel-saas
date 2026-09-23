@@ -43,6 +43,7 @@ import Billing from "@/pages/Billing";
 import PaymentResult from "@/pages/PaymentResult";
 import KnowledgeBase from "@/pages/KnowledgeBase";
 import Agents from "@/pages/Agents";
+import CreateAgent from "@/pages/CreateAgent";
 import Voices from "@/pages/Voices";
 import PhoneNumbers from "@/pages/PhoneNumbers";
 import AllContacts from "@/pages/AllContacts";
@@ -53,7 +54,6 @@ import AllTemplates from "@/pages/AllTemplates";
 import CreateWhatwayTemplate from "@/pages/CreateWhatwayTemplate";
 import CreateAgentLabTemplate from "@/pages/CreateAgentLabTemplate";
 import Settings from "@/pages/Settings";
-import Login from "@/pages/Login";
 import LandingPage from "@/pages/LandingPage";
 import AdminDashboard from "@/pages/AdminDashboard";
 import AdminCampaignDetail from "@/pages/AdminCampaignDetail";
@@ -66,15 +66,12 @@ import FlowsPage from "@/pages/FlowsPage";
 import CRMPage from "@/pages/CRMPage";
 import WidgetsPage from "@/pages/WidgetsPage";
 import FlowBuilderPage from "@/pages/FlowBuilderPage";
-import FlowExecutionLogsPage from "@/pages/FlowExecutionLogsPage";
 import WebhookConfigPage from "@/pages/WebhookConfigPage";
 import FormsPage from "@/pages/FormsPage";
 import AppointmentsPage from "@/pages/AppointmentsPage";
-import FlowTemplatesPage from "@/pages/FlowTemplatesPage";
 import IncomingConnections from "@/pages/IncomingConnections";
 import ToolsPage from "@/pages/ToolsPage";
 import GoogleCallbackPage from "@/pages/GoogleCallbackPage";
-import TransactionHistory from "@/pages/TransactionHistory";
 import Blog from "@/pages/Blog";
 import BlogPost from "@/pages/BlogPost";
 import Contact from "@/pages/Contact";
@@ -191,6 +188,7 @@ function UserAppRoutes({ includeAdmin = false }: { includeAdmin?: boolean }) {
         <Redirect to="/billing?tab=plans" />
       </Route>
       <Route path="/knowledge-base" component={KnowledgeBase} />
+      <Route path="/agents/new" component={CreateAgent} />
       <Route path="/agents" component={Agents} />
       <Route path="/conversations" component={PluginConversationsPage} />
       <Route path="/templates/agentlab/new" component={CreateAgentLabTemplate} />
@@ -231,9 +229,7 @@ function UserAppRoutes({ includeAdmin = false }: { includeAdmin?: boolean }) {
       </Route>
       <Route path="/flows/:id" component={FlowBuilderPage} />
       <Route path="/flows" component={FlowsPage} />
-      <Route path="/outbound" component={() => <div className="text-center py-16 text-muted-foreground">Outbound page coming soon</div>} />
       <Route path="/settings" component={Settings} />
-      <Route path="/developers" component={() => <div className="text-center py-16 text-muted-foreground">Developers page coming soon</div>} />
       <Route path="/whatsapp" component={WhatsAppApp} />
       <Route path="/whatsapp/*" component={WhatsAppApp} />
       {includeAdmin ? <Route path="/admin" component={AdminDashboard} /> : null}

@@ -26,12 +26,8 @@ const AUTH_PREFIXES = [
   "/phone-numbers",
   "/google-callback",
   "/flows",
-  "/outbound",
   "/settings",
-  "/developers",
   "/whatsapp",
-  "/api-keys",
-  "/team",
 ];
 
 export function isUserAppPath(path: string) {

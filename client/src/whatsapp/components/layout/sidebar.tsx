@@ -122,7 +122,7 @@ function getNavItems(role: string): NavItem[] {
                 allowedRoles: ["admin"],
             },
             {
-                href: "/campaigns",
+                href: "~/campaigns",
                 icon: Megaphone,
                 labelKey: "navigation.campaigns",
                 color: "text-orange-600",
@@ -144,7 +144,7 @@ function getNavItems(role: string): NavItem[] {
                 allowedRoles: ["superadmin", "admin"],
             },
             {
-                href: "/analytics",
+                href: "~/analytics?channel=whatsapp",
                 icon: BarChart3,
                 labelKey: "navigation.analytics",
                 color: "text-pink-600",
@@ -240,7 +240,7 @@ function getNavItems(role: string): NavItem[] {
                 allowedRoles: ["team"],
             },
             {
-                href: "/campaigns",
+                href: "~/campaigns",
                 icon: Megaphone,
                 labelKey: "navigation.campaigns",
                 color: "text-orange-600",
@@ -337,7 +337,7 @@ const sidebarItemsCategories = [
     {
         name: "navigation.master_campaigns",
         icon: Megaphone,
-        path: "/campaigns",
+        path: "~/campaigns",
         badge: "",
         color: "text-blue-600",
     },

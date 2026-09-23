@@ -95,7 +95,7 @@ function pathMatches(location: string, url: string) {
     return location === "/dashboard" || location === "/app" || location === "/dashboard";
   }
   if (url === "/campaigns") {
-    return location === "/campaigns" || location.startsWith("/campaigns/") || location.startsWith("/whatsapp/campaigns");
+    return location === "/campaigns" || location.startsWith("/campaigns/");
   }
   if (url === "/contacts") {
     return location === "/contacts" || location.startsWith("/contacts/");

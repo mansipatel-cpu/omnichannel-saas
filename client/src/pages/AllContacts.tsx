@@ -1320,7 +1320,7 @@ export default function AllContacts() {
                         key={page}
                         variant={page === currentPage ? "default" : "outline"}
                         size="sm"
-                        className={`h-8 w-8 ${page === currentPage ? "bg-[#2F80FF] hover:bg-[#256fe0]" : ""}`}
+                        className={`h-8 w-8 ${page === currentPage ? "bg-[#2F80FF] hover:bg-[#256fe0] text-white border-transparent" : ""}`}
                         onClick={() => handlePageChange(page)}
                       >
                         {page}

@@ -748,7 +748,7 @@ export default function Analytics() {
                   <p className="text-sm text-gray-500 mb-4">
                     {t("analytics.startCreatingCampaigns")}
                   </p>
-                  <Link href="/campaigns">
+                  <Link href="~/campaigns">
                     <Button className="bg-green-600 hover:bg-green-700 text-sm">
                       <PlusCircle className="w-4 h-4 mr-2" />
                       {t("analytics.createCampaign")}

@@ -19,7 +19,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { useTranslation } from "react-i18next";
 import { AuthStorage } from "@/lib/auth-storage";
-import { CreateCampaignDialog } from "@/components/CreateCampaignDialog";
 import { useDemoMode } from "@/components/DemoModeBanner";
 import { useAppHeader } from "@/components/AppPageHeader";
 import { Button } from "@/components/ui/button";
@@ -189,7 +188,6 @@ export default function Dashboard() {
   const { t } = useTranslation();
   const { isDemoMode } = useDemoMode();
   const [, setLocation] = useLocation();
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [campaignChoiceOpen, setCampaignChoiceOpen] = useState(false);
   const [isVideoOpen, setIsVideoOpen] = useState(false);
   const { search, setActions } = useAppHeader();
@@ -305,7 +303,7 @@ export default function Dashboard() {
         ? Math.min(100, Math.round(((c.sentCount || 0) / (c.recipientCount || c.totalRecipients || 1)) * 100))
         : 0,
       created: c.createdAt,
-      href: "/whatsapp/campaigns",
+      href: `/campaigns/whatsapp/${c.id}`,
     })),
   ]
     .filter((c) => !search || c.name.toLowerCase().includes(search.toLowerCase()))
@@ -381,7 +379,7 @@ export default function Dashboard() {
           <p className="text-xs text-slate-500 mt-1">Build a reusable message template.</p>
         </Link>
         <button
-          onClick={() => setCreateDialogOpen(true)}
+          onClick={() => setLocation("/campaigns/new?channel=calling")}
           className="rounded-2xl bg-white border border-slate-200 p-5 text-left min-h-[132px] hover:border-[#007BFF]/40 transition-colors shadow-sm"
         >
           <PhoneCall className="h-7 w-7 text-[#007BFF] mb-5" />
@@ -602,7 +600,7 @@ export default function Dashboard() {
               className="rounded-xl border border-slate-200 p-4 text-left hover:border-[#007BFF] hover:bg-sky-50/60 transition-colors"
               onClick={() => {
                 setCampaignChoiceOpen(false);
-                setLocation("/whatsapp/campaigns");
+                setLocation("/campaigns/new");
               }}
             >
               <p className="font-semibold text-slate-900">WhatsApp campaign</p>
@@ -612,7 +610,7 @@ export default function Dashboard() {
               className="rounded-xl border border-slate-200 p-4 text-left hover:border-[#007BFF] hover:bg-sky-50/60 transition-colors"
               onClick={() => {
                 setCampaignChoiceOpen(false);
-                setCreateDialogOpen(true);
+                setLocation("/campaigns/new?channel=calling");
               }}
             >
               <p className="font-semibold text-slate-900">Calling campaign</p>
@@ -621,8 +619,6 @@ export default function Dashboard() {
                       </div>
         </DialogContent>
       </Dialog>
-
-      <CreateCampaignDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} />
 
       {isDemoMode && (
         <Dialog open={isVideoOpen} onOpenChange={setIsVideoOpen}>

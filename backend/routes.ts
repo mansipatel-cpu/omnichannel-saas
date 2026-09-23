@@ -1703,11 +1703,9 @@ When using a tool:
   httpServer.on('upgrade', (request, socket, head) => {
     const pathname = request.url?.split('?')[0] || '';
 
-    console.log(`🔌 [Upgrade] Request for: ${request.url}`);
-    console.log(`   Pathname: ${pathname}`);
-
-    // Only handle Twilio stream WebSocket upgrades
+    // Only handle Twilio stream WebSocket upgrades — ignore Vite HMR and others
     if (pathname === '/api/webhooks/twilio/stream') {
+      console.log(`🔌 [Upgrade] Request for: ${request.url}`);
       console.log(`✅ [Upgrade] Handling Twilio stream WebSocket`);
 
       const wss = new WebSocketServer({ noServer: true });
@@ -1866,11 +1864,9 @@ When using a tool:
           }
         });
       });
-    } else {
-      // For all other upgrade requests (like Vite HMR), do nothing
-      // Let them pass through to other handlers
-      console.log(`📡 [Upgrade] Passing through: ${pathname}`);
     }
+    // All other upgrade requests (Vite HMR, WhatsApp WS, media streams) are
+    // handled by their own listeners — do not touch the socket here.
   });
 
   // ============================================

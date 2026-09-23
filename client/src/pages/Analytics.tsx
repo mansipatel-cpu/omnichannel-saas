@@ -497,7 +497,7 @@ export default function Analytics() {
                 </SelectContent>
               </Select>
               <Button
-                className="h-10 bg-[#007BFF] hover:bg-[#0069d9] text-white"
+                className="h-10 bg-[#007BFF] hover:bg-[#0069d9] text-white border-transparent"
                 disabled={exporting}
                 onClick={handleExportCalling}
               >
