@@ -15,26 +15,27 @@
  * ============================================================
  */
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Save, Loader2, Trash2, AlertTriangle, LogOut, Globe, Download, Clock, ShieldCheck, Upload, FileCheck, FilePlus, X, CheckCircle2, XCircle, AlertCircle, Key, ExternalLink, Users, MapPin, RefreshCw, Plus, Mail } from "lucide-react";
-import { ApiKeysTab } from "@/components/api-keys/ApiKeysTab";
+import { Loader2, User, Building, Shield, Calendar } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useMemo, useState, useEffect, Suspense } from "react";
-import { usePluginRegistry } from "@/contexts/plugin-registry";
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { usePluginStatus } from "@/hooks/use-plugin-status";
 import { AuthStorage } from "@/lib/auth-storage";
-import { useBranding } from "@/components/BrandingProvider";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
+  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -48,162 +49,43 @@ interface User {
   id: string;
   email: string;
   name: string;
+  username?: string;
+  firstName?: string | null;
+  lastName?: string | null;
   role: string;
-  credits: number;
-  planType: string;
-  company?: string | null;
-  timezone?: string | null;
-  kycStatus?: 'pending' | 'submitted' | 'approved' | 'rejected' | null;
-  kycSubmittedAt?: string | null;
-  kycApprovedAt?: string | null;
-  kycRejectionReason?: string | null;
-}
-
-interface KycDocument {
-  id: string;
-  userId: string;
-  documentType: string;
-  fileName: string;
-  filePath: string;
-  mimeType: string;
-  fileSize: number;
-  uploadedAt: string;
-}
-
-const KYC_DOCUMENT_TYPES = [
-  { type: 'photo_id', label: 'Photo ID (Passport/Driver License)', description: 'A valid government-issued photo identification' },
-  { type: 'company_registration', label: 'Company Registration', description: 'Business registration or incorporation certificate' },
-  { type: 'gst_certificate', label: 'GST Certificate', description: 'GST or tax registration certificate' },
-  { type: 'authorization_letter', label: 'Authorization Letter', description: 'Letter authorizing phone number usage on company letterhead' },
-];
-
-// Common timezones grouped by region
-const TIMEZONE_OPTIONS = [
-  { value: "UTC", label: "UTC (Coordinated Universal Time)", region: "Universal" },
-  // Americas
-  { value: "America/New_York", label: "Eastern Time (US & Canada)", region: "Americas" },
-  { value: "America/Chicago", label: "Central Time (US & Canada)", region: "Americas" },
-  { value: "America/Denver", label: "Mountain Time (US & Canada)", region: "Americas" },
-  { value: "America/Los_Angeles", label: "Pacific Time (US & Canada)", region: "Americas" },
-  { value: "America/Anchorage", label: "Alaska", region: "Americas" },
-  { value: "America/Toronto", label: "Toronto", region: "Americas" },
-  { value: "America/Vancouver", label: "Vancouver", region: "Americas" },
-  { value: "America/Mexico_City", label: "Mexico City", region: "Americas" },
-  { value: "America/Sao_Paulo", label: "São Paulo", region: "Americas" },
-  { value: "America/Buenos_Aires", label: "Buenos Aires", region: "Americas" },
-  { value: "America/Lima", label: "Lima", region: "Americas" },
-  { value: "America/Bogota", label: "Bogota", region: "Americas" },
-  // Europe
-  { value: "Europe/London", label: "London", region: "Europe" },
-  { value: "Europe/Paris", label: "Paris", region: "Europe" },
-  { value: "Europe/Berlin", label: "Berlin", region: "Europe" },
-  { value: "Europe/Madrid", label: "Madrid", region: "Europe" },
-  { value: "Europe/Rome", label: "Rome", region: "Europe" },
-  { value: "Europe/Amsterdam", label: "Amsterdam", region: "Europe" },
-  { value: "Europe/Stockholm", label: "Stockholm", region: "Europe" },
-  { value: "Europe/Warsaw", label: "Warsaw", region: "Europe" },
-  { value: "Europe/Moscow", label: "Moscow", region: "Europe" },
-  { value: "Europe/Istanbul", label: "Istanbul", region: "Europe" },
-  // Asia
-  { value: "Asia/Dubai", label: "Dubai", region: "Asia" },
-  { value: "Asia/Kolkata", label: "India (Mumbai, Delhi, Kolkata)", region: "Asia" },
-  { value: "Asia/Bangkok", label: "Bangkok", region: "Asia" },
-  { value: "Asia/Singapore", label: "Singapore", region: "Asia" },
-  { value: "Asia/Hong_Kong", label: "Hong Kong", region: "Asia" },
-  { value: "Asia/Shanghai", label: "Shanghai", region: "Asia" },
-  { value: "Asia/Tokyo", label: "Tokyo", region: "Asia" },
-  { value: "Asia/Seoul", label: "Seoul", region: "Asia" },
-  { value: "Asia/Jakarta", label: "Jakarta", region: "Asia" },
-  { value: "Asia/Manila", label: "Manila", region: "Asia" },
-  // Africa
-  { value: "Africa/Cairo", label: "Cairo", region: "Africa" },
-  { value: "Africa/Lagos", label: "Lagos", region: "Africa" },
-  { value: "Africa/Johannesburg", label: "Johannesburg", region: "Africa" },
-  { value: "Africa/Nairobi", label: "Nairobi", region: "Africa" },
-  // Oceania
-  { value: "Australia/Sydney", label: "Sydney", region: "Oceania" },
-  { value: "Australia/Melbourne", label: "Melbourne", region: "Oceania" },
-  { value: "Australia/Perth", label: "Perth", region: "Oceania" },
-  { value: "Pacific/Auckland", label: "Auckland", region: "Oceania" },
-  { value: "Pacific/Honolulu", label: "Hawaii", region: "Oceania" },
-];
-
-// Group timezones by region
-const groupedTimezones = TIMEZONE_OPTIONS.reduce((acc, tz) => {
-  if (!acc[tz.region]) acc[tz.region] = [];
-  acc[tz.region].push(tz);
-  return acc;
-}, {} as Record<string, typeof TIMEZONE_OPTIONS>);
-
-// Get current time in a timezone
-function getCurrentTimeInTimezone(timezone: string): string {
-  try {
-    return new Date().toLocaleTimeString('en-US', { 
-      timeZone: timezone,
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    });
-  } catch {
-    return '';
-  }
+  createdAt?: string | null;
 }
 
 export default function Settings() {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const { branding } = useBranding();
-  const { isRestApiPluginEnabled, isTeamManagementPluginEnabled } = usePluginStatus();
-  const pluginRegistry = usePluginRegistry();
-  const settingsTabs = pluginRegistry.getSettingsTabs();
-  const [deletePassword, setDeletePassword] = useState("");
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [company, setCompany] = useState("");
-  const [selectedTimezone, setSelectedTimezone] = useState<string>("");
-  const [currentTime, setCurrentTime] = useState<string>("");
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-
-  // Get tab from URL params
-  const urlParams = new URLSearchParams(window.location.search);
-  const initialTab = urlParams.get('tab') || 'profile';
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const [deletePassword, setDeletePassword] = useState("");
 
   const { data: user, isLoading } = useQuery<User>({
     queryKey: ["/api/auth/me"],
   });
 
-  // Initialize form values when user data loads
   useEffect(() => {
-    if (user?.name) {
-      const parts = user.name.split(" ");
-      setFirstName(parts[0] || "");
-      setLastName(parts.slice(1).join(" ") || "");
+    if (!user) return;
+    if (user.firstName || user.lastName) {
+      setFirstName(user.firstName || "");
+      setLastName(user.lastName || "");
+      return;
     }
-    if (user?.company) {
-      setCompany(user.company);
-    }
-    if (user?.timezone) {
-      setSelectedTimezone(user.timezone);
-    }
+    const parts = (user.name || "").split(" ");
+    setFirstName(parts[0] || "");
+    setLastName(parts.slice(1).join(" ") || "");
   }, [user]);
 
-  // Update current time display when timezone changes
-  useEffect(() => {
-    if (selectedTimezone) {
-      setCurrentTime(getCurrentTimeInTimezone(selectedTimezone));
-      const interval = setInterval(() => {
-        setCurrentTime(getCurrentTimeInTimezone(selectedTimezone));
-      }, 60000); // Update every minute
-      return () => clearInterval(interval);
-    }
-  }, [selectedTimezone]);
-
   const updateProfileMutation = useMutation({
-    mutationFn: async (data: { name?: string; company?: string | null; timezone?: string }) => {
+    mutationFn: async (data: { name: string }) => {
       const res = await apiRequest("PATCH", "/api/auth/me", data);
       if (!res.ok) {
         const error = await res.json();
@@ -213,14 +95,15 @@ export default function Settings() {
     },
     onSuccess: () => {
       toast({
-        title: t('settings.profileUpdated'),
-        description: t('settings.profileUpdatedDescription'),
+        title: t("settings.profileUpdated"),
+        description: t("settings.profileUpdatedDescription"),
       });
+      setIsEditing(false);
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
-        title: t('settings.updateFailed'),
+        title: t("settings.updateFailed"),
         description: error.message,
         variant: "destructive",
       });
@@ -238,16 +121,17 @@ export default function Settings() {
     },
     onSuccess: () => {
       toast({
-        title: t('settings.passwordChanged'),
-        description: t('settings.passwordChangedDescription'),
+        title: t("settings.passwordChanged"),
+        description: t("settings.passwordChangedDescription"),
       });
+      setIsPasswordModalOpen(false);
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
-        title: t('settings.passwordChangeFailed'),
+        title: t("settings.passwordChangeFailed"),
         description: error.message,
         variant: "destructive",
       });
@@ -265,111 +149,57 @@ export default function Settings() {
     },
     onSuccess: () => {
       toast({
-        title: t('settings.accountDeleted'),
-        description: t('settings.accountDeletedDescription'),
+        title: t("settings.accountDeleted"),
+        description: t("settings.accountDeletedDescription"),
       });
       AuthStorage.clearAuth();
       window.location.href = "/";
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
-        title: t('settings.deleteAccountFailed'),
+        title: t("settings.deleteAccountFailed"),
         description: error.message,
         variant: "destructive",
       });
     },
   });
 
-  const exportDataMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("GET", "/api/auth/export-data");
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || "Failed to export data");
-      }
-      return res.blob();
-    },
-    onSuccess: (blob) => {
-      // Create download link
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      const appSlug = ((branding.app_name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')) || 'platform';
-      a.download = `${appSlug}-data-export-${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      toast({
-        title: "Data Export Complete",
-        description: "Your data has been downloaded successfully as JSON.",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Export Failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleDeleteAccount = () => {
-    if (!deletePassword) {
-      toast({
-        title: t('settings.passwordRequired'),
-        description: t('settings.enterPasswordToDelete'),
-        variant: "destructive",
-      });
-      return;
+  const resetEdit = () => {
+    if (user?.firstName || user?.lastName) {
+      setFirstName(user?.firstName || "");
+      setLastName(user?.lastName || "");
+    } else {
+      const parts = (user?.name || "").split(" ");
+      setFirstName(parts[0] || "");
+      setLastName(parts.slice(1).join(" ") || "");
     }
-    deleteAccountMutation.mutate(deletePassword);
+    setIsEditing(false);
   };
 
-  const handleLogout = () => {
-    // Logout request clears the HttpOnly refresh token cookie on the server
-    fetch('/api/auth/logout', {
-      method: 'POST',
-      credentials: 'include',
-    }).catch(() => {});
-    AuthStorage.clearAuth();
-    window.location.href = "/";
-  };
-
-  const handleSaveProfile = () => {
+  const handleSave = () => {
     const fullName = `${firstName} ${lastName}`.trim();
-    updateProfileMutation.mutate({
-      name: fullName,
-      company: company.trim() || null,
-      timezone: selectedTimezone || undefined,
-    });
+    if (!fullName) return;
+    updateProfileMutation.mutate({ name: fullName });
   };
 
   const handleChangePassword = () => {
-    if (!currentPassword) {
+    if (!currentPassword || !newPassword || !confirmPassword) {
       toast({
-        title: t('settings.currentPasswordRequired'),
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!newPassword) {
-      toast({
-        title: t('settings.newPasswordRequired'),
+        title: t("settings.currentPasswordRequired"),
         variant: "destructive",
       });
       return;
     }
     if (newPassword.length < 8) {
       toast({
-        title: t('settings.passwordTooShort'),
+        title: t("settings.passwordTooShort"),
         variant: "destructive",
       });
       return;
     }
     if (newPassword !== confirmPassword) {
       toast({
-        title: t('settings.passwordsDoNotMatch'),
+        title: t("settings.passwordsDoNotMatch"),
         variant: "destructive",
       });
       return;
@@ -385,927 +215,210 @@ export default function Settings() {
     );
   }
 
-  return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-4xl font-semibold text-foreground">{t('settings.title')}</h1>
-        <p className="text-muted-foreground mt-1">{t('settings.description')}</p>
-      </div>
-
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList data-testid="tabs-settings">
-          <TabsTrigger value="profile" data-testid="tab-profile">{t('settings.profile')}</TabsTrigger>
-          <TabsTrigger value="kyc" data-testid="tab-kyc">
-            <ShieldCheck className="h-4 w-4 mr-2" />
-            {t('settings.kycDocuments')}
-          </TabsTrigger>
-          <TabsTrigger value="addresses" data-testid="tab-addresses">
-            <MapPin className="h-4 w-4 mr-2" />
-            {t('settings.addresses')}
-          </TabsTrigger>
-          {isRestApiPluginEnabled && (
-            <TabsTrigger value="developer" data-testid="tab-developer">
-              <Key className="h-4 w-4 mr-2" />
-              {t('settings.developer')}
-            </TabsTrigger>
-          )}
-          {settingsTabs.map((tab) => (
-            <TabsTrigger key={tab.id} value={tab.id} data-testid={`tab-${tab.id}`}>
-              {tab.icon === 'Users' && <Users className="h-4 w-4 mr-2" />}
-              {tab.icon === 'Mail' && <Mail className="h-4 w-4 mr-2" />}
-              {tab.label}
-            </TabsTrigger>
-          ))}
-          {/* Notifications tab hidden */}
-          <TabsTrigger value="account" data-testid="tab-account">{t('settings.account')}</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="profile" className="space-y-6">
-          <Card className="p-6">
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-semibold mb-4">{t('settings.profileInformation')}</h3>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="first-name">{t('settings.firstName')}</Label>
-                      <Input 
-                        id="first-name" 
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
-                        data-testid="input-first-name" 
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="last-name">{t('settings.lastName')}</Label>
-                      <Input 
-                        id="last-name" 
-                        value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
-                        data-testid="input-last-name" 
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">{t('common.email')}</Label>
-                    <Input id="email" type="email" defaultValue={user?.email} disabled data-testid="input-email" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="company">{t('settings.company')}</Label>
-                    <Input 
-                      id="company" 
-                      value={company}
-                      onChange={(e) => setCompany(e.target.value)}
-                      placeholder={t('settings.companyPlaceholder')} 
-                      data-testid="input-company" 
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <Separator />
-
-              <div>
-                <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
-                  <Globe className="h-5 w-5" />
-                  {t('settings.yourTimezone')}
-                </h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  {t('settings.timezoneDescription')}
-                </p>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="timezone">{t('settings.yourTimezone')}</Label>
-                    <Select value={selectedTimezone} onValueChange={setSelectedTimezone}>
-                      <SelectTrigger id="timezone" className="w-full" data-testid="select-timezone">
-                        <SelectValue placeholder={t('settings.timezone.placeholder')} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(groupedTimezones).map(([region, timezones]) => (
-                          <div key={region}>
-                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted/50">
-                              {region}
-                            </div>
-                            {timezones.map((tz) => (
-                              <SelectItem key={tz.value} value={tz.value} data-testid={`timezone-${tz.value}`}>
-                                {tz.label}
-                              </SelectItem>
-                            ))}
-                          </div>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {selectedTimezone && currentTime && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/30 p-3 rounded-md">
-                      <Clock className="h-4 w-4" />
-                      <span>{t('settings.currentTimeIn', { timezone: selectedTimezone })} <strong className="text-foreground">{currentTime}</strong></span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="flex justify-end">
-                <Button 
-                  onClick={handleSaveProfile}
-                  disabled={updateProfileMutation.isPending}
-                  data-testid="button-save-profile"
-                >
-                  {updateProfileMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4 mr-2" />
-                  )}
-                  {t('settings.saveChanges')}
-                </Button>
-              </div>
-
-              <Separator />
-
-              <div>
-                <h3 className="text-lg font-semibold mb-4">{t('settings.changePassword')}</h3>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="current-password">{t('settings.currentPassword')}</Label>
-                    <Input 
-                      id="current-password" 
-                      type="password" 
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      data-testid="input-current-password" 
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="new-password">{t('settings.newPassword')}</Label>
-                    <Input 
-                      id="new-password" 
-                      type="password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      data-testid="input-new-password" 
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="confirm-password">{t('settings.confirmPassword')}</Label>
-                    <Input 
-                      id="confirm-password" 
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      data-testid="input-confirm-password" 
-                    />
-                  </div>
-                  <div className="flex justify-end">
-                    <Button 
-                      onClick={handleChangePassword}
-                      disabled={changePasswordMutation.isPending || !currentPassword || !newPassword}
-                      data-testid="button-change-password"
-                    >
-                      {changePasswordMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <Save className="h-4 w-4 mr-2" />
-                      )}
-                      {t('settings.changePassword')}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="kyc" className="space-y-6">
-          <KycDocumentsSection user={user} />
-        </TabsContent>
-
-        <TabsContent value="addresses" className="space-y-6">
-          <AddressesSection />
-        </TabsContent>
-
-        <TabsContent value="developer" className="space-y-6">
-          <Card className="p-6">
-            <div className="flex items-center justify-between gap-4 flex-wrap">
-              <div>
-                <h3 className="text-lg font-semibold">{t('settings.apiDocumentation')}</h3>
-                <p className="text-sm text-muted-foreground">
-                  {t('settings.apiDocumentationDescription')}
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                onClick={() => window.open('/api/docs', '_blank')}
-                data-testid="button-open-api-docs"
-              >
-                <ExternalLink className="h-4 w-4 mr-2" />
-                {t('settings.openApiDocs')}
-              </Button>
-            </div>
-          </Card>
-          <ApiKeysTab />
-        </TabsContent>
-
-        {settingsTabs.map((tab) => (
-          <TabsContent key={tab.id} value={tab.id} className="space-y-6">
-            <Suspense fallback={<div className="flex items-center justify-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
-              <tab.component />
-            </Suspense>
-          </TabsContent>
-        ))}
-
-        {/* Notifications tab content hidden */}
-
-        <TabsContent value="account" className="space-y-6">
-          <Card className="p-6">
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-semibold mb-4">{t('settings.accountManagement')}</h3>
-                <p className="text-muted-foreground text-sm mb-6">
-                  {t('settings.accountManagementDescription')}
-                </p>
-              </div>
-
-              <div className="space-y-4">
-                {/* Data Export */}
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Download className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <p className="font-medium">{t('settings.exportYourData')}</p>
-                      <p className="text-sm text-muted-foreground">{t('settings.exportDataDescription')}</p>
-                    </div>
-                  </div>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => exportDataMutation.mutate()}
-                    disabled={exportDataMutation.isPending}
-                    data-testid="button-export-data"
-                  >
-                    {exportDataMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <Download className="h-4 w-4 mr-2" />
-                    )}
-                    {t('settings.exportDataButton')}
-                  </Button>
-                </div>
-
-                {/* Sign Out */}
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <LogOut className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <p className="font-medium">{t('settings.signOut')}</p>
-                      <p className="text-sm text-muted-foreground">{t('settings.signOutDescription')}</p>
-                    </div>
-                  </div>
-                  <Button variant="outline" onClick={handleLogout} data-testid="button-logout-settings">
-                    <LogOut className="h-4 w-4 mr-2" />
-                    {t('auth.logout')}
-                  </Button>
-                </div>
-
-                {/* Delete Account */}
-                <div className="flex items-center justify-between p-4 border border-destructive/50 rounded-lg bg-destructive/5">
-                    <div className="flex items-center gap-3">
-                      <Trash2 className="h-5 w-5 text-destructive" />
-                      <div>
-                        <p className="font-medium text-destructive">{t('settings.deleteAccount')}</p>
-                        <p className="text-sm text-muted-foreground">{t('settings.deleteAccountWarning')}</p>
-                      </div>
-                    </div>
-                    <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="destructive" data-testid="button-delete-account">
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          {t('settings.deleteAccount')}
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <div className="flex items-center gap-2 text-destructive">
-                            <AlertTriangle className="h-5 w-5" />
-                            <AlertDialogTitle>{t('settings.confirmDeleteAccount')}</AlertDialogTitle>
-                          </div>
-                          <AlertDialogDescription className="space-y-3">
-                            <p>{t('settings.deleteAccountConfirmMessage')}</p>
-                            <div className="p-3 bg-destructive/10 rounded-md border border-destructive/20">
-                              <p className="text-sm font-medium text-destructive">{t('settings.deleteAccountConsequences')}</p>
-                              <ul className="text-sm text-muted-foreground mt-2 space-y-1 list-disc list-inside">
-                                <li>{t('settings.deleteConsequence1')}</li>
-                                <li>{t('settings.deleteConsequence2')}</li>
-                                <li>{t('settings.deleteConsequence3')}</li>
-                              </ul>
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="delete-password">{t('settings.enterPasswordToConfirm')}</Label>
-                              <Input
-                                id="delete-password"
-                                type="password"
-                                placeholder={t('settings.yourPassword')}
-                                value={deletePassword}
-                                onChange={(e) => setDeletePassword(e.target.value)}
-                                data-testid="input-delete-password"
-                              />
-                            </div>
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel onClick={() => setDeletePassword("")} data-testid="button-cancel-delete">
-                            {t('common.cancel')}
-                          </AlertDialogCancel>
-                          <Button
-                            variant="destructive"
-                            onClick={handleDeleteAccount}
-                            disabled={deleteAccountMutation.isPending || !deletePassword}
-                            data-testid="button-confirm-delete"
-                          >
-                            {deleteAccountMutation.isPending ? (
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-4 w-4 mr-2" />
-                            )}
-                            {t('settings.permanentlyDelete')}
-                          </Button>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-              </div>
-            </div>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
-  );
-}
-
-function KycDocumentsSection({ user }: { user: User | undefined }) {
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  const [uploadingType, setUploadingType] = useState<string | null>(null);
-
-  const { data: kycDocuments, isLoading: documentsLoading, refetch: refetchDocuments } = useQuery<KycDocument[]>({
-    queryKey: ["/api/kyc/documents"],
-    enabled: !!user,
-  });
-
-  const uploadDocumentMutation = useMutation({
-    mutationFn: async ({ file, documentType }: { file: File, documentType: string }) => {
-      const formData = new FormData();
-      formData.append('document', file);
-      formData.append('documentType', documentType);
-      
-      const token = AuthStorage.getToken();
-      const response = await fetch('/api/kyc/upload', {
-        method: 'POST',
-        body: formData,
-        credentials: 'include',
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-      });
-      
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error.error || 'Upload failed');
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/kyc/documents"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      toast({ title: t('settings.kyc.uploadSuccess') || "Document uploaded successfully" });
-    },
-    onError: (error: any) => {
-      toast({ title: t('settings.kyc.uploadFailed') || "Upload failed", description: error.message, variant: "destructive" });
-    },
-    onSettled: () => {
-      setUploadingType(null);
-    }
-  });
-
-  const deleteDocumentMutation = useMutation({
-    mutationFn: async (documentId: string) => {
-      const response = await apiRequest("DELETE", `/api/kyc/documents/${documentId}`);
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error.error || 'Delete failed');
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/kyc/documents"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      toast({ title: t('settings.kyc.deleteSuccess') || "Document deleted successfully" });
-    },
-    onError: (error: any) => {
-      toast({ title: t('settings.kyc.deleteFailed') || "Delete failed", description: error.message, variant: "destructive" });
-    }
-  });
-
-  const submitKycMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/kyc/submit");
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error.error || 'Submit failed');
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/kyc/documents"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      toast({ title: t('settings.kyc.submitSuccess') || "KYC submitted for review", description: t('settings.kyc.submitSuccessDesc') || "An admin will review your documents soon." });
-    },
-    onError: (error: any) => {
-      toast({ title: t('settings.kyc.submitFailed') || "Submit failed", description: error.message, variant: "destructive" });
-    }
-  });
-
-  const handleFileUpload = (documentType: string) => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.pdf,.jpg,.jpeg,.png';
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) {
-        if (file.size > 5 * 1024 * 1024) {
-          toast({ title: t('settings.kyc.fileTooLarge') || "File too large", description: t('settings.kyc.fileTooLargeDesc') || "Maximum file size is 5MB", variant: "destructive" });
-          return;
-        }
-        setUploadingType(documentType);
-        uploadDocumentMutation.mutate({ file, documentType });
-      }
-    };
-    input.click();
-  };
-
-  const getDocumentForType = (type: string) => {
-    return kycDocuments?.find(doc => doc.documentType === type);
-  };
-
-  const allDocumentsUploaded = KYC_DOCUMENT_TYPES.every(doc => getDocumentForType(doc.type));
-  const kycStatus = user?.kycStatus || 'pending';
-
-  const getStatusBadge = () => {
-    switch (kycStatus) {
-      case 'approved':
-        return <Badge className="bg-green-100 text-green-800 border-green-200"><CheckCircle2 className="h-3 w-3 mr-1" />{t('settings.addressStatus.verified')}</Badge>;
-      case 'rejected':
-        return <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />{t('settings.addressStatus.failed')}</Badge>;
-      case 'submitted':
-        return <Badge variant="secondary"><AlertCircle className="h-3 w-3 mr-1" />{t('settings.addressStatus.pending')}</Badge>;
-      default:
-        return <Badge variant="outline"><AlertCircle className="h-3 w-3 mr-1" />{t('settings.addressStatus.pending')}</Badge>;
-    }
-  };
+  const username = user?.username || user?.email?.split("@")[0] || "";
+  const memberSince = user?.createdAt ? new Date(user.createdAt).toLocaleString() : "N/A";
 
   return (
     <div className="space-y-6">
-      <Card>
+      <Card className="border-slate-200 shadow-none">
         <CardHeader>
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5" />
-                {t('settings.kycVerification')}
-              </CardTitle>
-              <CardDescription>
-                {t('settings.kycVerificationDescription')}
-              </CardDescription>
-            </div>
-            {getStatusBadge()}
-          </div>
+          <CardTitle className="flex items-center text-[17px] font-semibold">
+            <User className="w-5 h-5 mr-2" />
+            Account Information
+          </CardTitle>
+          <CardDescription>Manage your account details and preferences</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {kycStatus === 'rejected' && user?.kycRejectionReason && (
-            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
-              <p className="text-sm font-medium text-destructive">{t('settings.kycRejectionReason')}</p>
-              <p className="text-sm text-destructive/80">{user.kycRejectionReason}</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Input
+              id="firstName"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              disabled={!isEditing}
+              data-testid="input-first-name"
+            />
+            <Input
+              id="lastName"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              disabled={!isEditing}
+              data-testid="input-last-name"
+            />
+            <div className="space-y-2">
+              <Label htmlFor="username" className="flex items-center">
+                <Building className="w-4 h-4 mr-2" />
+                Username
+              </Label>
+              <Input id="username" value={username} disabled data-testid="input-username" />
             </div>
-          )}
-
-          {kycStatus === 'approved' && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <p className="text-sm text-green-800">
-                {t('settings.kycComplete')}
-              </p>
+            <div className="space-y-2">
+              <Label htmlFor="email" className="flex items-center">
+                <Building className="w-4 h-4 mr-2" />
+                Email
+              </Label>
+              <Input id="email" value={user?.email || ""} disabled data-testid="input-email" />
             </div>
-          )}
-
-          <div className="space-y-4">
-            {KYC_DOCUMENT_TYPES.map((docType) => {
-              const existingDoc = getDocumentForType(docType.type);
-              const isUploading = uploadingType === docType.type;
-
-              return (
-                <div key={docType.type} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex items-center gap-3">
-                    {existingDoc ? (
-                      <FileCheck className="h-5 w-5 text-green-600" />
-                    ) : (
-                      <FilePlus className="h-5 w-5 text-muted-foreground" />
-                    )}
-                    <div>
-                      <p className="font-medium">{t(`settings.kyc.${docType.type}`)}</p>
-                      <p className="text-sm text-muted-foreground">{t(`settings.kyc.${docType.type}Desc`)}</p>
-                      {existingDoc && (
-                        <p className="text-xs text-green-600 mt-1">
-                          {t('settings.kyc.uploaded')} {existingDoc.fileName}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {existingDoc && kycStatus !== 'approved' && kycStatus !== 'submitted' && (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => deleteDocumentMutation.mutate(existingDoc.id)}
-                        disabled={deleteDocumentMutation.isPending}
-                        data-testid={`button-delete-${docType.type}`}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
-                    {!existingDoc && kycStatus !== 'approved' && (
-                      <Button
-                        variant="outline"
-                        onClick={() => handleFileUpload(docType.type)}
-                        disabled={isUploading}
-                        data-testid={`button-upload-${docType.type}`}
-                      >
-                        {isUploading ? (
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        ) : (
-                          <Upload className="h-4 w-4 mr-2" />
-                        )}
-                        {t('settings.kyc.upload')}
-                      </Button>
-                    )}
-                    {existingDoc && (
-                      <Badge variant="secondary" className="text-green-600">
-                        <CheckCircle2 className="h-3 w-3 mr-1" />
-                        {t('settings.kyc.uploadedStatus')}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+            <div className="space-y-2">
+              <Label className="flex items-center">
+                <Shield className="w-4 h-4 mr-2" />
+                Role
+              </Label>
+              <Input value={user?.role || ""} disabled className="bg-slate-50" data-testid="input-role" />
+            </div>
           </div>
 
-          {kycStatus !== 'approved' && kycStatus !== 'submitted' && (
-            <div className="flex justify-end">
-              <Button
-                onClick={() => submitKycMutation.mutate()}
-                disabled={!allDocumentsUploaded || submitKycMutation.isPending}
-                data-testid="button-submit-kyc"
-              >
-                {submitKycMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <ShieldCheck className="h-4 w-4 mr-2" />
-                )}
-                {t('settings.kyc.submitForReview')}
-              </Button>
+          <div className="flex items-center justify-between pt-4 border-t">
+            <div className="text-sm text-slate-500 flex items-center">
+              <Calendar className="w-4 h-4 mr-2" />
+              Member since {memberSince}
             </div>
-          )}
-
-          <p className="text-xs text-muted-foreground">
-            {t('settings.kyc.acceptedFormats')}
-          </p>
+            <div className="space-x-2">
+              {isEditing ? (
+                <>
+                  <Button variant="outline" onClick={resetEdit} disabled={updateProfileMutation.isPending}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleSave}
+                    disabled={updateProfileMutation.isPending || !firstName.trim()}
+                    data-testid="button-save-profile"
+                  >
+                    {updateProfileMutation.isPending ? "Saving..." : "Save Changes"}
+                  </Button>
+                </>
+              ) : (
+                <Button onClick={() => setIsEditing(true)} data-testid="button-edit-account">
+                  Edit Account
+                </Button>
+              )}
+            </div>
+          </div>
         </CardContent>
       </Card>
-    </div>
-  );
-}
 
-interface UserAddress {
-  id: string;
-  userId: string;
-  customerName: string;
-  street: string;
-  city: string;
-  region: string;
-  postalCode: string;
-  isoCountry: string;
-  twilioAddressSid?: string;
-  status: string;
-  verificationStatus?: string;
-  validationStatus?: string;
-  rejectionReason?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface AddressCountry {
-  code: string;
-  name: string;
-  requirement: string;
-}
-
-function AddressesSection() {
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  const [showAddDialog, setShowAddDialog] = useState(false);
-  const [selectedCountry, setSelectedCountry] = useState<string>("");
-  const [customerName, setCustomerName] = useState("");
-  const [street, setStreet] = useState("");
-  const [city, setCity] = useState("");
-  const [region, setRegion] = useState("");
-  const [postalCode, setPostalCode] = useState("");
-  const [refreshingAddressId, setRefreshingAddressId] = useState<string | null>(null);
-
-  const { data: addresses, isLoading } = useQuery<UserAddress[]>({
-    queryKey: ["/api/user/addresses"],
-  });
-
-  const { data: countries } = useQuery<AddressCountry[]>({
-    queryKey: ["/api/user/addresses/countries"],
-  });
-
-  const createAddressMutation = useMutation({
-    mutationFn: async (data: {
-      customerName: string;
-      street: string;
-      city: string;
-      region: string;
-      postalCode: string;
-      isoCountry: string;
-    }) => {
-      const response = await apiRequest("POST", "/api/user/addresses", data);
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error.error || "Failed to create address");
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/user/addresses"] });
-      toast({ title: t('settings.addressSubmitted'), description: t('settings.addressSubmittedDescription') });
-      setShowAddDialog(false);
-      resetForm();
-    },
-    onError: (error: any) => {
-      toast({ title: t('settings.createAddressFailed'), description: error.message, variant: "destructive" });
-    },
-  });
-
-  const refreshAddressMutation = useMutation({
-    mutationFn: async (addressId: string) => {
-      setRefreshingAddressId(addressId);
-      const response = await apiRequest("GET", `/api/user/addresses/${addressId}/refresh`);
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error.error || "Failed to refresh status");
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/user/addresses"] });
-      toast({ title: t('settings.statusRefreshed') });
-      setRefreshingAddressId(null);
-    },
-    onError: (error: any) => {
-      toast({ title: t('settings.refreshStatusFailed'), description: error.message, variant: "destructive" });
-      setRefreshingAddressId(null);
-    },
-  });
-
-  const deleteAddressMutation = useMutation({
-    mutationFn: async (addressId: string) => {
-      const response = await apiRequest("DELETE", `/api/user/addresses/${addressId}`);
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error.error || "Failed to delete address");
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/user/addresses"] });
-      toast({ title: t('settings.addressDeleted') });
-    },
-    onError: (error: any) => {
-      toast({ title: t('settings.deleteAddressFailed'), description: error.message, variant: "destructive" });
-    },
-  });
-
-  const resetForm = () => {
-    setSelectedCountry("");
-    setCustomerName("");
-    setStreet("");
-    setCity("");
-    setRegion("");
-    setPostalCode("");
-  };
-
-  const handleSubmit = () => {
-    if (!selectedCountry || !customerName || !street || !city || !region || !postalCode) {
-      toast({ title: t('settings.allFieldsRequired'), variant: "destructive" });
-      return;
-    }
-    createAddressMutation.mutate({
-      customerName,
-      street,
-      city,
-      region,
-      postalCode,
-      isoCountry: selectedCountry,
-    });
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'verified':
-        return <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100"><CheckCircle2 className="h-3 w-3 mr-1" />{t('settings.addressStatus.verified')}</Badge>;
-      case 'submitted':
-      case 'pending':
-        return <Badge variant="secondary"><Clock className="h-3 w-3 mr-1" />{t('settings.addressStatus.pending')}</Badge>;
-      case 'rejected':
-        return <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />{t('settings.addressStatus.failed')}</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
-  };
-
-  const getCountryName = (code: string) => {
-    const country = countries?.find(c => c.code === code);
-    return country?.name || code;
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <Card>
+      <Card className="border-slate-200 shadow-none">
         <CardHeader>
-          <div className="flex items-center justify-between gap-4 flex-wrap">
+          <CardTitle className="text-[17px] font-semibold">Security</CardTitle>
+          <CardDescription>Manage your security preferences</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="flex items-center gap-2">
-                <MapPin className="h-5 w-5" />
-                {t('settings.addressesTitle')}
-              </CardTitle>
-              <CardDescription>
-                {t('settings.addressesDescription')}
-              </CardDescription>
+              <h4 className="font-medium">Change Password</h4>
+              <p className="text-sm text-slate-500">Update your account password</p>
             </div>
-            <AlertDialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+            <Button variant="outline" onClick={() => setIsPasswordModalOpen(true)} data-testid="button-change-password">
+              Change
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-red-200 shadow-none">
+        <CardHeader>
+          <CardTitle className="text-[17px] font-semibold text-red-600">Danger Zone</CardTitle>
+          <CardDescription>Irreversible actions for your account</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="font-medium">Delete Account</h4>
+              <p className="text-sm text-slate-500">Permanently delete your account and all data</p>
+            </div>
+            <AlertDialog
+              onOpenChange={(open) => {
+                if (!open) setDeletePassword("");
+              }}
+            >
               <AlertDialogTrigger asChild>
-                <Button data-testid="button-add-address">
-                  <Plus className="h-4 w-4 mr-2" />
-                  {t('settings.addAddress')}
+                <Button variant="destructive" data-testid="button-delete-account">
+                  Delete Account
                 </Button>
               </AlertDialogTrigger>
-              <AlertDialogContent className="max-w-md">
+              <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>{t('settings.addNewAddress')}</AlertDialogTitle>
+                  <AlertDialogTitle>Delete this account?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    {t('settings.addAddressDescription')}
+                    This permanently deletes your account and all data. Enter your password to confirm.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label>{t('settings.country')}</Label>
-                    <Select value={selectedCountry} onValueChange={setSelectedCountry}>
-                      <SelectTrigger data-testid="select-address-country">
-                        <SelectValue placeholder={t('settings.country')} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {countries?.map((country) => (
-                          <SelectItem key={country.code} value={country.code}>
-                            {country.name} ({country.requirement === 'local' ? t('settings.addressStatus.localRequired') || 'Local address required' : t('settings.addressStatus.anyAddress') || 'Any address'})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>{t('settings.fullNameOrCompany')}</Label>
-                    <Input
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      placeholder={t('settings.fullNameOrCompany')}
-                      data-testid="input-address-name"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>{t('settings.streetAddress')}</Label>
-                    <Input
-                      value={street}
-                      onChange={(e) => setStreet(e.target.value)}
-                      placeholder={t('settings.streetAddress')}
-                      data-testid="input-address-street"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>{t('settings.city')}</Label>
-                      <Input
-                        value={city}
-                        onChange={(e) => setCity(e.target.value)}
-                        placeholder={t('settings.city')}
-                        data-testid="input-address-city"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>{t('settings.stateProvince')}</Label>
-                      <Input
-                        value={region}
-                        onChange={(e) => setRegion(e.target.value)}
-                        placeholder={t('settings.stateProvince')}
-                        data-testid="input-address-region"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>{t('settings.postalCode')}</Label>
-                    <Input
-                      value={postalCode}
-                      onChange={(e) => setPostalCode(e.target.value)}
-                      placeholder={t('settings.postalCode')}
-                      data-testid="input-address-postal"
-                    />
-                  </div>
-                </div>
+                <Input
+                  type="password"
+                  placeholder="Your password"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  data-testid="input-delete-password"
+                />
                 <AlertDialogFooter>
-                  <AlertDialogCancel onClick={resetForm}>{t('common.cancel')}</AlertDialogCancel>
-                  <Button
-                    onClick={handleSubmit}
-                    disabled={createAddressMutation.isPending}
-                    data-testid="button-submit-address"
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => deleteAccountMutation.mutate(deletePassword)}
+                    disabled={deleteAccountMutation.isPending || !deletePassword}
                   >
-                    {createAddressMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                    {t('settings.submitAddress')}
-                  </Button>
+                    {deleteAccountMutation.isPending ? "Deleting..." : "Yes, delete"}
+                  </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
           </div>
-        </CardHeader>
-        <CardContent>
-          {addresses?.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <MapPin className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>{t('settings.noAddresses')}</p>
-              <p className="text-sm">{t('settings.noAddressesDescription')}</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {addresses?.map((address) => (
-                <div key={address.id} className="flex items-start justify-between p-4 border rounded-lg">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{address.customerName}</span>
-                      {getStatusBadge(address.status)}
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {address.street}, {address.city}, {address.region} {address.postalCode}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {getCountryName(address.isoCountry)}
-                    </p>
-                    {address.rejectionReason && (
-                      <p className="text-sm text-destructive">
-                        {t('settings.kycRejectionReason')} {address.rejectionReason}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => refreshAddressMutation.mutate(address.id)}
-                      disabled={refreshingAddressId === address.id}
-                      title={t('settings.refreshStatus') || "Refresh status"}
-                      data-testid={`button-refresh-address-${address.id}`}
-                    >
-                      <RefreshCw className={`h-4 w-4 ${refreshingAddressId === address.id ? 'animate-spin' : ''}`} />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => deleteAddressMutation.mutate(address.id)}
-                      disabled={deleteAddressMutation.isPending}
-                      title={t('settings.deleteAddress') || "Delete address"}
-                      data-testid={`button-delete-address-${address.id}`}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </CardContent>
       </Card>
+
+      <Dialog open={isPasswordModalOpen} onOpenChange={setIsPasswordModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change Password</DialogTitle>
+            <DialogDescription>Enter your current password and a new one.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="currentPassword">Current Password</Label>
+              <Input
+                id="currentPassword"
+                type="password"
+                className="mt-3"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                data-testid="input-current-password"
+              />
+            </div>
+            <div>
+              <Label htmlFor="newPassword">New Password</Label>
+              <Input
+                id="newPassword"
+                type="password"
+                className="mt-3"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                data-testid="input-new-password"
+              />
+            </div>
+            <div>
+              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                className="mt-3"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                data-testid="input-confirm-password"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPasswordModalOpen(false)} disabled={changePasswordMutation.isPending}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleChangePassword}
+              disabled={changePasswordMutation.isPending}
+              data-testid="button-update-password"
+            >
+              {changePasswordMutation.isPending ? "Updating..." : "Update Password"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

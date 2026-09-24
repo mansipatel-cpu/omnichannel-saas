@@ -1,7 +1,8 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -20,8 +21,8 @@ import {
   MoreHorizontal, RefreshCw, Download, Plus, MessageSquare, CheckCircle2,
   TrendingUp, TrendingDown, Minus, Clock, Flame, UserX, PhoneMissed,
   ClipboardCheck, UserCheck, ArrowDownUp, PhoneCall, Zap, Palette, Check,
-  History, Tag, Trash2, BarChart3, Square, CheckSquare, X, Megaphone, PhoneIncoming,
-  GripVertical, Settings, EyeOff, Eye
+  History, Tag, Trash2, BarChart3, X,
+  GripVertical, Settings, EyeOff, Eye, Copy, Bot, Sparkles, Mail
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -41,6 +42,7 @@ interface Lead {
   lastName: string | null;
   phone: string;
   email: string | null;
+  company?: string | null;
   stage: string;
   stageId: string | null;
   leadScore: number | null;
@@ -372,6 +374,7 @@ function LeadCard({ lead, onClick, stageColor, isSelected, onToggleSelect }: {
   onToggleSelect?: (leadId: string) => void;
 }) {
   const { t } = useTranslation();
+  const pointerRef = useRef({ x: 0, y: 0, dragged: false });
   const hasValidPhone = lead.phone && lead.phone !== 'Unknown' && lead.phone.trim() !== '';
   const fullName = [lead.firstName, lead.lastName].filter(Boolean).join(" ");
   // Primary display: Phone if valid, otherwise name, otherwise email, otherwise Unknown
@@ -410,10 +413,20 @@ function LeadCard({ lead, onClick, stageColor, isSelected, onToggleSelect }: {
       className="group"
     >
       <Card 
-        className={`cursor-pointer hover-elevate transition-all bg-card border-l-[3px] ${!borderStyle ? theme.accentBorder : ''} ${isSelected ? 'ring-2 ring-primary' : ''}`}
-        onClick={onClick}
+        className={`cursor-pointer transition-all bg-white border-slate-200 shadow-none ${isSelected ? 'ring-2 ring-[#2F6BFF]/30' : ''}`}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          pointerRef.current = { x: e.clientX, y: e.clientY, dragged: false };
+        }}
+        onPointerUp={(e) => {
+          e.stopPropagation();
+          const dx = Math.abs(e.clientX - pointerRef.current.x);
+          const dy = Math.abs(e.clientY - pointerRef.current.y);
+          if (!pointerRef.current.dragged && dx < 8 && dy < 8) {
+            onClick();
+          }
+        }}
         data-testid={`lead-card-${lead.id}`}
-        style={borderStyle}
       >
         <CardContent className="p-3">
           <div className="flex flex-col gap-2">
@@ -647,37 +660,35 @@ function AIKanbanColumn({
 
   return (
     <div 
-      className={`flex flex-col min-w-[300px] max-w-[300px] rounded-xl overflow-hidden transition-all border bg-card ${
-        highlighted ? 'border-primary ring-2 ring-primary/30 shadow-lg' : 'border-border/50 opacity-90'
-      } ${isDragging ? 'opacity-50 scale-95' : ''} ${isDragOver ? 'ring-2 ring-blue-400 scale-[1.02]' : ''}`}
+      className={`relative flex flex-col rounded-2xl overflow-hidden transition-all border border-slate-200 bg-white ${
+        highlighted ? '' : 'opacity-80'
+      } ${isDragging ? 'opacity-50 scale-95' : ''} ${isDragOver ? 'ring-2 ring-blue-400' : ''}`}
       data-testid={`ai-kanban-column-${category.id}`}
-      draggable
-      onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
-      onDragEnd={onDragEnd}
     >
-      <div 
-        className="px-4 py-3 text-white cursor-grab active:cursor-grabbing"
-        style={{ backgroundColor: category.color }}
+      <span className="absolute left-0 right-0 top-0 h-1.5" style={{ backgroundColor: category.color }} />
+      <div
+        className="px-4 pt-5 pb-3 cursor-grab active:cursor-grabbing"
+        draggable
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
       >
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <GripVertical className="w-4 h-4 text-white/60" />
-            <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-white/20">
-              <Icon className="w-4 h-4" />
-            </div>
-            <h3 className="font-semibold text-sm uppercase tracking-wide">
+          <div className="flex items-center gap-2 min-w-0">
+            <GripVertical className="w-4 h-4 text-slate-300" />
+            <Icon className="w-4 h-4 shrink-0" style={{ color: category.color }} />
+            <h3 className="font-semibold text-sm uppercase tracking-wide text-slate-800 truncate">
               {t(`crmPage.categories.${category.id}`, { defaultValue: category.label })}
             </h3>
-            <Badge className="h-5 px-1.5 text-[10px] font-medium bg-white/20 text-white border-0">
+            <span className="h-5 min-w-5 px-1.5 rounded-full bg-slate-100 text-[11px] font-medium text-slate-500 inline-flex items-center justify-center">
               {total}
-            </Badge>
+            </span>
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="icon" variant="ghost" className="h-7 w-7 text-white/80 hover:text-white hover:bg-white/20">
+              <Button size="icon" variant="ghost" className="h-7 w-7 text-slate-400 hover:text-slate-700 hover:bg-slate-100">
                 <MoreHorizontal className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -771,12 +782,10 @@ function AIKanbanColumn({
             ))}
           </AnimatePresence>
           {leads.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-10 text-center min-h-[100px]">
-              <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center mb-2">
-                <Icon className="w-4 h-4" style={{ color: category.color }} />
-              </div>
-              <p className="text-xs text-muted-foreground">{t("crmPage.noLeads")}</p>
-              <p className="text-[10px] text-muted-foreground/60 mt-0.5">{t("crmPage.dropLeadsHere")}</p>
+            <div className="flex flex-col items-center justify-center py-12 text-center min-h-[140px]">
+              <Icon className="w-8 h-8 mb-2 opacity-40" style={{ color: category.color }} />
+              <p className="text-sm font-medium text-slate-500">{t("crmPage.noLeads")}</p>
+              <p className="text-xs text-slate-400 mt-0.5">{t("crmPage.dropLeadsHere")}</p>
             </div>
           )}
         </div>
@@ -856,139 +865,172 @@ function LeadDetailModal({ lead, open, onClose, stageColor }: { lead: Lead | nul
     }
   };
 
-  if (!lead) return null;
+  const categoryInfo = lead ? AI_CATEGORIES.find(c => c.id === lead.aiCategory) : undefined;
+  const categoryLabel = categoryInfo
+    ? t(`crmPage.categories.${categoryInfo.id}`, { defaultValue: categoryInfo.label })
+    : (lead?.stage || "").replace(/_/g, " ");
+  const qualificationId = lead ? `LD-${lead.id.replace(/-/g, "").slice(0, 12)}` : "";
+  const scoreValue = lead?.leadScore ?? 0;
+  const companyName = lead?.company || "Demo Company";
+  const agentLabel = lead?.sourceType === "incoming" ? "AI Agent: incoming" : "AI Agent: campaign";
+  const activityDate = lead?.lastCallAt || lead?.updatedAt || lead?.createdAt;
+  const timeAgo = (() => {
+    if (!activityDate) return "";
+    const diff = Date.now() - new Date(activityDate).getTime();
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return t("crmPage.justNow");
+    if (minutes < 60) return t("crmPage.minutesAgo", { count: minutes, defaultValue: "{{count}}m ago" });
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return t("crmPage.hoursAgo", { count: hours });
+    const days = Math.floor(hours / 24);
+    return t("crmPage.daysAgo", { count: days });
+  })();
+  const dateLabel = activityDate
+    ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true }).format(new Date(activityDate))
+    : "";
 
-  const theme = getStageTheme(lead.stage, stageColor);
+  const copyPhone = () => {
+    if (lead?.phone) navigator.clipboard.writeText(lead.phone).catch(() => {});
+  };
 
-  return (
-    <Dialog open={open} onOpenChange={() => onClose()}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="lead-detail-modal">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-3">
-            <ScoreIndicator score={lead.leadScore} />
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open, onClose]);
+
+  if (!open || !lead) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" data-testid="lead-detail-modal">
+      <button type="button" className="absolute inset-0 bg-black/50" aria-label="Close lead details" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-xl">
+        <div className="px-6 pt-5 pb-4">
+          <div className="flex items-start justify-between gap-4">
             <div>
-              <span className="text-lg">{displayName}</span>
-              <div className="flex items-center gap-2 mt-1">
-                <Badge className={theme.badgeBg}>{lead.stage}</Badge>
-                {lead.sentiment && (
-                  <Badge variant="outline" className="flex items-center gap-1">
-                    <SentimentIcon sentiment={lead.sentiment} />
-                    <span className="capitalize">{t(`sentiment.${lead.sentiment}`, { defaultValue: lead.sentiment })}</span>
-                  </Badge>
+              <h2 className="flex items-center gap-2 text-[17px] font-semibold text-slate-900">
+                Lead Details
+                {categoryInfo && (
+                  <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium" style={{ backgroundColor: `${categoryInfo.color}18`, color: categoryInfo.color }}>
+                    {categoryLabel}
+                  </span>
                 )}
+              </h2>
+              <p className="text-xs text-slate-400 mt-1">
+                Telephony Qualification ID: {qualificationId}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="absolute right-4 top-4 rounded-sm text-slate-400 hover:text-slate-700"
+              aria-label="Close"
+            >
+              <X className="h-4 w-4" />
+            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="relative h-12 w-12">
+                <svg className="h-12 w-12 -rotate-90" viewBox="0 0 48 48">
+                  <circle cx="24" cy="24" r="18" fill="none" stroke="#E2E8F0" strokeWidth="4" />
+                  <circle
+                    cx="24"
+                    cy="24"
+                    r="18"
+                    fill="none"
+                    stroke={scoreValue >= 70 ? "#F97316" : "#2F6BFF"}
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                    strokeDasharray={`${2 * Math.PI * 18}`}
+                    strokeDashoffset={`${2 * Math.PI * 18 * (1 - scoreValue / 100)}`}
+                  />
+                </svg>
+                <span className="absolute inset-0 flex items-center justify-center text-[11px] font-semibold text-slate-700">{scoreValue}</span>
               </div>
-            </div>
-          </DialogTitle>
-          <DialogDescription>
-            {t("crmPage.leadDetails")}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-6 py-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-muted-foreground">{t("crmPage.phone")}</p>
-              <p className="font-mono" data-testid="lead-detail-phone">{lead.phone}</p>
-            </div>
-            {lead.email && (
-              <div>
-                <p className="text-sm text-muted-foreground">{t("crmPage.email")}</p>
-                <p data-testid="lead-detail-email">{lead.email}</p>
+              <div className="leading-tight">
+                <p className="text-[10px] uppercase tracking-wide text-slate-400">Lead Score</p>
+                <p className="text-xs font-medium text-slate-700">{scoreValue}/100 Qualified</p>
               </div>
-            )}
-            <div>
-              <p className="text-sm text-muted-foreground">{t("crmPage.source")}</p>
-              <Badge variant="outline" className="flex items-center gap-1 w-fit">
-                {lead.sourceType === "campaign" ? <Zap className="w-3 h-3" /> : <PhoneCall className="w-3 h-3" />}
-                {lead.sourceType === "campaign" ? t("crmPage.campaigns") : t("crmPage.incoming")}
-              </Badge>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">{t("crmPage.created")}</p>
-              <p className="text-sm">{new Date(lead.createdAt).toLocaleDateString()}</p>
             </div>
           </div>
+        </div>
 
-          <Separator />
-
-          <div className="flex flex-wrap gap-2">
-            {lead.hasAppointment && (
-              <Badge className="bg-blue-500 text-white flex items-center gap-1">
-                <Calendar className="w-3 h-3" /> {t("crmPage.appointmentBooked")}
-              </Badge>
-            )}
-            {lead.hasFormSubmission && (
-              <Badge className="bg-purple-500 text-white flex items-center gap-1">
-                <ClipboardCheck className="w-3 h-3" /> {t("crmPage.formSubmitted")}
-              </Badge>
-            )}
-            {lead.hasTransfer && (
-              <Badge className="bg-violet-500 text-white flex items-center gap-1">
-                <PhoneForwarded className="w-3 h-3" /> {t("crmPage.transferred")}
-              </Badge>
-            )}
-            {lead.hasCallback && (
-              <Badge className="bg-amber-500 text-white flex items-center gap-1">
-                <PhoneCall className="w-3 h-3" /> {t("crmPage.callbackScheduled")}
-              </Badge>
-            )}
+        <div className="px-6 pb-5 space-y-4">
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+            <div className="flex items-center gap-2">
+              <p className="text-lg font-semibold text-slate-900 font-mono" data-testid="lead-detail-phone">{lead.phone}</p>
+              <button type="button" onClick={copyPhone} className="text-slate-400 hover:text-slate-600">
+                <Copy className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-2 space-y-1.5 text-sm text-slate-500">
+              <p className="flex items-center gap-2">
+                <Phone className="h-3.5 w-3.5" />
+                {companyName}
+              </p>
+              <p className="flex items-center gap-2">
+                <Bot className="h-3.5 w-3.5" />
+                {agentLabel}
+              </p>
+              <p className="flex items-center gap-2">
+                <Clock className="h-3.5 w-3.5" />
+                {timeAgo}{dateLabel ? ` · ${dateLabel}` : ""}
+              </p>
+              {lead.email && (
+                <p className="flex items-center gap-2" data-testid="lead-detail-email">
+                  <Mail className="h-3.5 w-3.5" />
+                  {lead.email}
+                </p>
+              )}
+            </div>
           </div>
 
           {lead.recordingUrl && (
-            <div>
-              <p className="text-sm font-medium mb-2">{t("crmPage.recording")}</p>
-              <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => {
-                    const audio = document.getElementById(`audio-${lead.id}`) as HTMLAudioElement;
-                    if (audio) {
-                      if (isPlaying) {
-                        audio.pause();
-                      } else {
-                        audio.play();
-                      }
-                      setIsPlaying(!isPlaying);
-                    }
-                  }}
-                  data-testid="play-recording-button"
-                >
-                  {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                </Button>
-                <audio id={`audio-${lead.id}`} src={lead.recordingUrl} onEnded={() => setIsPlaying(false)} className="hidden" />
-                <span className="text-sm text-muted-foreground">{t("crmPage.callRecording")}</span>
-              </div>
+            <div className="flex items-center gap-3 p-3 rounded-xl border border-slate-200">
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => {
+                  const audio = document.getElementById(`audio-${lead.id}`) as HTMLAudioElement;
+                  if (audio) {
+                    if (isPlaying) audio.pause();
+                    else audio.play();
+                    setIsPlaying(!isPlaying);
+                  }
+                }}
+                data-testid="play-recording-button"
+              >
+                {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+              </Button>
+              <audio id={`audio-${lead.id}`} src={lead.recordingUrl} onEnded={() => setIsPlaying(false)} className="hidden" />
+              <span className="text-sm text-slate-500">{t("crmPage.callRecording")}</span>
             </div>
           )}
 
-          {lead.aiSummary && (
-            <div>
-              <p className="text-sm font-medium mb-2">{t("crmPage.aiSummary")}</p>
-              <p className="text-sm text-muted-foreground bg-muted p-3 rounded-lg" data-testid="lead-ai-summary">{lead.aiSummary}</p>
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles className="h-4 w-4 text-[#2F6BFF]" />
+              <h3 className="text-sm font-semibold text-slate-900">AI Conversational Analysis & Intent</h3>
             </div>
-          )}
-
-          {lead.transcript && (
-            <div>
-              <p className="text-sm font-medium mb-2">{t("crmPage.transcript")}</p>
-              <ScrollArea className="h-48 bg-muted p-3 rounded-lg">
-                <pre className="text-xs whitespace-pre-wrap font-sans" data-testid="lead-transcript">{lead.transcript}</pre>
-              </ScrollArea>
+            <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600 leading-relaxed" data-testid="lead-ai-summary">
+              “{lead.aiSummary || "No AI analysis available for this lead yet."}”
             </div>
-          )}
-
-          <Separator />
+          </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="w-full">
-              <TabsTrigger value="notes" className="flex-1" data-testid="tab-notes">
-                <MessageSquare className="w-4 h-4 mr-2" />
-                {t("crmPage.notes")} ({notes.length})
+            <TabsList className="h-auto w-full justify-start gap-6 rounded-none bg-transparent p-0 border-b border-slate-200">
+              <TabsTrigger value="notes" className="rounded-none border-b-2 border-transparent px-0 pb-2.5 shadow-none data-[state=active]:border-[#2F6BFF] data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-slate-900 text-slate-500" data-testid="tab-notes">
+                Notes
               </TabsTrigger>
-              <TabsTrigger value="activity" className="flex-1" data-testid="tab-activity">
-                <History className="w-4 h-4 mr-2" />
-                {t("crmPage.activity")} ({activities.length})
+              <TabsTrigger value="activity" className="rounded-none border-b-2 border-transparent px-0 pb-2.5 shadow-none data-[state=active]:border-[#2F6BFF] data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-slate-900 text-slate-500" data-testid="tab-activity">
+                Activity
               </TabsTrigger>
             </TabsList>
 
@@ -1000,35 +1042,25 @@ function LeadDetailModal({ lead, open, onClose, stageColor }: { lead: Lead | nul
               ) : notes.length > 0 ? (
                 <div className="space-y-3 mb-4" data-testid="notes-list">
                   {notes.map((note, index) => (
-                    <div key={note.id} className="p-3 bg-muted rounded-lg" data-testid={`note-item-${index}`}>
+                    <div key={note.id} className="p-3 bg-slate-50 rounded-xl" data-testid={`note-item-${index}`}>
                       <p className="text-sm" data-testid={`note-content-${index}`}>{note.content}</p>
-                      <p className="text-xs text-muted-foreground mt-2" data-testid={`note-date-${index}`}>
+                      <p className="text-xs text-slate-400 mt-2" data-testid={`note-date-${index}`}>
                         {new Date(note.createdAt).toLocaleString()}
                       </p>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground mb-4" data-testid="notes-empty">{t("crmPage.noNotes")}</p>
+                <p className="text-sm text-slate-400 mb-4" data-testid="notes-empty">Add notes</p>
               )}
 
-              <div className="space-y-2">
-                <Textarea 
-                  placeholder={t("crmPage.addNotePlaceholder")}
-                  value={noteText}
-                  onChange={(e) => setNoteText(e.target.value)}
-                  className="min-h-[80px]"
-                  data-testid="lead-note-input"
-                />
-                <Button 
-                  onClick={() => noteText.trim() && addNoteMutation.mutate(noteText.trim())}
-                  disabled={!noteText.trim() || addNoteMutation.isPending}
-                  data-testid="add-note-button"
-                >
-                  {addNoteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                  {t("crmPage.addNote")}
-                </Button>
-              </div>
+              <Textarea
+                placeholder="Add a note..."
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                className="min-h-[72px] rounded-xl border-slate-200"
+                data-testid="lead-note-input"
+              />
             </TabsContent>
 
             <TabsContent value="activity" className="mt-4" data-testid="activity-section">
@@ -1040,16 +1072,16 @@ function LeadDetailModal({ lead, open, onClose, stageColor }: { lead: Lead | nul
                 <ScrollArea className="h-64">
                   <div className="space-y-3" data-testid="activity-list">
                     {activities.map((activity, index) => (
-                      <div key={activity.id} className="flex gap-3 p-3 bg-muted rounded-lg" data-testid={`activity-item-${index}`}>
-                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-background shrink-0">
+                      <div key={activity.id} className="flex gap-3 p-3 bg-slate-50 rounded-xl" data-testid={`activity-item-${index}`}>
+                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-white border border-slate-200 shrink-0">
                           {getActivityIcon(activity.activityType)}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium">{activity.title}</p>
                           {activity.description && (
-                            <p className="text-xs text-muted-foreground mt-1">{activity.description}</p>
+                            <p className="text-xs text-slate-500 mt-1">{activity.description}</p>
                           )}
-                          <p className="text-xs text-muted-foreground mt-1">
+                          <p className="text-xs text-slate-400 mt-1">
                             {new Date(activity.createdAt).toLocaleString()}
                           </p>
                         </div>
@@ -1058,17 +1090,30 @@ function LeadDetailModal({ lead, open, onClose, stageColor }: { lead: Lead | nul
                   </div>
                 </ScrollArea>
               ) : (
-                <p className="text-sm text-muted-foreground">{t("crmPage.noActivity")}</p>
+                <p className="text-sm text-slate-400">{t("crmPage.noActivity")}</p>
               )}
             </TabsContent>
           </Tabs>
-        </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} data-testid="close-lead-modal">{t("crmPage.close")}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <Button
+              variant="outline"
+              className="rounded-lg border-slate-200"
+              onClick={() => noteText.trim() && addNoteMutation.mutate(noteText.trim())}
+              disabled={!noteText.trim() || addNoteMutation.isPending}
+              data-testid="add-note-button"
+            >
+              {addNoteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Add Note
+            </Button>
+            <Button variant="outline" className="rounded-lg border-slate-200" onClick={onClose} data-testid="close-lead-modal">
+              Close
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 
@@ -1198,138 +1243,188 @@ function CRMFilterSettingsDialog({
     }));
   };
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg" data-testid="filter-settings-modal">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Settings className="w-5 h-5" />
-            {t("crmSettings.title", { defaultValue: "CRM Filter Settings" })}
-          </DialogTitle>
-          <DialogDescription>
-            {t("crmSettings.description", { defaultValue: "Configure how leads are displayed and filtered in your CRM." })}
-          </DialogDescription>
-        </DialogHeader>
-        
-        <ScrollArea className="max-h-[60vh]">
-          <div className="space-y-6 py-4 pr-4">
-            {/* Hide leads without phone toggle */}
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-sm font-medium">{t("crmSettings.hideLeadsWithoutPhone", { defaultValue: "Hide leads without phone" })}</Label>
-                <p className="text-xs text-muted-foreground">
-                  {t("crmSettings.hideLeadsWithoutPhoneDesc", { defaultValue: "Only show leads that have a valid phone number" })}
-                </p>
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onOpenChange(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open, onOpenChange]);
+
+  if (!open) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" data-testid="filter-settings-modal">
+      <button type="button" className="absolute inset-0 bg-black/40" aria-label="Close settings" onClick={() => onOpenChange(false)} />
+      <div className="relative z-10 w-full max-w-[560px] rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
+              <Settings className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-[17px] font-semibold text-slate-900 leading-tight">
+                {t("crmSettings.title", { defaultValue: "CRM Filter Settings" })}
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                {t("crmSettings.description", { defaultValue: "Configure how leads are displayed and filtered in your CRM." })}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="mt-6 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-slate-900">
+              {t("crmSettings.hideLeadsWithoutPhone", { defaultValue: "Hide leads without phone" })}
+            </p>
+            <p className="mt-0.5 text-sm text-slate-500">
+              {t("crmSettings.hideLeadsWithoutPhoneDesc", { defaultValue: "Only show leads that have a valid phone number" })}
+            </p>
+          </div>
+          <Switch
+            checked={localSettings.hideLeadsWithoutPhone}
+            onCheckedChange={(checked) => {
+              setLocalSettings(prev => ({ ...prev, hideLeadsWithoutPhone: checked }));
+            }}
+            data-testid="toggle-hide-no-phone"
+          />
+        </div>
+
+        <div className="mt-8">
+          <p className="text-sm font-semibold text-slate-900">
+            {t("crmSettings.scoreThresholds", { defaultValue: "Lead Score Thresholds" })}
+          </p>
+          <p className="mt-1 text-sm text-slate-500">
+            {t("crmSettings.scoreThresholdsDesc", { defaultValue: "Define score ranges for Hot and Warm lead classifications" })}
+          </p>
+
+          <div className="mt-5 space-y-5">
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Flame className="h-4 w-4 text-orange-500" />
+                  <span className="text-sm text-slate-700">
+                    {t("crmSettings.hotLeadThreshold", { defaultValue: "Hot Lead Threshold" })}
+                  </span>
+                </div>
+                <span className="text-sm font-medium text-slate-700">{localSettings.hotScoreThreshold}+</span>
               </div>
-              <Switch
-                checked={localSettings.hideLeadsWithoutPhone}
-                onCheckedChange={(checked) => {
-                  setLocalSettings(prev => ({ ...prev, hideLeadsWithoutPhone: checked }));
+              <Slider
+                value={[localSettings.hotScoreThreshold]}
+                onValueChange={([value]) => {
+                  setLocalSettings(prev => ({ ...prev, hotScoreThreshold: value }));
                 }}
-                data-testid="toggle-hide-no-phone"
+                min={50}
+                max={100}
+                step={5}
+                className="w-full"
+                trackClassName="h-1.5 bg-slate-200"
+                rangeClassName="bg-slate-300"
+                thumbClassName="h-4 w-4 border border-slate-300 bg-white shadow-sm"
+                data-testid="slider-hot-threshold"
               />
             </div>
 
-            <Separator />
-
-            {/* Score Thresholds */}
-            <div className="space-y-4">
-              <Label className="text-sm font-medium">{t("crmSettings.scoreThresholds", { defaultValue: "Lead Score Thresholds" })}</Label>
-              <p className="text-xs text-muted-foreground mb-4">
-                {t("crmSettings.scoreThresholdsDesc", { defaultValue: "Define score ranges for Hot and Warm lead classifications" })}
-              </p>
-              
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Flame className="w-4 h-4 text-orange-500" />
-                      <span className="text-sm">{t("crmSettings.hotLeadThreshold", { defaultValue: "Hot Lead Threshold" })}</span>
-                    </div>
-                    <span className="text-sm font-medium">{localSettings.hotScoreThreshold}+</span>
-                  </div>
-                  <Slider
-                    value={[localSettings.hotScoreThreshold]}
-                    onValueChange={([value]) => {
-                      setLocalSettings(prev => ({ ...prev, hotScoreThreshold: value }));
-                    }}
-                    min={50}
-                    max={100}
-                    step={5}
-                    className="w-full"
-                    data-testid="slider-hot-threshold"
-                  />
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-amber-500" />
+                  <span className="text-sm text-slate-700">
+                    {t("crmSettings.warmLeadThreshold", { defaultValue: "Warm Lead Threshold" })}
+                  </span>
                 </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <TrendingUp className="w-4 h-4 text-yellow-500" />
-                      <span className="text-sm">{t("crmSettings.warmLeadThreshold", { defaultValue: "Warm Lead Threshold" })}</span>
-                    </div>
-                    <span className="text-sm font-medium">{localSettings.warmScoreThreshold}+</span>
-                  </div>
-                  <Slider
-                    value={[localSettings.warmScoreThreshold]}
-                    onValueChange={([value]) => {
-                      setLocalSettings(prev => ({ ...prev, warmScoreThreshold: value }));
-                    }}
-                    min={20}
-                    max={79}
-                    step={5}
-                    className="w-full"
-                    data-testid="slider-warm-threshold"
-                  />
-                </div>
+                <span className="text-sm font-medium text-slate-700">{localSettings.warmScoreThreshold}+</span>
               </div>
+              <Slider
+                value={[localSettings.warmScoreThreshold]}
+                onValueChange={([value]) => {
+                  setLocalSettings(prev => ({ ...prev, warmScoreThreshold: value }));
+                }}
+                min={20}
+                max={79}
+                step={5}
+                className="w-full"
+                trackClassName="h-1.5 bg-slate-200"
+                rangeClassName="bg-slate-300"
+                thumbClassName="h-4 w-4 border border-slate-300 bg-white shadow-sm"
+                data-testid="slider-warm-threshold"
+              />
             </div>
-
-            <Separator />
-
-            {/* Hidden Categories */}
-            <div className="space-y-3">
-              <Label className="text-sm font-medium">{t("crmSettings.visibleCategories", { defaultValue: "Visible Categories" })}</Label>
-              <p className="text-xs text-muted-foreground mb-2">
-                {t("crmSettings.visibleCategoriesDesc", { defaultValue: "Choose which AI categories to show in the kanban view" })}
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                {AI_CATEGORIES.map((cat) => {
-                  const isHidden = localSettings.hiddenCategories.includes(cat.id);
-                  return (
-                    <div
-                      key={cat.id}
-                      className="flex items-center gap-2 p-2 rounded-md border hover-elevate cursor-pointer"
-                      onClick={() => toggleCategory(cat.id)}
-                      data-testid={`toggle-category-${cat.id}`}
-                    >
-                      {isHidden ? (
-                        <EyeOff className="w-4 h-4 text-muted-foreground" />
-                      ) : (
-                        <Eye className="w-4 h-4 text-primary" />
-                      )}
-                      <span className={`text-sm ${isHidden ? 'text-muted-foreground' : ''}`}>
-                        {t(`crmPage.categories.${cat.id}`, { defaultValue: cat.label })}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
           </div>
-        </ScrollArea>
-        
-        <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="cancel-filter-settings">
+        </div>
+
+        <div className="mt-8">
+          <p className="text-sm font-semibold text-slate-900">
+            {t("crmSettings.visibleCategories", { defaultValue: "Visible Categories" })}
+          </p>
+          <p className="mt-1 text-sm text-slate-500">
+            {t("crmSettings.visibleCategoriesDesc", { defaultValue: "Choose which AI categories to show in the kanban view" })}
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-2.5">
+            {AI_CATEGORIES.map((cat) => {
+              const isHidden = localSettings.hiddenCategories.includes(cat.id);
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left ${
+                    isHidden ? "border-slate-200 bg-slate-50 text-slate-400" : "border-slate-200 bg-white text-slate-700"
+                  }`}
+                  onClick={() => toggleCategory(cat.id)}
+                  data-testid={`toggle-category-${cat.id}`}
+                >
+                  {isHidden ? (
+                    <EyeOff className="h-4 w-4 text-slate-400" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-slate-500" />
+                  )}
+                  <span className="text-sm">
+                    {t(`crmPage.categories.${cat.id}`, { defaultValue: cat.label })}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="mt-8 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            className="h-9 rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            onClick={() => onOpenChange(false)}
+            data-testid="cancel-filter-settings"
+          >
             {t("common.cancel", { defaultValue: "Cancel" })}
-          </Button>
-          <Button onClick={handleSave} disabled={isSaving} data-testid="save-filter-settings">
-            {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+          </button>
+          <button
+            type="button"
+            className="h-9 rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+            onClick={handleSave}
+            disabled={isSaving}
+            data-testid="save-filter-settings"
+          >
+            {isSaving ? <Loader2 className="mr-2 inline h-4 w-4 animate-spin" /> : null}
             {t("common.save", { defaultValue: "Save Settings" })}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 
@@ -2006,110 +2101,100 @@ export default function CRMPage() {
   const isLoading = stagesLoading || leadsLoading;
 
   return (
-    <div className="flex flex-col h-full bg-background" data-testid="crm-page">
-      <div className="bg-gradient-to-r from-primary/5 via-primary/3 to-transparent border-b">
-        <div className="px-6 py-4 space-y-4">
-          {/* Header Row - Title and Actions */}
+    <div className="flex flex-col h-full space-y-4" data-testid="crm-page">
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-primary/10">
-                <Zap className="w-6 h-6 text-primary" />
+              <div className="flex items-center justify-center w-11 h-11 rounded-xl bg-[#2F6BFF]">
+                <Zap className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-semibold">{t("crmPage.title")}</h1>
-                <p className="text-sm text-muted-foreground">
-                  {t("crmPage.description")}
+                <h1 className="text-[17px] font-semibold text-slate-900 leading-tight">Qualified Leads</h1>
+                <p className="text-sm text-slate-500 mt-0.5">
+                  View and manage AI-categorized leads
                 </p>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleExportCSV} 
+              <button
+                type="button"
+                className="h-9 px-3.5 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 inline-flex items-center gap-1.5 hover:bg-slate-50"
+                onClick={handleExportCSV}
                 data-testid="export-leads"
               >
-                <Download className="w-4 h-4 mr-1.5" />
-                {t("crmPage.export")}
-              </Button>
-
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setFilterSettingsOpen(true)} 
+                <Download className="w-4 h-4" />
+                Export
+              </button>
+              <button
+                type="button"
+                className="h-9 px-3.5 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 inline-flex items-center gap-1.5 hover:bg-slate-50"
+                onClick={() => setFilterSettingsOpen(true)}
                 data-testid="open-filter-settings"
               >
-                <Settings className="w-4 h-4 mr-1.5" />
-                {t("crmPage.settings")}
-              </Button>
+                <Settings className="w-4 h-4" />
+                Settings
+              </button>
             </div>
           </div>
 
-          {/* Stats Cards Row - Lead Counts by Category */}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
-            {/* All Leads Card */}
-            <Card 
-              className={`cursor-pointer transition-all hover-elevate ${aiCategoryFilter === "all" ? "ring-2 ring-primary bg-primary/5" : "bg-card/50"}`}
+            <button
+              type="button"
+              className={`text-left rounded-xl border px-3 py-3 transition-colors ${aiCategoryFilter === "all" ? "border-slate-200 bg-slate-50" : "border-slate-200 bg-white"}`}
               onClick={() => {
                 setAiCategoryFilter("all");
                 setListPage(1);
               }}
               data-testid="filter-all"
             >
-              <CardContent className="p-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <Zap className="w-4 h-4 text-primary" />
-                  <span className="text-2xl font-bold">{categoryCounts?.total || 0}</span>
-                </div>
-                <p className="text-xs text-muted-foreground">{t("crmPage.allLeads")}</p>
-              </CardContent>
-            </Card>
+              <div className="flex items-center gap-2 text-slate-900">
+                <Zap className="w-4 h-4 text-[#2F6BFF]" />
+                <span className="text-xl font-semibold">{categoryCounts?.total || 0}</span>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">All Leads</p>
+            </button>
 
-            {/* Category Cards */}
             {orderedCategories.map((cat) => {
               const Icon = cat.icon;
               const count = categoryCounts?.counts?.[cat.id] || 0;
               const isSelected = aiCategoryFilter === cat.id;
               return (
-                <Card 
+                <button
+                  type="button"
                   key={cat.id}
-                  className={`cursor-pointer transition-all hover-elevate ${isSelected ? "ring-2 ring-primary" : "bg-card/50"}`}
+                  className={`text-left rounded-xl border px-3 py-3 transition-colors ${isSelected ? "border-slate-200 bg-slate-50" : "border-slate-200 bg-white"}`}
                   onClick={() => {
                     setAiCategoryFilter(cat.id);
                     setListPage(1);
                   }}
                   data-testid={`filter-${cat.id}`}
-                  style={isSelected ? { backgroundColor: `${cat.color}15` } : undefined}
                 >
-                  <CardContent className="p-3">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Icon className="w-4 h-4" style={{ color: cat.color }} />
-                      <span className="text-2xl font-bold">{count}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground truncate">{t(`crmPage.categories.${cat.id}`, { defaultValue: cat.label })}</p>
-                  </CardContent>
-                </Card>
+                  <div className="flex items-center gap-2 text-slate-900">
+                    <Icon className="w-4 h-4" style={{ color: cat.color }} />
+                    <span className="text-xl font-semibold">{count}</span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1 truncate">{t(`crmPage.categories.${cat.id}`, { defaultValue: cat.label })}</p>
+                </button>
               );
             })}
           </div>
-        </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-4 px-6 py-3 border-b bg-muted/30">
+      <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[200px] max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <Input
-            placeholder={t("crmPage.searchPlaceholder")}
+            placeholder="Search leads by name, phone, email, or tag..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 bg-background"
+            className="pl-9 h-10 rounded-lg border-slate-200 bg-white"
             data-testid="search-leads-input"
           />
         </div>
         
         <Select value={sourceFilter} onValueChange={(v) => { setSourceFilter(v); setSelectedSourceId("all"); }}>
-          <SelectTrigger className="w-40 bg-background" data-testid="source-filter">
+          <SelectTrigger className="w-40 h-10 rounded-lg border-slate-200 bg-white" data-testid="source-filter">
             <SelectValue placeholder={t("crmPage.allSources")} />
           </SelectTrigger>
           <SelectContent>
@@ -2201,10 +2286,11 @@ export default function CRMPage() {
           
           <div className="h-6 w-px bg-border mx-1" />
           
-          <div className="flex items-center rounded-lg border bg-background p-1 gap-1">
+          <div className="flex items-center rounded-lg border border-slate-200 bg-white p-1 gap-1">
             <Button
               variant={viewMode === "kanban" ? "secondary" : "ghost"}
               size="icon"
+              className={viewMode === "kanban" ? "bg-slate-100" : ""}
               onClick={() => setViewMode("kanban")}
               data-testid="view-kanban"
               title={t("crmPage.kanbanView")}
@@ -2214,6 +2300,7 @@ export default function CRMPage() {
             <Button
               variant={viewMode === "list" ? "secondary" : "ghost"}
               size="icon"
+              className={viewMode === "list" ? "bg-slate-100" : ""}
               onClick={() => setViewMode("list")}
               data-testid="view-list"
               title={t("crmPage.listView")}
@@ -2223,6 +2310,7 @@ export default function CRMPage() {
             <Button
               variant={viewMode === "analytics" ? "secondary" : "ghost"}
               size="icon"
+              className={viewMode === "analytics" ? "bg-slate-100" : ""}
               onClick={() => setViewMode("analytics")}
               data-testid="view-analytics"
               title={t("crmPage.analyticsView")}
@@ -2380,81 +2468,69 @@ export default function CRMPage() {
                 </div>
               ) : analytics ? (
                 <>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <Card>
-                      <CardContent className="p-4">
-                        <p className="text-sm text-muted-foreground">{t("crmPage.totalLeads")}</p>
-                        <p className="text-2xl font-bold" data-testid="analytics-total-leads">{analytics.totalLeads}</p>
-                      </CardContent>
-                    </Card>
-                    <Card>
-                      <CardContent className="p-4">
-                        <p className="text-sm text-muted-foreground">{t("crmPage.avgLeadScore")}</p>
-                        <p className="text-2xl font-bold" data-testid="analytics-avg-score">{analytics.avgLeadScore?.toFixed(1) || '--'}</p>
-                      </CardContent>
-                    </Card>
-                    <Card>
-                      <CardContent className="p-4">
-                        <p className="text-sm text-muted-foreground">{t("crmPage.fromCampaigns")}</p>
-                        <p className="text-2xl font-bold" data-testid="analytics-campaign-leads">
-                          {analytics.leadsBySource?.find(s => s.sourceType === 'campaign')?.count || 0}
-                        </p>
-                      </CardContent>
-                    </Card>
-                    <Card>
-                      <CardContent className="p-4">
-                        <p className="text-sm text-muted-foreground">{t("crmPage.fromIncoming")}</p>
-                        <p className="text-2xl font-bold" data-testid="analytics-incoming-leads">
-                          {analytics.leadsBySource?.find(s => s.sourceType === 'incoming')?.count || 0}
-                        </p>
-                      </CardContent>
-                    </Card>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {[
+                      { label: "Total Leads", value: analytics.totalLeads, testId: "analytics-total-leads" },
+                      { label: "Avg. Lead Score", value: analytics.avgLeadScore?.toFixed(1) || "--", testId: "analytics-avg-score" },
+                      { label: "From Campaigns", value: analytics.leadsBySource?.find(s => s.sourceType === "campaign")?.count || 0, testId: "analytics-campaign-leads" },
+                      { label: "From Incoming", value: analytics.leadsBySource?.find(s => s.sourceType === "incoming")?.count || 0, testId: "analytics-incoming-leads" },
+                    ].map((stat) => (
+                      <div key={stat.testId} className="rounded-2xl border border-slate-200 bg-white px-5 py-4">
+                        <p className="text-sm text-slate-500">{stat.label}</p>
+                        <p className="mt-3 text-[28px] leading-none font-semibold text-slate-900" data-testid={stat.testId}>{stat.value}</p>
+                      </div>
+                    ))}
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-base">{t("crmPage.leadsByCategory")}</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-3">
-                          {analytics.leadsByCategory?.map((item, index) => {
-                            const cat = AI_CATEGORIES.find(c => c.id === item.category);
-                            const Icon = cat?.icon;
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                      <h3 className="text-sm font-semibold text-slate-900 mb-4">Leads by Category</h3>
+                      <div className="space-y-3">
+                        {analytics.leadsByCategory?.length ? analytics.leadsByCategory.map((item, index) => {
+                          const cat = AI_CATEGORIES.find(c => c.id === item.category);
+                          const Icon = cat?.icon;
+                          return (
+                            <div key={index} className="flex items-center justify-between">
+                              <div className="flex items-center gap-2.5">
+                                {Icon ? <Icon className="w-4 h-4" style={{ color: cat?.color }} /> : <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />}
+                                <span className="text-sm text-slate-700">{cat ? t(`crmPage.categories.${cat.id}`, { defaultValue: cat.label }) : item.category}</span>
+                              </div>
+                              <span className="text-sm font-medium text-slate-900">{item.count}</span>
+                            </div>
+                          );
+                        }) : <p className="text-sm text-slate-500">{t("crmPage.noData")}</p>}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                      <h3 className="text-sm font-semibold text-slate-900 mb-4">Sentiment Breakdown</h3>
+                      <div className="space-y-4">
+                        {(() => {
+                          const rows = [
+                            { key: "positive", label: "Positive", color: "#22C55E" },
+                            { key: "neutral", label: "Neutral", color: "#F59E0B" },
+                            { key: "negative", label: "Negative", color: "#F43F5E" },
+                          ];
+                          const totalSentiment = rows.reduce((sum, row) => {
+                            return sum + (analytics.sentimentBreakdown?.find(s => s.sentiment === row.key)?.count || 0);
+                          }, 0);
+                          return rows.map((row) => {
+                            const count = analytics.sentimentBreakdown?.find(s => s.sentiment === row.key)?.count || 0;
+                            const percent = totalSentiment ? Math.round((count / totalSentiment) * 100) : 0;
                             return (
-                              <div key={index} className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  {Icon && <Icon className="w-4 h-4" style={{ color: cat?.color }} />}
-                                  <span className="text-sm">{cat ? t(`crmPage.categories.${cat.id}`, { defaultValue: cat.label }) : item.category}</span>
+                              <div key={row.key} className="flex items-center gap-3">
+                                <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: row.color }} />
+                                <span className="w-20 text-sm text-slate-700">{row.label}</span>
+                                <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
+                                  <div className="h-full rounded-full" style={{ width: `${percent}%`, backgroundColor: row.color }} />
                                 </div>
-                                <Badge variant="secondary">{item.count}</Badge>
+                                <span className="w-16 text-right text-sm text-slate-500">{percent}% ({count})</span>
                               </div>
                             );
-                          }) || <p className="text-sm text-muted-foreground">{t("crmPage.noData")}</p>}
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-base">{t("crmPage.sentimentBreakdown")}</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-3">
-                          {analytics.sentimentBreakdown?.map((item, index) => (
-                            <div key={index} className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                {item.sentiment === 'positive' && <TrendingUp className="w-4 h-4 text-emerald-500" />}
-                                {item.sentiment === 'negative' && <TrendingDown className="w-4 h-4 text-rose-500" />}
-                                {item.sentiment === 'neutral' && <Minus className="w-4 h-4 text-muted-foreground" />}
-                                <span className="text-sm capitalize">{item.sentiment ? t(`sentiment.${item.sentiment}`, { defaultValue: item.sentiment }) : t("crmPage.unknown")}</span>
-                              </div>
-                              <Badge variant="secondary">{item.count}</Badge>
-                            </div>
-                          )) || <p className="text-sm text-muted-foreground">{t("crmPage.noData")}</p>}
-                        </div>
-                      </CardContent>
-                    </Card>
+                          });
+                        })()}
+                      </div>
+                    </div>
                   </div>
                 </>
               ) : (
@@ -2466,7 +2542,7 @@ export default function CRMPage() {
             </div>
           </ScrollArea>
         ) : viewMode === "kanban" ? (
-          <div className="flex gap-4 p-6 overflow-x-auto h-full">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {aiKanbanLoading || preferencesLoading ? (
               <div className="flex items-center justify-center w-full py-20">
                 <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />

@@ -1220,14 +1220,45 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteCampaign(id: string): Promise<boolean> {
-
-    // delete dependent queue records first
-    await db
-      .delete(messageQueue)
-      .where(eq(messageQueue.campaignId, id));
-
-    // then delete campaign
+    // Soft-delete only (status → deleted) so the campaign can be restored
+    // like auto-calling campaigns. Do not wipe the message queue.
     return this.campaignRepo.delete(id);
+  }
+
+  async getDeletedCampaigns(page: number = 1, limit: number = 100) {
+    return this.campaignRepo.getDeleted(page, limit);
+  }
+
+  async getDeletedCampaignsByChannel(
+    channelId: string,
+    page: number = 1,
+    limit: number = 100
+  ) {
+    return this.campaignRepo.getDeletedByChannel(channelId, page, limit);
+  }
+
+  async getDeletedCampaignsByChannelIds(
+    channelIds: string[],
+    page: number = 1,
+    limit: number = 100
+  ) {
+    return this.campaignRepo.getDeletedByChannelIds(channelIds, page, limit);
+  }
+
+  async getDeletedCampaignsByUserId(
+    userId: string,
+    page: number = 1,
+    limit: number = 100
+  ) {
+    return this.campaignRepo.getDeletedByUserId(userId, page, limit);
+  }
+
+  async getCampaignIncludingDeleted(id: string): Promise<Campaign | undefined> {
+    return this.campaignRepo.getByIdIncludingDeleted(id);
+  }
+
+  async restoreCampaign(id: string): Promise<Campaign | undefined> {
+    return this.campaignRepo.restore(id);
   }
   // Channels
   async getChannels(): Promise<Channel[]> {

@@ -15,10 +15,7 @@
  * ============================================================
  */
 
-import { useRef } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@wa/components/ui/card";
-import { Badge } from "@wa/components/ui/badge";
-import { Button } from "@wa/components/ui/button";
+import { useRef, useState } from "react";
 import {
   Accordion,
   AccordionContent,
@@ -27,6 +24,7 @@ import {
 } from "@wa/components/ui/accordion";
 import {
   Book,
+  ChevronUp,
   Code,
   Copy,
   Download,
@@ -41,7 +39,6 @@ import {
   Webhook,
   Info,
 } from "lucide-react";
-import Header from "@wa/components/layout/header";
 import { useTranslation } from "@wa/lib/i18n";
 import { useToast } from "@wa/hooks/use-toast";
 
@@ -600,6 +597,90 @@ function generateHtmlDocument(): string {
 </html>`;
 }
 
+const AUTH_EXAMPLE_CURL = `curl -X GET "${BASE_URL}/account" \\
+  -H "X-API-Key: YOUR_API_KEY" \\
+  -H "X-API-Secret: YOUR_API_SECRET" \\
+  -H "X-Channel-Id: YOUR_CHANNEL_ID"`;
+
+const AUTH_EXAMPLE_RESPONSE = `{
+  "success": true,
+  "data": {
+    "account_id": "acc_89217490",
+    "name": "AutoComm Enterprise",
+    "active_channels": ["whatsapp", "voice_ivr"],
+    "rate_limit": 120
+  }
+}`;
+
+function CodePanel({
+  title,
+  code,
+  onCopy,
+  responseCode,
+  statusLabel = "200 OK",
+  contentType = "application/json",
+}: {
+  title?: string;
+  code: string;
+  onCopy: () => void;
+  responseCode?: string;
+  statusLabel?: string;
+  contentType?: string;
+}) {
+  const [open, setOpen] = useState(true);
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+      {title && (
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          className="flex w-full items-center justify-between px-4 py-3 text-left"
+        >
+          <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
+            <Code className="h-4 w-4 text-slate-400" />
+            {title}
+          </div>
+          <ChevronUp className={`h-4 w-4 text-slate-400 transition-transform ${open ? "" : "rotate-180"}`} />
+        </button>
+      )}
+      {open && (
+        <div className="bg-[#0B1220] text-slate-100">
+          <div className="relative">
+            <pre className="p-4 pr-24 text-[13px] leading-relaxed overflow-x-auto font-mono whitespace-pre-wrap">
+              {code}
+            </pre>
+            <button
+              type="button"
+              onClick={onCopy}
+              className="absolute top-3 right-3 h-8 px-2.5 rounded-lg border border-white/15 bg-[#0B1220] text-xs text-slate-200 inline-flex items-center gap-1.5 hover:bg-white/5"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Copy
+            </button>
+          </div>
+          {responseCode && (
+            <>
+              <div className="flex items-center justify-between px-4 py-2 text-xs text-slate-400">
+                <div className="flex items-center gap-2">
+                  <span>Response</span>
+                  <span className="rounded-full border border-white/15 px-2 py-0.5 text-[11px] text-slate-200">
+                    {statusLabel}
+                  </span>
+                </div>
+                <span>{contentType}</span>
+              </div>
+              <pre className="px-4 pb-4 text-[13px] leading-relaxed overflow-x-auto font-mono whitespace-pre-wrap">
+                {responseCode}
+              </pre>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function downloadHtml() {
   const html = generateHtmlDocument();
   const blob = new Blob([html], { type: "text/html" });
@@ -617,6 +698,7 @@ export default function ApiDocs() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [activeSection, setActiveSection] = useState("authentication");
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -627,346 +709,248 @@ export default function ApiDocs() {
   };
 
   const scrollToSection = (id: string) => {
+    setActiveSection(id);
     sectionRefs.current[id]?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  return (
-    <div className="flex-1 min-h-screen dots-bg">
-      <Header
-        title={t("apiDocs.title")}
-        subtitle={t("apiDocs.subtitle")}
-      />
+  const navItems = [
+    { id: "authentication", label: t("apiDocs.sections.authentication"), icon: <Key className="w-4 h-4" /> },
+    { id: "rate-limiting", label: t("apiDocs.sections.rateLimiting"), icon: <Shield className="w-4 h-4" /> },
+    ...sections.map((section) => ({ id: section.id, label: section.title, icon: section.icon })),
+    { id: "errors", label: t("apiDocs.sections.errorCodes"), icon: <AlertTriangle className="w-4 h-4" /> },
+  ];
 
-      <div className="flex gap-6 p-6">
+  return (
+    <div className="flex-1 min-h-screen">
+      <div className="flex gap-4 p-1 lg:p-0">
         <aside className="hidden lg:block w-56 shrink-0">
-          <div className="sticky top-6 space-y-1">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+          <div className="sticky top-4 rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3 px-2">
               {t("apiDocs.navigation")}
             </p>
-            <button
-              onClick={() => scrollToSection("authentication")}
-              className="flex items-center gap-2 w-full text-left px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
-            >
-              <Key className="w-4 h-4" />
-              {t("apiDocs.sections.authentication")}
-            </button>
-            <button
-              onClick={() => scrollToSection("rate-limiting")}
-              className="flex items-center gap-2 w-full text-left px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
-            >
-              <Shield className="w-4 h-4" />
-              {t("apiDocs.sections.rateLimiting")}
-            </button>
-            {sections.map((section) => (
-              <button
-                key={section.id}
-                onClick={() => scrollToSection(section.id)}
-                className="flex items-center gap-2 w-full text-left px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
-              >
-                {section.icon}
-                {section.title}
-              </button>
-            ))}
-            <button
-              onClick={() => scrollToSection("errors")}
-              className="flex items-center gap-2 w-full text-left px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
-            >
-              <AlertTriangle className="w-4 h-4" />
-              {t("apiDocs.sections.errorCodes")}
-            </button>
-            <div className="pt-4 mt-4 border-t">
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full justify-start gap-2"
-                onClick={downloadHtml}
-              >
-                <Download className="w-4 h-4" />
-                Download as HTML
-              </Button>
+            <div className="space-y-0.5">
+              {navItems.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => scrollToSection(item.id)}
+                  className={`flex items-center gap-2.5 w-full text-left px-2.5 py-2 text-sm rounded-lg ${
+                    activeSection === item.id ? "bg-slate-100 text-slate-900" : "text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="text-slate-400">{item.icon}</span>
+                  {item.label}
+                </button>
+              ))}
             </div>
+            <button
+              type="button"
+              onClick={downloadHtml}
+              className="mt-6 w-full h-9 rounded-full border border-slate-200 bg-white text-sm text-slate-700 inline-flex items-center justify-center gap-2 hover:bg-slate-50"
+            >
+              <Download className="w-4 h-4" />
+              Download as HTML
+            </button>
           </div>
         </aside>
 
-        <main className="flex-1 min-w-0 space-y-6">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-start gap-3">
-                <Book className="w-6 h-6 text-primary mt-0.5 shrink-0" />
-                <div>
-                  <h2 className="text-lg font-semibold mb-1">{t("apiDocs.overview.title")}</h2>
-                  <p className="text-sm text-muted-foreground mb-3">
-                    {t("apiDocs.overview.description")}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <code className="text-sm bg-muted px-3 py-1.5 rounded font-mono">{BASE_URL}</code>
-                    <Button variant="ghost" size="sm" onClick={() => copyToClipboard(BASE_URL)}>
-                      <Copy className="w-4 h-4" />
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    {t("apiDocs.overview.responseFormat")}:{" "}
-                    <code className="bg-muted px-1 py-0.5 rounded">
-                      {"{ success: boolean, data?: any, error?: string }"}
-                    </code>
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <div ref={(el) => { sectionRefs.current["authentication"] = el; }}>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Key className="w-5 h-5" />
-                  {t("apiDocs.sections.authentication")}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  {t("apiDocs.auth.description")}
+        <main className="flex-1 min-w-0 space-y-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5">
+            <div className="flex items-start gap-3">
+              <Book className="w-5 h-5 text-[#2F6BFF] mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <h2 className="text-[17px] font-semibold text-slate-900 mb-1">{t("apiDocs.overview.title", { defaultValue: "REST API Reference" })}</h2>
+                <p className="text-sm text-slate-500 mb-4">
+                  {t("apiDocs.overview.description", { defaultValue: "Use the REST API to integrate messaging, contacts, campaigns, and more into your applications. All endpoints require authentication via API key and secret headers." })}
                 </p>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline">Header</Badge>
-                    <code className="text-sm bg-muted px-2 py-1 rounded font-mono">X-API-Key: YOUR_API_KEY</code>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline">Header</Badge>
-                    <code className="text-sm bg-muted px-2 py-1 rounded font-mono">X-API-Secret: YOUR_API_SECRET</code>
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Badge variant="outline">Header</Badge>
-                    <code className="text-sm bg-muted px-2 py-1 rounded font-mono">X-Channel-Id: YOUR_CHANNEL_ID</code>
-                    <span className="text-xs text-muted-foreground">(required if API key covers all channels; can also use <code className="text-xs">?channel_id=</code> query param)</span>
-                  </div>
+                <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                  <code className="flex-1 text-sm text-slate-800 font-mono truncate">{BASE_URL}</code>
+                  <button type="button" onClick={() => copyToClipboard(BASE_URL)} className="text-slate-400 hover:text-slate-700">
+                    <Copy className="w-4 h-4" />
+                  </button>
                 </div>
-                <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
-                  <div className="flex items-start gap-2">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
-                    <p className="text-sm text-amber-800 dark:text-amber-200">
-                      {t("apiDocs.auth.warning")}
-                    </p>
-                  </div>
-                </div>
-                <Accordion type="single" collapsible defaultValue="auth-example">
-                  <AccordionItem value="auth-example">
-                    <AccordionTrigger className="text-sm">
-                      <span className="flex items-center gap-2">
-                        <Code className="w-4 h-4" />
-                        {t("apiDocs.auth.curlExample")}
-                      </span>
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <div className="relative">
-                        <pre className="text-sm bg-muted p-4 rounded-lg overflow-x-auto font-mono">
-{`curl -X GET "${BASE_URL}/account" \\
-  -H "X-API-Key: YOUR_API_KEY" \\
-  -H "X-API-Secret: YOUR_API_SECRET" \\
-  -H "X-Channel-Id: YOUR_CHANNEL_ID"`}
-                        </pre>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="absolute top-2 right-2"
-                          onClick={() =>
-                            copyToClipboard(
-                              `curl -X GET "${BASE_URL}/account" \\\n  -H "X-API-Key: YOUR_API_KEY" \\\n  -H "X-API-Secret: YOUR_API_SECRET" \\\n  -H "X-Channel-Id: YOUR_CHANNEL_ID"`
-                            )
-                          }
-                        >
-                          <Copy className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
-              </CardContent>
-            </Card>
+                <p className="text-sm text-slate-500 mt-3">
+                  All responses follow this format:{" "}
+                  <code className="text-slate-700">
+                    {"{ success: boolean, data?: any, error?: string }"}
+                  </code>
+                </p>
+              </div>
+            </div>
           </div>
 
-          <div ref={(el) => { sectionRefs.current["rate-limiting"] = el; }}>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Shield className="w-5 h-5" />
-                  {t("apiDocs.sections.rateLimiting")}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  {t("apiDocs.rateLimit.description")}
+          <div ref={(el) => { sectionRefs.current["authentication"] = el; }} className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <Key className="w-5 h-5 text-slate-700" />
+              <h2 className="text-[17px] font-semibold text-slate-900">{t("apiDocs.sections.authentication")}</h2>
+            </div>
+            <p className="text-sm text-slate-500">
+              {t("apiDocs.auth.description", { defaultValue: "All API requests must include your API key and secret in the request headers. You can generate API keys from the Settings page." })}
+            </p>
+            <div className="space-y-2">
+              {[
+                "X-API-Key: YOUR_API_KEY",
+                "X-API-Secret: YOUR_API_SECRET",
+                "X-Channel-Id: YOUR_CHANNEL_ID",
+              ].map((header) => (
+                <div key={header} className="flex items-center gap-2">
+                  <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">Header</span>
+                  <code className="text-sm font-mono text-slate-800">{header}</code>
+                </div>
+              ))}
+              <p className="text-xs text-slate-400 pl-[4.5rem]">
+                (required if API key covers all channels; can also use <code>?channel_id=</code> query param)
+              </p>
+            </div>
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                <p className="text-sm text-amber-800">
+                  {t("apiDocs.auth.warning", { defaultValue: "Keep your API secret safe. Never expose it in client-side code or public repositories. If compromised, revoke it immediately and generate a new one." })}
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="border rounded-lg p-4">
-                    <p className="text-sm font-medium mb-1">{t("apiDocs.rateLimit.monthly")}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {t("apiDocs.rateLimit.monthlyDesc")}
-                    </p>
-                  </div>
-                  <div className="border rounded-lg p-4">
-                    <p className="text-sm font-medium mb-1">{t("apiDocs.rateLimit.perMinute")}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {t("apiDocs.rateLimit.perMinuteDesc")}
-                    </p>
-                  </div>
+              </div>
+            </div>
+            <CodePanel
+              title={t("apiDocs.auth.curlExample", { defaultValue: "Example authenticated request" })}
+              code={AUTH_EXAMPLE_CURL}
+              responseCode={AUTH_EXAMPLE_RESPONSE}
+              onCopy={() => copyToClipboard(AUTH_EXAMPLE_CURL)}
+            />
+          </div>
+
+          <div ref={(el) => { sectionRefs.current["rate-limiting"] = el; }} className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <Shield className="w-5 h-5 text-slate-700" />
+              <h2 className="text-[17px] font-semibold text-slate-900">{t("apiDocs.sections.rateLimiting")}</h2>
+            </div>
+            <p className="text-sm text-slate-500">
+              {t("apiDocs.rateLimit.description", { defaultValue: "Standard tiers allow up to 120 requests per minute per API key. When this limit is exceeded, subsequent calls will yield a 429 Too Many Requests status code." })}
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {[
+                { label: "RATE LIMIT", value: "120 req / min" },
+                { label: "BURST ALLOWANCE", value: "30 req / sec" },
+                { label: "COOLDOWN WINDOW", value: "60 seconds" },
+              ].map((stat) => (
+                <div key={stat.label} className="rounded-xl border border-slate-200 px-4 py-3">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{stat.label}</p>
+                  <p className="mt-1 text-lg font-semibold text-slate-900">{stat.value}</p>
                 </div>
-                <div className="bg-muted rounded-lg p-4">
-                  <p className="text-sm font-medium mb-2">{t("apiDocs.rateLimit.exceeded")}</p>
-                  <pre className="text-sm font-mono overflow-x-auto">
-{JSON.stringify({ success: false, error: "Rate limit exceeded. Please try again later." }, null, 2)}
-                  </pre>
-                </div>
-              </CardContent>
-            </Card>
+              ))}
+            </div>
           </div>
 
           {sections.map((section) => (
             <div
               key={section.id}
               ref={(el) => { sectionRefs.current[section.id] = el; }}
+              className="rounded-2xl border border-slate-200 bg-white p-5"
             >
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    {section.icon}
-                    {section.title}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Accordion
-                    type="multiple"
-                    defaultValue={section.endpoints.map((_, idx) => `${section.id}-${idx}`)}
-                    className="space-y-2"
-                  >
-                    {section.endpoints.map((endpoint, idx) => {
-                      const curlCmd = generateCurl(endpoint);
-                      return (
-                        <AccordionItem
-                          key={`${section.id}-${idx}`}
-                          value={`${section.id}-${idx}`}
-                          className="border rounded-lg px-4"
-                        >
-                          <AccordionTrigger className="hover:no-underline py-3">
-                            <div className="flex items-center gap-3 text-left">
-                              <Badge
-                                className={`${METHOD_COLORS[endpoint.method]} font-mono text-xs px-2 py-0.5 border-0 shrink-0`}
-                              >
-                                {endpoint.method}
-                              </Badge>
-                              <div className="min-w-0">
-                                <code className="text-sm font-mono font-medium">{endpoint.path}</code>
-                                <p className="text-xs text-muted-foreground mt-0.5">{endpoint.description}</p>
-                              </div>
-                            </div>
-                          </AccordionTrigger>
-                          <AccordionContent className="space-y-4 pt-2 pb-4">
-                            {endpoint.note && (
-                              <div className="flex gap-2 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-                                <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
-                                <p className="text-xs text-blue-800 dark:text-blue-200 whitespace-pre-wrap">{endpoint.note}</p>
-                              </div>
-                            )}
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-slate-600">{section.icon}</span>
+                <h2 className="text-[17px] font-semibold text-slate-900">{section.title}</h2>
+              </div>
+              <Accordion
+                type="multiple"
+                defaultValue={section.endpoints.map((_, idx) => `${section.id}-${idx}`)}
+                className="space-y-3"
+              >
+                {section.endpoints.map((endpoint, idx) => {
+                  const curlCmd = generateCurl(endpoint);
+                  return (
+                    <AccordionItem
+                      key={`${section.id}-${idx}`}
+                      value={`${section.id}-${idx}`}
+                      className="border border-slate-200 rounded-xl px-4"
+                    >
+                      <AccordionTrigger className="hover:no-underline py-3">
+                        <div className="flex items-center gap-3 text-left">
+                          <span
+                            className={`${METHOD_COLORS[endpoint.method]} font-mono text-[11px] px-2 py-0.5 rounded-md shrink-0`}
+                          >
+                            {endpoint.method}
+                          </span>
+                          <div className="min-w-0">
+                            <code className="text-sm font-mono font-medium text-slate-800">{endpoint.path}</code>
+                            <p className="text-xs text-slate-500 mt-0.5">{endpoint.description}</p>
+                          </div>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="space-y-4 pt-2 pb-4">
+                        {endpoint.note && (
+                          <div className="flex gap-2 bg-blue-50 border border-blue-100 rounded-xl p-3">
+                            <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+                            <p className="text-xs text-blue-800 whitespace-pre-wrap">{endpoint.note}</p>
+                          </div>
+                        )}
 
-                            {endpoint.query && (
-                              <div>
-                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                                  Query Parameters
-                                </p>
-                                <code className="text-sm bg-muted px-2 py-1 rounded font-mono block">
-                                  {endpoint.query}
-                                </code>
-                              </div>
-                            )}
+                        {endpoint.query && (
+                          <div>
+                            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                              Query Parameters
+                            </p>
+                            <code className="text-sm bg-slate-50 border border-slate-200 px-2 py-1 rounded-lg font-mono block">
+                              {endpoint.query}
+                            </code>
+                          </div>
+                        )}
 
-                            {endpoint.body && (
-                              <div>
-                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                                  Request Body
-                                </p>
-                                <pre className="text-sm bg-muted p-3 rounded-lg overflow-x-auto font-mono">
-                                  {endpoint.body}
-                                </pre>
-                              </div>
-                            )}
+                        {endpoint.body && (
+                          <CodePanel
+                            title="Request Body"
+                            code={endpoint.body}
+                            onCopy={() => copyToClipboard(endpoint.body || "")}
+                          />
+                        )}
 
-                            {endpoint.response && (
-                              <div>
-                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                                  Response
-                                </p>
-                                <pre className="text-sm bg-muted p-3 rounded-lg overflow-x-auto font-mono">
-                                  {endpoint.response}
-                                </pre>
-                              </div>
-                            )}
+                        {endpoint.response && (
+                          <CodePanel
+                            title="Response"
+                            code={endpoint.response}
+                            onCopy={() => copyToClipboard(endpoint.response || "")}
+                          />
+                        )}
 
-                            <div>
-                              <div className="flex items-center justify-between mb-1">
-                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                  cURL
-                                </p>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-7 text-xs"
-                                  onClick={() => copyToClipboard(curlCmd)}
-                                >
-                                  <Copy className="w-3 h-3 mr-1" />
-                                  {t("apiDocs.copyCurl")}
-                                </Button>
-                              </div>
-                              <pre className="text-sm bg-muted p-3 rounded-lg overflow-x-auto font-mono whitespace-pre-wrap">
-                                {curlCmd}
-                              </pre>
-                            </div>
-                          </AccordionContent>
-                        </AccordionItem>
-                      );
-                    })}
-                  </Accordion>
-                </CardContent>
-              </Card>
+                        <CodePanel
+                          title="cURL"
+                          code={curlCmd}
+                          onCopy={() => copyToClipboard(curlCmd)}
+                        />
+                      </AccordionContent>
+                    </AccordionItem>
+                  );
+                })}
+              </Accordion>
             </div>
           ))}
 
-          <div ref={(el) => { sectionRefs.current["errors"] = el; }}>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5" />
-                  {t("apiDocs.sections.errorCodes")}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {ERROR_CODES.map((err) => (
-                    <div
-                      key={err.code}
-                      className="flex items-start gap-3 border rounded-lg p-3"
-                    >
-                      <Badge
-                        variant="outline"
-                        className={`font-mono text-xs shrink-0 ${
-                          err.code >= 500
-                            ? "border-red-300 text-red-700 dark:text-red-400"
-                            : err.code >= 400
-                              ? "border-amber-300 text-amber-700 dark:text-amber-400"
-                              : "border-gray-300"
-                        }`}
-                      >
-                        {err.code}
-                      </Badge>
-                      <div>
-                        <p className="text-sm font-medium">{err.label}</p>
-                        <p className="text-xs text-muted-foreground">{err.description}</p>
-                      </div>
-                    </div>
-                  ))}
+          <div ref={(el) => { sectionRefs.current["errors"] = el; }} className="rounded-2xl border border-slate-200 bg-white p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <AlertTriangle className="w-5 h-5 text-slate-700" />
+              <h2 className="text-[17px] font-semibold text-slate-900">{t("apiDocs.sections.errorCodes")}</h2>
+            </div>
+            <div className="space-y-2">
+              {ERROR_CODES.map((err) => (
+                <div
+                  key={err.code}
+                  className="flex items-start gap-3 border border-slate-200 rounded-xl p-3"
+                >
+                  <span
+                    className={`font-mono text-xs shrink-0 rounded-md px-2 py-0.5 border ${
+                      err.code >= 500
+                        ? "border-red-200 text-red-700 bg-red-50"
+                        : "border-amber-200 text-amber-700 bg-amber-50"
+                    }`}
+                  >
+                    {err.code}
+                  </span>
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">{err.label}</p>
+                    <p className="text-xs text-slate-500">{err.description}</p>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
+              ))}
+            </div>
           </div>
         </main>
       </div>

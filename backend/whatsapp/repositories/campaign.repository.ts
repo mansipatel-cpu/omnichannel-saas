@@ -16,7 +16,7 @@
  */
 
 import { db } from "../db";
-import { eq, desc, sql, lte, ne, and } from "drizzle-orm";
+import { eq, desc, sql, ne, and, inArray } from "drizzle-orm";
 import {
   campaigns,
   users,
@@ -25,8 +25,23 @@ import {
   type InsertCampaign
 } from "@shared/whatsapp-schema";
 
+/** Infer a safe status when restoring a soft-deleted campaign (previous status was overwritten). */
+function inferRestoreStatus(campaign: Campaign): string {
+  const recipientCount = Number(campaign.recipientCount) || 0;
+  const sentCount = Number(campaign.sentCount) || 0;
 
-
+  if (campaign.completedAt || (recipientCount > 0 && sentCount >= recipientCount)) {
+    return "completed";
+  }
+  // Never auto-resume sending after restore
+  if (sentCount > 0) {
+    return "paused";
+  }
+  if (campaign.scheduledAt && new Date(campaign.scheduledAt) > new Date()) {
+    return "scheduled";
+  }
+  return "draft";
+}
 
 export class CampaignRepository {
   async getAllold(page: number = 1, limit: number = 10): Promise<{
@@ -193,6 +208,170 @@ export class CampaignRepository {
     return campaign || undefined;
   }
 
+  async getByIdIncludingDeleted(id: string): Promise<Campaign | undefined> {
+    const [campaign] = await db.select().from(campaigns).where(eq(campaigns.id, id));
+    return campaign || undefined;
+  }
+
+  private deletedSelectFields() {
+    return {
+      id: campaigns.id,
+      name: campaigns.name,
+      createdBy: campaigns.createdBy,
+      createdByName: sql<string>`
+        CONCAT(
+          COALESCE(${users.firstName}, ''),
+          ' ',
+          COALESCE(${users.lastName}, '')
+        )
+      `.as("createdByName"),
+      status: campaigns.status,
+      templateId: campaigns.templateId,
+      templateName: templates.name,
+      audienceType: campaigns.audienceType,
+      platform: campaigns.platform,
+      type: campaigns.type,
+      campaignType: campaigns.campaignType,
+      recipientCount: campaigns.recipientCount,
+      sentCount: campaigns.sentCount,
+      deliveredCount: campaigns.deliveredCount,
+      readCount: campaigns.readCount,
+      failedCount: campaigns.failedCount,
+      repliedCount: campaigns.repliedCount,
+      channelId: campaigns.channelId,
+      createdAt: campaigns.createdAt,
+      updatedAt: campaigns.updatedAt,
+      // Soft-delete timestamp (status flip); exposed as deletedAt for UI parity with voice campaigns
+      deletedAt: sql<Date>`${campaigns.updatedAt}`.as("deletedAt"),
+    };
+  }
+
+  async getDeleted(
+    page: number = 1,
+    limit: number = 100
+  ): Promise<{ data: any[]; total: number; page: number; limit: number }> {
+    const offset = (page - 1) * limit;
+    const where = eq(campaigns.status, "deleted");
+
+    const data = await db
+      .select(this.deletedSelectFields())
+      .from(campaigns)
+      .leftJoin(users, eq(users.id, sql`${campaigns.createdBy}::text`))
+      .leftJoin(templates, eq(templates.id, campaigns.templateId))
+      .where(where)
+      .orderBy(desc(campaigns.updatedAt))
+      .limit(limit)
+      .offset(offset);
+
+    const totalResult = await db
+      .select({ total: sql<number>`COUNT(*)` })
+      .from(campaigns)
+      .where(where);
+
+    return {
+      data,
+      total: totalResult[0]?.total ?? 0,
+      page,
+      limit,
+    };
+  }
+
+  async getDeletedByChannel(
+    channelId: string,
+    page: number = 1,
+    limit: number = 100
+  ): Promise<{ data: any[]; total: number; page: number; limit: number }> {
+    const offset = (page - 1) * limit;
+    const where = and(eq(campaigns.channelId, channelId), eq(campaigns.status, "deleted"));
+
+    const data = await db
+      .select(this.deletedSelectFields())
+      .from(campaigns)
+      .leftJoin(users, eq(users.id, sql`${campaigns.createdBy}::text`))
+      .leftJoin(templates, eq(templates.id, campaigns.templateId))
+      .where(where)
+      .orderBy(desc(campaigns.updatedAt))
+      .limit(limit)
+      .offset(offset);
+
+    const totalResult = await db
+      .select({ total: sql<number>`COUNT(*)` })
+      .from(campaigns)
+      .where(where);
+
+    return {
+      data,
+      total: totalResult[0]?.total ?? 0,
+      page,
+      limit,
+    };
+  }
+
+  async getDeletedByChannelIds(
+    channelIds: string[],
+    page: number = 1,
+    limit: number = 100
+  ): Promise<{ data: any[]; total: number; page: number; limit: number }> {
+    if (channelIds.length === 0) {
+      return { data: [], total: 0, page, limit };
+    }
+    const offset = (page - 1) * limit;
+    const where = and(inArray(campaigns.channelId, channelIds), eq(campaigns.status, "deleted"));
+
+    const data = await db
+      .select(this.deletedSelectFields())
+      .from(campaigns)
+      .leftJoin(users, eq(users.id, sql`${campaigns.createdBy}::text`))
+      .leftJoin(templates, eq(templates.id, campaigns.templateId))
+      .where(where)
+      .orderBy(desc(campaigns.updatedAt))
+      .limit(limit)
+      .offset(offset);
+
+    const totalResult = await db
+      .select({ total: sql<number>`COUNT(*)` })
+      .from(campaigns)
+      .where(where);
+
+    return {
+      data,
+      total: totalResult[0]?.total ?? 0,
+      page,
+      limit,
+    };
+  }
+
+  async getDeletedByUserId(
+    userId: string,
+    page: number = 1,
+    limit: number = 100
+  ): Promise<{ data: any[]; total: number; page: number; limit: number }> {
+    const offset = (page - 1) * limit;
+    const where = and(eq(campaigns.createdBy, userId), eq(campaigns.status, "deleted"));
+
+    const data = await db
+      .select(this.deletedSelectFields())
+      .from(campaigns)
+      .leftJoin(users, eq(users.id, sql`${campaigns.createdBy}::text`))
+      .leftJoin(templates, eq(templates.id, campaigns.templateId))
+      .where(where)
+      .orderBy(desc(campaigns.updatedAt))
+      .limit(limit)
+      .offset(offset);
+
+    const totalResult = await db
+      .select({ total: sql<number>`COUNT(*)` })
+      .from(campaigns)
+      .where(where);
+
+    return {
+      data,
+      total: totalResult[0]?.total ?? 0,
+      page,
+      limit,
+    };
+  }
+
 
   // async getCampaignByUserId(userId: string): Promise<Campaign | undefined>{
   //   const [campaign] = await db.select().from(campaigns).where(eq(campaigns.createdBy, userId));
@@ -327,10 +506,28 @@ export class CampaignRepository {
   }
 
   async delete(id: string): Promise<boolean> {
-    const result = await db.update(campaigns).set({ status: 'deleted' }).where(eq(campaigns.id, id)).returning();
+    const result = await db
+      .update(campaigns)
+      .set({ status: "deleted", updatedAt: new Date() })
+      .where(and(eq(campaigns.id, id), ne(campaigns.status, "deleted")))
+      .returning();
     return result.length > 0;
   }
 
+  async restore(id: string): Promise<Campaign | undefined> {
+    const existing = await this.getByIdIncludingDeleted(id);
+    if (!existing || existing.status !== "deleted") {
+      return undefined;
+    }
+
+    const status = inferRestoreStatus(existing);
+    const [updated] = await db
+      .update(campaigns)
+      .set({ status, updatedAt: new Date() })
+      .where(and(eq(campaigns.id, id), eq(campaigns.status, "deleted")))
+      .returning();
+    return updated || undefined;
+  }
 
   async getAllCampaignCount(): Promise<number> {
     const campaignsList = await db.select().from(campaigns).where(ne(campaigns.status, 'deleted'));

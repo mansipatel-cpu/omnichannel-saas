@@ -88,11 +88,17 @@ export interface IStorage {
   getCampaignByUserId(userId: string): Promise<Campaign[]>;
   getCampaignsByChannel(channelId: string): Promise<Campaign[]>;
   getCampaign(id: string): Promise<Campaign | undefined>;
+  getCampaignIncludingDeleted(id: string): Promise<Campaign | undefined>;
   createCampaign(campaign: InsertCampaign): Promise<Campaign>;
   updateCampaign(id: string, campaign: Partial<Campaign>): Promise<Campaign | undefined>;
   incrementCampaignSentCount(id: string): Promise<void>;
   incrementCampaignFailedCount(id: string): Promise<void>;
   deleteCampaign(id: string): Promise<boolean>;
+  restoreCampaign(id: string): Promise<Campaign | undefined>;
+  getDeletedCampaigns(page?: number, limit?: number): Promise<{ data: any[]; total: number; page: number; limit: number }>;
+  getDeletedCampaignsByChannel(channelId: string, page?: number, limit?: number): Promise<{ data: any[]; total: number; page: number; limit: number }>;
+  getDeletedCampaignsByChannelIds(channelIds: string[], page?: number, limit?: number): Promise<{ data: any[]; total: number; page: number; limit: number }>;
+  getDeletedCampaignsByUserId(userId: string, page?: number, limit?: number): Promise<{ data: any[]; total: number; page: number; limit: number }>;
 
   // Templates
   getTemplates(): Promise<Template[]>;
@@ -735,7 +741,55 @@ export class MemStorage implements IStorage {
   }
 
   async deleteCampaign(id: string): Promise<boolean> {
-    return this.campaigns.delete(id);
+    const campaign = this.campaigns.get(id);
+    if (!campaign || campaign.status === "deleted") return false;
+    this.campaigns.set(id, { ...campaign, status: "deleted", updatedAt: new Date() });
+    return true;
+  }
+
+  async getCampaignIncludingDeleted(id: string): Promise<Campaign | undefined> {
+    return this.campaigns.get(id);
+  }
+
+  async restoreCampaign(id: string): Promise<Campaign | undefined> {
+    const campaign = this.campaigns.get(id);
+    if (!campaign || campaign.status !== "deleted") return undefined;
+    const recipientCount = Number(campaign.recipientCount) || 0;
+    const sentCount = Number(campaign.sentCount) || 0;
+    let status = "draft";
+    if (campaign.completedAt || (recipientCount > 0 && sentCount >= recipientCount)) status = "completed";
+    else if (sentCount > 0) status = "paused";
+    else if (campaign.scheduledAt && new Date(campaign.scheduledAt) > new Date()) status = "scheduled";
+    const restored = { ...campaign, status, updatedAt: new Date() };
+    this.campaigns.set(id, restored);
+    return restored;
+  }
+
+  async getDeletedCampaigns(page: number = 1, limit: number = 100) {
+    const data = Array.from(this.campaigns.values()).filter((c) => c.status === "deleted");
+    return { data, total: data.length, page, limit };
+  }
+
+  async getDeletedCampaignsByChannel(channelId: string, page: number = 1, limit: number = 100) {
+    const data = Array.from(this.campaigns.values()).filter(
+      (c) => c.status === "deleted" && c.channelId === channelId
+    );
+    return { data, total: data.length, page, limit };
+  }
+
+  async getDeletedCampaignsByChannelIds(channelIds: string[], page: number = 1, limit: number = 100) {
+    const idSet = new Set(channelIds);
+    const data = Array.from(this.campaigns.values()).filter(
+      (c) => c.status === "deleted" && c.channelId && idSet.has(c.channelId)
+    );
+    return { data, total: data.length, page, limit };
+  }
+
+  async getDeletedCampaignsByUserId(userId: string, page: number = 1, limit: number = 100) {
+    const data = Array.from(this.campaigns.values()).filter(
+      (c) => c.status === "deleted" && c.createdBy === userId
+    );
+    return { data, total: data.length, page, limit };
   }
 
   // Channels

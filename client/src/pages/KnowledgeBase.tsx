@@ -22,10 +22,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
 import { Link, FileText, Type, Search, ChevronDown, FileStack, Trash2, Upload, Globe, FileType, Crown, Zap, Lock, BookOpen, Loader2, CheckCircle2, AlertCircle, Brain, RefreshCw, Video, Play } from "lucide-react";
 import { AuthStorage } from "@/lib/auth-storage";
 import { useDemoMode } from "@/components/DemoModeBanner";
+import { useAppHeaderOptional } from "@/components/AppPageHeader";
 import {
   Dialog,
   DialogContent,
@@ -63,7 +63,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -102,8 +101,16 @@ interface User {
 export default function KnowledgeBase() {
   const { t } = useTranslation();
   const [, setLocation] = useLocation();
+  const appHeader = useAppHeaderOptional();
+  const setPageMeta = appHeader?.setPageMeta;
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!setPageMeta) return;
+    setPageMeta({ hideTitle: true });
+    return () => setPageMeta(null);
+  }, [setPageMeta]);
   
   const { isDemoMode } = useDemoMode();
   const [isVideoOpen, setIsVideoOpen] = useState(false);
@@ -374,29 +381,30 @@ export default function KnowledgeBase() {
     }
   };
 
-  const getTypeBadgeVariant = (type: string): "default" | "secondary" | "outline" => {
-    switch (type) {
-      case 'url':
-        return 'default';
-      case 'file':
-        return 'secondary';
-      case 'text':
-        return 'outline';
+  const statusColor = (status: string | undefined) => {
+    switch (status) {
+      case 'processing':
+        return "#2563EB";
+      case 'completed':
+        return "#16A34A";
+      case 'failed':
+        return "#EF4444";
       default:
-        return 'outline';
+        return "#94A3B8";
     }
   };
 
   const getStatusIcon = (status: string | undefined) => {
+    const color = statusColor(status);
     switch (status) {
       case 'processing':
-        return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />;
+        return <Loader2 className="h-4 w-4 animate-spin" style={{ color }} />;
       case 'completed':
-        return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+        return <CheckCircle2 className="h-4 w-4" style={{ color }} />;
       case 'failed':
-        return <AlertCircle className="h-4 w-4 text-red-500" />;
+        return <AlertCircle className="h-4 w-4" style={{ color }} />;
       default:
-        return <Loader2 className="h-4 w-4 text-muted-foreground" />;
+        return <Loader2 className="h-4 w-4" style={{ color }} />;
     }
   };
 
@@ -529,52 +537,66 @@ export default function KnowledgeBase() {
   const textCount = knowledgeBase.filter(item => item.type === 'text').length;
   const processingCount = knowledgeBase.filter(item => item.ragStatus === 'processing').length;
   const totalChunks = knowledgeBase.reduce((sum, item) => sum + (item.chunkCount || 0), 0);
+  const maxStorageBytes = storageUsage?.maxStorageBytes || 20 * 1024 * 1024;
+  const usedStorageBytes = storageUsage?.usedStorageBytes ?? totalSize;
+  const storagePercent = Math.min(
+    100,
+    storageUsage?.usagePercent ?? Math.round((usedStorageBytes / maxStorageBytes) * 100)
+  );
+
+  const statLabelClass = "mt-1.5 text-sm text-slate-500";
 
   return (
-    <div className="space-y-6">
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-50 via-purple-100/50 to-fuchsia-50 dark:from-violet-950/40 dark:via-purple-900/30 dark:to-fuchsia-950/40 border border-violet-100 dark:border-violet-900/50 p-6 md:p-8">
-        <div className="absolute inset-0 bg-grid-slate-200/50 dark:bg-grid-slate-700/20 [mask-image:linear-gradient(0deg,transparent,rgba(255,255,255,0.5))]" />
-        <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg shadow-violet-500/25">
-              <Brain className="h-7 w-7 text-white" />
+    <div className="space-y-4">
+      <div className="rounded-2xl bg-white border border-slate-200 shadow-sm px-5 py-5 md:px-6">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="h-12 w-12 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "#2563EB" }}>
+              <BookOpen className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-foreground">{t('knowledgeBase.title')}</h1>
-              <p className="text-muted-foreground mt-0.5">{t('knowledgeBase.description')}</p>
+              <h1 className="text-xl md:text-[22px] font-bold text-slate-900 tracking-tight">
+                {t('knowledgeBase.title')}
+              </h1>
+              <p className="text-sm text-slate-500 mt-0.5">
+                {t('knowledgeBase.description')}
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2.5">
             {isDemoMode && (
               <Button
                 variant="outline"
                 onClick={() => setIsVideoOpen(true)}
-                className="bg-white/80 dark:bg-white/10 hover:bg-white text-violet-900 dark:text-violet-100 border-violet-200 dark:border-violet-800 font-semibold shadow"
+                className="bg-white hover:bg-slate-50 text-slate-700 border-slate-200 font-medium shadow-sm"
                 data-testid="button-watch-demo-kb"
               >
-                <Video className="h-4 w-4 mr-2 text-violet-600 dark:text-violet-400" />
+                <Video className="h-4 w-4 mr-2" style={{ color: "#2563EB" }} />
                 <span>Watch Demo Video</span>
               </Button>
             )}
-            <Button 
+            <Button
               onClick={() => setUrlDialogOpen(true)}
-              className="bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-lg"
+              className="text-white border-transparent shadow-sm font-medium hover:opacity-90"
+              style={{ backgroundColor: "#2563EB" }}
               data-testid="button-add-url"
             >
               <Link className="h-4 w-4 mr-2" />
               {t('knowledgeBase.actions.addUrl')}
             </Button>
-            <Button 
+            <Button
               variant="outline"
               onClick={() => setFileDialogOpen(true)}
+              className="bg-white border-slate-200 text-slate-700 hover:bg-slate-50 font-medium shadow-sm"
               data-testid="button-add-files"
             >
               <FileText className="h-4 w-4 mr-2" />
               {t('knowledgeBase.actions.addFiles')}
             </Button>
-            <Button 
+            <Button
               variant="outline"
               onClick={() => setTextDialogOpen(true)}
+              className="bg-white border-slate-200 text-slate-700 hover:bg-slate-50 font-medium shadow-sm"
               data-testid="button-create-text"
             >
               <Type className="h-4 w-4 mr-2" />
@@ -582,74 +604,84 @@ export default function KnowledgeBase() {
             </Button>
           </div>
         </div>
-        
-        <div className="relative mt-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
-          <div className="bg-white/80 dark:bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-violet-100/50 dark:border-violet-800/30">
-            <div className="text-2xl font-bold text-violet-700 dark:text-violet-300">{knowledgeBase.length}</div>
-            <div className="text-violet-600/70 dark:text-violet-400/70 text-sm">{t('knowledgeBase.stats.totalItems')}</div>
-          </div>
-          <div className="bg-white/80 dark:bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-blue-100/50 dark:border-blue-800/30">
-            <div className="flex items-center gap-2">
-              <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">{totalChunks}</div>
-              <Brain className="h-4 w-4 text-blue-500 dark:text-blue-400" />
-            </div>
-            <div className="text-blue-600/70 dark:text-blue-400/70 text-sm">{t('knowledgeBase.stats.knowledgeChunks')}</div>
-          </div>
-          <div className="bg-white/80 dark:bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-emerald-100/50 dark:border-emerald-800/30">
-            <div className="flex items-center gap-2">
-              <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{urlCount + fileCount}</div>
-              <FileText className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
-            </div>
-            <div className="text-emerald-600/70 dark:text-emerald-400/70 text-sm">{t('knowledgeBase.stats.docsAndUrls')}</div>
-          </div>
-          <div className="bg-white/80 dark:bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-amber-100/50 dark:border-amber-800/30">
-            <div className="flex items-center gap-2">
-              <div className="text-2xl font-bold text-amber-700 dark:text-amber-300">{textCount}</div>
-              <Type className="h-4 w-4 text-amber-500 dark:text-amber-400" />
-            </div>
-            <div className="text-amber-600/70 dark:text-amber-400/70 text-sm">{t('knowledgeBase.stats.textEntries')}</div>
-          </div>
-          <div className="bg-white/80 dark:bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-purple-100/50 dark:border-purple-800/30">
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center justify-between">
-                <div className="text-lg font-bold text-purple-700 dark:text-purple-300">{formatBytes(totalSize)}</div>
-                <span className="text-xs text-purple-600/70 dark:text-purple-400/70">/ 20 MB</span>
-              </div>
-              <Progress 
-                value={storageUsage?.usagePercent || Math.round((totalSize / (20 * 1024 * 1024)) * 100)} 
-                className="h-1.5" 
-              />
-            </div>
-            <div className="text-purple-600/70 dark:text-purple-400/70 text-sm mt-1">{t('knowledgeBase.stats.storageUsed')}</div>
-          </div>
-        </div>
-
-        {processingCount > 0 && (
-          <div className="relative mt-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg p-3 flex items-center gap-3 border border-blue-200 dark:border-blue-800">
-            <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-            <span className="text-sm text-blue-700 dark:text-blue-300">
-              {t('knowledgeBase.processing.message', { count: processingCount })}
-            </span>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="ml-auto h-7 text-blue-600"
-              onClick={() => refetch()}
-              data-testid="button-refresh-status"
-            >
-              <RefreshCw className="h-3 w-3 mr-1" />
-              {t('common.refresh')}
-            </Button>
-          </div>
-        )}
       </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+        <div className="rounded-xl bg-white border border-slate-200 shadow-sm px-5 py-4">
+          <div className="text-[28px] font-bold leading-none tabular-nums" style={{ color: "#2563EB" }}>
+            {knowledgeBase.length}
+          </div>
+          <div className={statLabelClass}>{t('knowledgeBase.stats.totalItems')}</div>
+        </div>
+        <div className="rounded-xl bg-white border border-slate-200 shadow-sm px-5 py-4">
+          <div className="flex items-center gap-2">
+            <div className="text-[28px] font-bold leading-none tabular-nums" style={{ color: "#2563EB" }}>
+              {totalChunks}
+            </div>
+            <Brain className="h-4 w-4" style={{ color: "#2563EB" }} />
+          </div>
+          <div className={statLabelClass}>{t('knowledgeBase.stats.knowledgeChunks')}</div>
+        </div>
+        <div className="rounded-xl bg-white border border-slate-200 shadow-sm px-5 py-4">
+          <div className="flex items-center gap-2">
+            <div className="text-[28px] font-bold leading-none tabular-nums" style={{ color: "#16A34A" }}>
+              {urlCount + fileCount}
+            </div>
+            <FileText className="h-4 w-4" style={{ color: "#16A34A" }} />
+          </div>
+          <div className={statLabelClass}>{t('knowledgeBase.stats.docsAndUrls')}</div>
+        </div>
+        <div className="rounded-xl bg-white border border-slate-200 shadow-sm px-5 py-4">
+          <div className="flex items-center gap-2">
+            <div className="text-[28px] font-bold leading-none tabular-nums" style={{ color: "#F97316" }}>
+              {textCount}
+            </div>
+            <Type className="h-4 w-4" style={{ color: "#F97316" }} />
+          </div>
+          <div className={statLabelClass}>{t('knowledgeBase.stats.textEntries')}</div>
+        </div>
+        <div className="rounded-xl bg-white border border-slate-200 shadow-sm px-5 py-4">
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-lg font-bold tabular-nums" style={{ color: "#2563EB" }}>
+              {formatBytes(usedStorageBytes)}
+            </span>
+            <span className="text-sm text-slate-400">/ {formatBytes(maxStorageBytes)}</span>
+          </div>
+          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="h-full rounded-full"
+              style={{ width: `${storagePercent}%`, backgroundColor: "#2563EB" }}
+            />
+          </div>
+          <div className={statLabelClass}>{t('knowledgeBase.stats.storageUsed')}</div>
+        </div>
+      </div>
+
+      {processingCount > 0 && (
+        <div className="rounded-xl bg-white border border-slate-200 shadow-sm px-4 py-3 flex items-center gap-3">
+          <Loader2 className="h-4 w-4 animate-spin" style={{ color: "#2563EB" }} />
+          <span className="text-sm text-slate-600">
+            {t('knowledgeBase.processing.message', { count: processingCount })}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto h-7"
+            onClick={() => refetch()}
+            data-testid="button-refresh-status"
+          >
+            <RefreshCw className="h-3 w-3 mr-1" />
+            {t('common.refresh')}
+          </Button>
+        </div>
+      )}
 
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[250px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
             placeholder={t('knowledgeBase.searchPlaceholder')}
-            className="pl-9"
+            className="h-11 pl-10 bg-white border-slate-200 shadow-sm rounded-lg"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             data-testid="input-search-knowledge-base"
@@ -657,9 +689,9 @@ export default function KnowledgeBase() {
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="gap-2" data-testid="button-filter-type">
+            <Button variant="outline" className="h-11 gap-2 bg-white border-slate-200 shadow-sm font-normal text-slate-700 min-w-[128px] justify-between" data-testid="button-filter-type">
               {typeFilter ? t(`knowledgeBase.types.${typeFilter}`) : t('knowledgeBase.filters.allTypes')}
-              <ChevronDown className="h-4 w-4" />
+              <ChevronDown className="h-4 w-4 text-slate-400" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -683,55 +715,55 @@ export default function KnowledgeBase() {
       </div>
 
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
-          <p className="text-sm text-muted-foreground">{t('knowledgeBase.loading')}</p>
+        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm flex flex-col items-center justify-center py-24 text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-slate-400 mb-4" />
+          <p className="text-sm text-slate-500">{t('knowledgeBase.loading')}</p>
         </div>
       ) : filteredItems.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center">
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-lg bg-muted">
-            <FileStack className="h-8 w-8 text-muted-foreground" />
+        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm flex flex-col items-center justify-center py-24 text-center">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-slate-50 border border-slate-200">
+            <FileStack className="h-8 w-8 text-slate-400" />
           </div>
-          <h3 className="text-lg font-medium text-foreground mb-2">{t('knowledgeBase.empty.title')}</h3>
-          <p className="text-sm text-muted-foreground">
+          <h3 className="text-lg font-medium text-slate-900 mb-2">{t('knowledgeBase.empty.title')}</h3>
+          <p className="text-sm text-slate-500">
             {searchQuery || typeFilter ? t('knowledgeBase.empty.adjustFilters') : t('knowledgeBase.empty.uploadFirst')}
           </p>
         </div>
       ) : (
         <>
-          <div className="rounded-md border overflow-x-auto">
+          <div className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>{t('knowledgeBase.table.name')}</TableHead>
-                  <TableHead>{t('common.type')}</TableHead>
-                  <TableHead>{t('knowledgeBase.table.aiStatus')}</TableHead>
-                  <TableHead className="hidden md:table-cell">{t('knowledgeBase.table.chunks')}</TableHead>
-                  <TableHead className="hidden sm:table-cell">{t('knowledgeBase.table.size')}</TableHead>
-                  <TableHead className="hidden lg:table-cell">{t('knowledgeBase.table.created')}</TableHead>
-                  <TableHead className="w-[100px]"></TableHead>
+                <TableRow className="hover:bg-transparent border-slate-200">
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{t('knowledgeBase.table.name')}</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{t('common.type')}</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{t('knowledgeBase.table.aiStatus')}</TableHead>
+                  <TableHead className="hidden md:table-cell text-[11px] font-semibold uppercase tracking-wider text-slate-400">{t('knowledgeBase.table.chunks')}</TableHead>
+                  <TableHead className="hidden sm:table-cell text-[11px] font-semibold uppercase tracking-wider text-slate-400">{t('knowledgeBase.table.size')}</TableHead>
+                  <TableHead className="hidden lg:table-cell text-[11px] font-semibold uppercase tracking-wider text-slate-400">{t('knowledgeBase.table.created')}</TableHead>
+                  <TableHead className="w-[90px] text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">{t('knowledgeBase.table.actions', 'Actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {paginatedItems.map((item) => (
-                  <TableRow key={item.id} data-testid={`row-kb-item-${item.id}`}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        {getTypeIcon(item.type)}
-                        <span className="truncate max-w-[200px]">{item.title}</span>
+                  <TableRow key={item.id} className="border-slate-100" data-testid={`row-kb-item-${item.id}`}>
+                    <TableCell className="font-medium text-slate-800">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-slate-400">{getTypeIcon(item.type)}</span>
+                        <span className="truncate max-w-[280px]">{item.title}</span>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={getTypeBadgeVariant(item.type)}>
+                      <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium text-white" style={{ backgroundColor: "#111827" }}>
                         {item.type}
-                      </Badge>
+                      </span>
                     </TableCell>
                     <TableCell>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5">
                             {getStatusIcon(item.ragStatus)}
-                            <span className="text-sm text-muted-foreground">
+                            <span className="text-sm font-medium" style={{ color: statusColor(item.ragStatus) }}>
                               {getStatusText(item.ragStatus)}
                             </span>
                           </div>
@@ -747,23 +779,23 @@ export default function KnowledgeBase() {
                         </TooltipContent>
                       </Tooltip>
                     </TableCell>
-                    <TableCell className="text-muted-foreground hidden md:table-cell">
+                    <TableCell className="text-slate-600 hidden md:table-cell">
                       {item.chunkCount || 0}
                     </TableCell>
-                    <TableCell className="text-muted-foreground hidden sm:table-cell">
+                    <TableCell className="text-slate-600 hidden sm:table-cell">
                       {formatBytes(item.storageSize)}
                     </TableCell>
-                    <TableCell className="text-muted-foreground hidden lg:table-cell">
+                    <TableCell className="text-slate-600 hidden lg:table-cell">
                       {new Date(item.createdAt).toLocaleDateString()}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-right">
                       <Button
                         variant="ghost"
                         size="icon"
                         onClick={() => setDeletingItem(item)}
                         data-testid={`button-delete-${item.id}`}
                       >
-                        <Trash2 className="h-4 w-4 text-destructive" />
+                        <Trash2 className="h-4 w-4" style={{ color: "#EF4444" }} />
                       </Button>
                     </TableCell>
                   </TableRow>

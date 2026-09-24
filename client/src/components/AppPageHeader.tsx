@@ -19,8 +19,6 @@ import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { AuthStorage } from "@/lib/auth-storage";
 import { NotificationBell } from "@/components/NotificationBell";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { LanguageSelector } from "@/components/LanguageSelector";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
@@ -29,7 +27,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, ChevronDown, LogOut, CreditCard, Settings } from "lucide-react";
+import { Search, ChevronDown, LogOut, User } from "lucide-react";
 
 interface MeUser {
   name?: string;
@@ -66,8 +64,9 @@ const PAGE_HEADERS: Array<{ test: (path: string) => boolean; title: string; subt
   { test: (p) => p === "/calls", title: "Calls", subtitle: "Browse inbound and outbound call history." },
   { test: (p) => p.startsWith("/analytics"), title: "Analytics", subtitle: "Track WhatsApp and Auto Calling performance." },
   { test: (p) => p === "/agents/new", title: "Create AI Agent", subtitle: "Configure type, persona, telephony, model, and prompts." },
+  { test: (p) => /^\/agents\/[^/]+\/edit$/.test(p), title: "Edit Agent", subtitle: "Update type, persona, telephony, model, and prompts." },
   { test: (p) => p === "/agents", title: "AI Agents", subtitle: "Create and manage your conversational AI agents" },
-  { test: (p) => p === "/knowledge-base", title: "Knowledge Base", subtitle: "Upload documents your agents can use." },
+  { test: (p) => p === "/knowledge-base", title: "Knowledge Base", subtitle: "Train your AI agents with custom knowledge" },
   { test: (p) => p === "/voices", title: "Voice", subtitle: "Choose and preview voices for calling." },
   { test: (p) => p === "/crm", title: "Quick CRM", subtitle: "Manage leads captured from calls and chats." },
   { test: (p) => p === "/phone-numbers", title: "Phone Numbers", subtitle: "Purchase and manage calling numbers." },
@@ -82,7 +81,7 @@ const PAGE_HEADERS: Array<{ test: (path: string) => boolean; title: string; subt
   { test: (p) => p === "/tools/widgets", title: "Widgets", subtitle: "Embed calling and chat on your website." },
   { test: (p) => p === "/tools", title: "Tools", subtitle: "Connect extra capabilities to your agents." },
   { test: (p) => p === "/billing", title: "Billing", subtitle: "Plans, credits, and payment history." },
-  { test: (p) => p === "/settings", title: "Settings", subtitle: "Account, workspace, and preferences." },
+  { test: (p) => p === "/settings", title: "Profile", subtitle: "Manage your account details and preferences." },
   { test: (p) => p === "/whatsapp/inbox", title: "Team Inbox", subtitle: "Reply to WhatsApp conversations in one place." },
   { test: (p) => p === "/whatsapp/api-docs", title: "API Documentation", subtitle: "Integrate WhatsApp messaging into your apps." },
   { test: (p) => p.startsWith("/whatsapp/waba-connection") || p.startsWith("/whatsapp/channels"), title: "Settings", subtitle: "Connect and manage WhatsApp Business accounts." },
@@ -103,12 +102,16 @@ export function AppHeaderProvider({ children }: { children: ReactNode }) {
   const [search, setSearch] = useState("");
   const [pageMeta, setPageMeta] = useState<PageHeaderMeta | null>(null);
   const [actions, setActions] = useState<ReactNode>(null);
+  const locationRef = useRef(location);
 
-  useEffect(() => {
+  // Reset header chrome when the route changes, before child effects run.
+  // A location effect would clear page meta after the page sets it.
+  if (locationRef.current !== location) {
+    locationRef.current = location;
     setSearch("");
     setPageMeta(null);
     setActions(null);
-  }, [location]);
+  }
 
   const value = useMemo(
     () => ({ search, setSearch, pageMeta, setPageMeta, actions, setActions }),
@@ -209,18 +212,10 @@ export function AppPageHeader() {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuItem onClick={() => setLocation("/whatsapp/waba-connection")} className="cursor-pointer">
-              <Settings className="mr-2 h-4 w-4" />
-              Settings
+            <DropdownMenuItem onClick={() => setLocation("/settings")} className="cursor-pointer">
+              <User className="mr-2 h-4 w-4" />
+              Profile
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setLocation("/billing")} className="cursor-pointer">
-              <CreditCard className="mr-2 h-4 w-4" />
-              Billing & Credits
-            </DropdownMenuItem>
-            <div className="flex items-center justify-between px-2 py-1.5">
-              <LanguageSelector variant="compact" />
-              <ThemeToggle />
-            </div>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive focus:text-destructive">
               <LogOut className="mr-2 h-4 w-4" />

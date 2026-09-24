@@ -2,8 +2,7 @@ import { useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ClipboardList, Calendar, Webhook, Globe, Key, Users, Mail, ContactRound, Link as LinkIcon, TableProperties, ExternalLink, Unlink, Loader2, Video, Play } from "lucide-react";
-import { usePluginStatus } from "@/hooks/use-plugin-status";
+import { ClipboardList, Calendar, Webhook, Globe, ContactRound, Link as LinkIcon, TableProperties, ExternalLink, Unlink, Loader2, Video, Play } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -20,7 +19,6 @@ interface ToolCard {
   iconColor: string;
   iconBg: string;
   url: string;
-  pluginRequired?: string;
 }
 
 function GoogleSheetsCardActions() {
@@ -121,7 +119,6 @@ export default function ToolsPage() {
   const { isDemoMode } = useDemoMode();
   const [isVideoOpen, setIsVideoOpen] = useState(false);
   const [, setLocation] = useLocation();
-  const { isPluginEnabled, isLoading } = usePluginStatus();
   const { toast } = useToast();
 
   const allTools: ToolCard[] = useMemo(() => [
@@ -180,36 +177,6 @@ export default function ToolsPage() {
       url: "/incoming-connections",
     },
     {
-      id: "developer",
-      title: t('toolsPage.tools.developer.title', 'Developer / API Keys'),
-      description: t('toolsPage.tools.developer.description', 'Manage API keys and access REST API documentation.'),
-      icon: Key,
-      iconColor: "text-amber-600 dark:text-amber-400",
-      iconBg: "bg-amber-500/10 dark:bg-amber-500/20",
-      url: "/settings?tab=developer",
-      pluginRequired: "rest-api",
-    },
-    {
-      id: "team",
-      title: t('toolsPage.tools.team.title', 'Team Management'),
-      description: t('toolsPage.tools.team.description', 'Invite team members, assign roles, and manage permissions.'),
-      icon: Users,
-      iconColor: "text-blue-600 dark:text-blue-400",
-      iconBg: "bg-blue-500/10 dark:bg-blue-500/20",
-      url: "/settings?tab=team",
-      pluginRequired: "team-management",
-    },
-    {
-      id: "messaging",
-      title: t('toolsPage.tools.messaging.title', 'WhatsApp & Email'),
-      description: t('toolsPage.tools.messaging.description', 'Configure WhatsApp Business and email messaging for your agents.'),
-      icon: Mail,
-      iconColor: "text-emerald-600 dark:text-emerald-400",
-      iconBg: "bg-emerald-500/10 dark:bg-emerald-500/20",
-      url: "/settings?tab=messaging",
-      pluginRequired: "messaging",
-    },
-    {
       id: "google-sheets",
       title: t('toolsPage.tools.googleSheets.title', 'Google Sheets'),
       description: t('toolsPage.tools.googleSheets.description', 'Push appointment and form data to Google Sheets in real time.'),
@@ -246,79 +213,49 @@ export default function ToolsPage() {
     }
   }, [t]);
 
-  const visibleTools = allTools.filter((tool) => {
-    if (!tool.pluginRequired) return true;
-    return isPluginEnabled?.(tool.pluginRequired) ?? false;
-  });
-
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight" data-testid="text-tools-title">{t('toolsPage.title', 'Tools')}</h1>
-          <p className="text-muted-foreground mt-1" data-testid="text-tools-description">
-            {t('toolsPage.description', 'Access and configure your platform tools and integrations.')}
-          </p>
-        </div>
-        {isDemoMode && (
+    <div className="max-w-5xl mx-auto space-y-6">
+      {isDemoMode && (
+        <div className="flex justify-end">
           <Button
             variant="outline"
             onClick={() => setIsVideoOpen(true)}
-            className="border-primary/30 text-primary hover:bg-primary/10 font-semibold flex items-center gap-2 self-start sm:self-auto"
+            className="border-primary/30 text-primary hover:bg-primary/10 font-semibold flex items-center gap-2"
             data-testid="button-watch-demo-tools"
           >
             <Video className="h-4 w-4" />
             <span>Watch Demo Video</span>
           </Button>
-        )}
-      </div>
-
-      {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <Card key={i} className="animate-pulse">
-              <CardContent className="p-5">
-                <div className="flex items-start gap-4">
-                  <div className="w-11 h-11 rounded-md bg-muted" />
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 bg-muted rounded w-24" />
-                    <div className="h-3 bg-muted rounded w-full" />
-                    <div className="h-3 bg-muted rounded w-3/4" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {visibleTools.map((tool) => (
-            <Card
-              key={tool.id}
-              className="cursor-pointer hover-elevate active-elevate-2 transition-colors"
-              onClick={() => setLocation(tool.url)}
-              data-testid={`card-tool-${tool.id}`}
-            >
-              <CardContent className="p-5">
-                <div className="flex items-start gap-4">
-                  <div className={`w-11 h-11 rounded-md ${tool.iconBg} flex items-center justify-center shrink-0`}>
-                    <tool.icon className={`w-5 h-5 ${tool.iconColor}`} />
-                  </div>
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <h3 className="font-semibold text-sm text-foreground">{tool.title}</h3>
-                    <p className="text-xs text-muted-foreground leading-relaxed">{tool.description}</p>
-                    {tool.id === "google-sheets" && (
-                      <div className="pt-1">
-                        <GoogleSheetsCardActions />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
         </div>
       )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {allTools.map((tool) => (
+          <Card
+            key={tool.id}
+            className="cursor-pointer hover-elevate active-elevate-2 transition-colors"
+            onClick={() => setLocation(tool.url)}
+            data-testid={`card-tool-${tool.id}`}
+          >
+            <CardContent className="p-5">
+              <div className="flex items-start gap-4">
+                <div className={`w-11 h-11 rounded-md ${tool.iconBg} flex items-center justify-center shrink-0`}>
+                  <tool.icon className={`w-5 h-5 ${tool.iconColor}`} />
+                </div>
+                <div className="min-w-0 flex-1 space-y-1">
+                  <h3 className="font-semibold text-sm text-foreground">{tool.title}</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{tool.description}</p>
+                  {tool.id === "google-sheets" && (
+                    <div className="pt-1">
+                      <GoogleSheetsCardActions />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
       {isDemoMode && (
         <Dialog open={isVideoOpen} onOpenChange={setIsVideoOpen}>

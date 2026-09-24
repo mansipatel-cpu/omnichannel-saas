@@ -3,7 +3,7 @@
  * Shows navigation based on granted permissions for team members
  * Supports both user team members and admin sub-admins
  */
-import { Users, BookOpen, Mic, Link as LinkIcon, Phone, Settings, ChevronsUpDown, Plus, BarChart3, Home, Target, LogOut, Coins, Shield, CreditCard, TrendingUp, UserCheck, Webhook, Layout, FileText, Wrench, Globe, Building2, Key, Puzzle, MessageSquare, Headphones, ListOrdered, ContactRound, Package, DollarSign, Brain, Bot } from "lucide-react";
+import { Users, BookOpen, Mic, Link as LinkIcon, Phone, Settings, ChevronsUpDown, BarChart3, Home, Target, LogOut, Shield, CreditCard, UserCheck, Webhook, FileText, Wrench, Globe, MessageSquare, ContactRound, Bot } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -20,7 +20,6 @@ import {
 } from "@/components/ui/sidebar";
 import { Link, useLocation } from "wouter";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -88,7 +87,6 @@ const USER_SECTION_ROUTES: Record<string, { url: string; icon: any; label: strin
   knowledge_base: [
     { url: "/knowledge-base", icon: BookOpen, label: "Knowledge Base", group: "build", iconColor: "text-violet-500" },
   ],
-  templates: [],
   contacts: [
     { url: "/contacts", icon: UserCheck, label: "All Contacts", group: "telephony", iconColor: "text-brand" },
   ],
@@ -117,9 +115,6 @@ const USER_SECTION_ROUTES: Record<string, { url: string; icon: any; label: strin
   billing: [
     { url: "/billing", icon: CreditCard, label: "Billing & Credits", group: "billing", iconColor: "text-amber-500" },
   ],
-  api_keys: [
-    { url: "/settings", icon: Key, label: "API Keys", group: "settings", iconColor: "text-slate-500" },
-  ],
   settings: [
     { url: "/whatsapp/waba-connection", icon: Settings, label: "Settings", group: "settings" },
   ],
@@ -128,40 +123,8 @@ const USER_SECTION_ROUTES: Record<string, { url: string; icon: any; label: strin
   ],
 };
 
-// Admin section mappings to tab values
-const ADMIN_SECTION_TABS: Record<string, { tabValue: string; icon: any; label: string }[]> = {
-  user_management: [
-    { tabValue: "users", icon: Users, label: "Users" },
-    { tabValue: "contacts", icon: ContactRound, label: "Contacts" },
-  ],
-  billing_management: [
-    { tabValue: "billing", icon: CreditCard, label: "Billing" },
-  ],
-  platform_settings: [
-    { tabValue: "settings", icon: Settings, label: "Settings" },
-    { tabValue: "communications", icon: MessageSquare, label: "Communications" },
-  ],
-  api_credentials: [
-    { tabValue: "voice-ai", icon: Brain, label: "Voice AI" },
-  ],
-  team_oversight: [
-    { tabValue: "teams", icon: Building2, label: "Teams" },
-  ],
-  analytics_reports: [
-    { tabValue: "analytics", icon: BarChart3, label: "Analytics" },
-    { tabValue: "calls", icon: Headphones, label: "Call Monitoring" },
-    { tabValue: "queue", icon: ListOrdered, label: "Batch Jobs" },
-  ],
-  plugins: [
-    { tabValue: "settings", icon: Puzzle, label: "Plugins" },
-  ],
-  admin_team: [
-    { tabValue: "teams", icon: Building2, label: "Admin Team" },
-  ],
-};
-
 export function TeamMemberSidebar() {
-  const [location, setLocation] = useLocation();
+  const [location] = useLocation();
   const { t } = useTranslation();
   const { branding, currentLogo, showLogo, showFavicon } = useBranding();
   const { setOpenMobile, isMobile } = useSidebar();
@@ -249,29 +212,7 @@ export function TeamMemberSidebar() {
     return groups;
   };
 
-  // Build admin tab items for admin team members
-  const buildAdminTabs = (): { tabValue: string; icon: any; label: string }[] => {
-    if (!isAdminTeam) return [];
-    
-    const tabs: { tabValue: string; icon: any; label: string }[] = [];
-    const addedTabs = new Set<string>();
-
-    Object.entries(ADMIN_SECTION_TABS).forEach(([sectionId, sectionTabs]) => {
-      if (hasSectionAccess(sectionId)) {
-        sectionTabs.forEach(tab => {
-          if (!addedTabs.has(tab.tabValue)) {
-            tabs.push(tab);
-            addedTabs.add(tab.tabValue);
-          }
-        });
-      }
-    });
-
-    return tabs;
-  };
-
   const navGroups = buildNavItems();
-  const adminTabs = buildAdminTabs();
 
   return (
     <Sidebar collapsible="icon">
@@ -454,31 +395,6 @@ export function TeamMemberSidebar() {
           </SidebarGroup>
         )}
 
-        {/* Admin Section - For admin team members */}
-        {isAdminTeam && adminTabs.length > 0 && (
-          <SidebarGroup>
-            <SidebarGroupLabel className="px-3 text-xs font-bold uppercase tracking-wide text-muted-foreground">
-              {t('nav.administration')}
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location.startsWith("/admin")}
-                    tooltip={t('nav.adminDashboard')}
-                    data-testid="link-admin-dashboard"
-                  >
-                    <Link href="/admin" onClick={handleNavClick}>
-                      <Shield className="h-4 w-4" />
-                      <span>{t('nav.adminDashboard')}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
       </SidebarContent>
 
       {/* Footer */}

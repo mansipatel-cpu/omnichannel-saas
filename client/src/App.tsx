@@ -189,6 +189,7 @@ function UserAppRoutes({ includeAdmin = false }: { includeAdmin?: boolean }) {
       </Route>
       <Route path="/knowledge-base" component={KnowledgeBase} />
       <Route path="/agents/new" component={CreateAgent} />
+      <Route path="/agents/:id/edit" component={CreateAgent} />
       <Route path="/agents" component={Agents} />
       <Route path="/conversations" component={PluginConversationsPage} />
       <Route path="/templates/agentlab/new" component={CreateAgentLabTemplate} />
@@ -732,11 +733,8 @@ function Router() {
       console.log("Router - Authenticated team member on auth page, redirecting to /dashboard");
       return <Redirect to="/dashboard" />;
     }
-    const user = AuthStorage.getUser();
-    const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
-    const redirectTo = isAdmin ? '/admin' : '/dashboard';
-    console.log("Router - Authenticated user on auth page, redirecting to", redirectTo);
-    return <Redirect to={redirectTo} />;
+    console.log("Router - Authenticated user on auth page, redirecting to /dashboard");
+    return <Redirect to="/dashboard" />;
   }
 
   // Redirect authenticated team members away from team login page
@@ -750,6 +748,11 @@ function Router() {
   if (isAdminTeamMember && location === '/admin/team/login') {
     console.log("Router - Authenticated admin team member on admin team login page, redirecting to /admin");
     return <Redirect to="/admin" />;
+  }
+
+  // Admin dashboard is no longer the home page. Regular users land on /dashboard.
+  if ((location === '/admin' || location === '/admin/dashboard') && !isAdminTeamMember) {
+    return <Redirect to="/dashboard" />;
   }
 
   // Admin routes - protected by server-side validation

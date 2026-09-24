@@ -24,7 +24,6 @@ import {
   BarChart3,
   LayoutGrid,
   Settings,
-  Headphones,
   ChevronDown,
   Zap,
   BookOpen,
@@ -137,7 +136,6 @@ export function AppSidebar() {
     return null;
   }
 
-  const isAdmin = user.role === "admin" || user.role === "super_admin";
   const appName = branding.app_name || "AutoComm";
 
   const itemClass = (active: boolean) =>
@@ -319,16 +317,6 @@ export function AppSidebar() {
 
       <SidebarFooter className="px-2 pb-4 pt-2 mt-auto">
         <SidebarMenu className="gap-0.5">
-          {isAdmin && (
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={location.startsWith("/admin")} tooltip="Admin Dashboard" className={itemClass(location.startsWith("/admin"))} data-testid="link-admin-dashboard">
-                <Link href="/admin" onClick={handleNavClick}>
-                  <LayoutGrid className="h-4 w-4" />
-                  <span>Admin Dashboard</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          )}
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
@@ -340,14 +328,6 @@ export function AppSidebar() {
               <Link href="/whatsapp/waba-connection" onClick={handleNavClick}>
                 <Settings className="h-4 w-4" />
                 <span>Settings</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="Help & Support" className={itemClass(false)} data-testid="link-help-support">
-              <Link href="/settings" onClick={handleNavClick}>
-                <Headphones className="h-4 w-4" />
-                <span>Help & Support</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

@@ -18,13 +18,10 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Search, Play, Mic, Square, AlertCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Search, Play, Pause, Mic, AlertCircle } from "lucide-react";
 import { useTranslation } from 'react-i18next';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import OpenAIVoicePreviewButton from "@/components/OpenAIVoicePreviewButton";
 
 interface AccountVoice {
@@ -61,7 +58,6 @@ export default function Voices() {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [playingVoice, setPlayingVoice] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState("elevenlabs");
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
@@ -180,76 +176,56 @@ export default function Voices() {
     return languageNames[code?.toLowerCase()] || code?.toUpperCase() || "Unknown";
   };
 
-  const getTotalVoiceCount = () => {
-    if (activeTab === "elevenlabs") {
-      return accountVoices?.length || 0;
-    }
-    return OPENAI_VOICES.length;
-  };
+  const totalVoiceCount = (accountVoices?.length || 0) + OPENAI_VOICES.length;
+  const filteredCount = filteredVoices.length + filteredOpenAIVoices.length;
 
-  const getFilteredCount = () => {
-    if (activeTab === "elevenlabs") {
-      return filteredVoices.length;
-    }
-    return filteredOpenAIVoices.length;
-  };
+  const pill = "inline-flex items-center rounded-full bg-[#F4F6F8] px-2.5 py-1 text-[11px] font-medium text-slate-500 capitalize";
+  const accentPill = "inline-flex items-center rounded-full border border-[#2F6BFF] bg-white px-2.5 py-1 text-[11px] font-medium text-[#2F6BFF] capitalize";
+
+  const playButton = (isPlaying: boolean, onClick: () => void, testId: string) => (
+    <button
+      type="button"
+      onClick={onClick}
+      className="h-7 w-7 text-slate-400 hover:text-slate-700 inline-flex items-center justify-center shrink-0"
+      data-testid={testId}
+    >
+      {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 fill-slate-400" />}
+    </button>
+  );
+
+  const voiceTitle = (name: string, extra?: string) => extra ? `${name} - ${extra}` : name;
 
   return (
-    <div className="space-y-6">
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-pink-50 via-rose-100/50 to-fuchsia-50 dark:from-pink-950/40 dark:via-rose-900/30 dark:to-fuchsia-950/40 border border-pink-100 dark:border-pink-900/50 p-6 md:p-8">
-        <div className="absolute inset-0 bg-grid-slate-200/50 dark:bg-grid-slate-700/20 [mask-image:linear-gradient(0deg,transparent,rgba(255,255,255,0.5))]" />
-        <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-pink-500 to-rose-600 flex items-center justify-center shadow-lg shadow-pink-500/25">
-              <Mic className="h-7 w-7 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-foreground">{t('voices.title')}</h1>
-              <p className="text-muted-foreground mt-0.5">
-                {t('voices.subtitleBrowse', 'Browse and preview available voices')}
-              </p>
-            </div>
-          </div>
+    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 md:p-6 space-y-5">
+      <div className="flex items-center gap-3">
+        <div className="h-11 w-11 rounded-xl bg-[#2F6BFF] flex items-center justify-center shrink-0">
+          <Mic className="h-5 w-5 text-white" />
+        </div>
+        <div>
+          <h1 className="text-[17px] font-semibold text-slate-900 leading-tight">Voice Library</h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            Browse and preview {totalVoiceCount || 21} voices for your agents
+          </p>
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList data-testid="tabs-voice-provider">
-          <TabsTrigger value="elevenlabs" data-testid="tab-elevenlabs">
-            ElevenLabs ({accountVoices?.length || 0})
-          </TabsTrigger>
-          <TabsTrigger value="openai" data-testid="tab-openai">
-            OpenAI ({OPENAI_VOICES.length})
-          </TabsTrigger>
-        </TabsList>
+      <div className="relative max-w-xl">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+        <Input
+          placeholder="Search voices by name, accent, or description..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-9 h-10 rounded-lg border-slate-200 bg-white"
+          data-testid="input-search-voices"
+        />
+      </div>
 
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder={t('voices.searchPlaceholder')}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-                data-testid="input-search-voices"
-              />
-            </div>
-          </div>
+      <div className="flex items-center justify-between text-sm text-slate-500">
+        <span>Total Voices</span>
+        <span>Showing {filteredCount} of {totalVoiceCount} voices</span>
+      </div>
 
-          {(activeTab === "openai" || !isLoading) && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">
-                {debouncedSearch 
-                  ? t('voices.showingFiltered', { count: getFilteredCount(), total: getTotalVoiceCount() })
-                  : t('voices.totalVoices', { count: getTotalVoiceCount() })}
-              </span>
-            </div>
-          )}
-        </div>
-
-        <TabsContent value="elevenlabs" className="space-y-4">
-          {isError ? (
+      {isError && (
         <Alert variant="destructive" data-testid="alert-voices-error">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>{t('common.error')}</AlertTitle>
@@ -257,160 +233,87 @@ export default function Voices() {
             {(error as Error)?.message || t('voices.errorLoading', 'Failed to load voices. Please check your ElevenLabs API key configuration.')}
           </AlertDescription>
         </Alert>
-      ) : isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      )}
+
+      {isLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {Array.from({ length: 8 }).map((_, i) => (
-            <Card key={i} className="p-4">
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex-1">
-                  <Skeleton className="h-5 w-3/4 mb-2" />
-                  <div className="flex gap-2">
-                    <Skeleton className="h-5 w-16" />
-                    <Skeleton className="h-5 w-12" />
-                  </div>
-                </div>
-                <Skeleton className="h-9 w-9 rounded-md" />
+            <div key={i} className="rounded-2xl border border-slate-200 bg-white p-4">
+              <Skeleton className="h-5 w-3/4 mb-3" />
+              <div className="flex gap-2">
+                <Skeleton className="h-5 w-16" />
+                <Skeleton className="h-5 w-12" />
               </div>
-            </Card>
+            </div>
           ))}
         </div>
-      ) : filteredVoices.length === 0 ? (
+      ) : filteredCount === 0 ? (
         <Card className="p-16 text-center">
           <Mic className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
           <h3 className="text-lg font-semibold mb-2">
-            {debouncedSearch 
+            {debouncedSearch
               ? t('voices.noVoicesMatch', 'No voices match your search')
               : t('voices.noVoicesAvailable', 'No voices available')}
           </h3>
           <p className="text-muted-foreground">
-            {debouncedSearch 
+            {debouncedSearch
               ? t('voices.tryDifferentSearch', 'Try a different search term')
-              : t('voices.voicesWillAppear', 'Your ElevenLabs account voices will appear here')}
+              : t('voices.voicesWillAppear', 'Your voices will appear here')}
           </p>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {filteredVoices.map((voice) => (
-            <Card
+            <div
               key={voice.voice_id}
-              className="p-4 hover-elevate relative overflow-visible border-green-200 dark:border-green-800/50"
+              className="rounded-2xl border border-slate-200 bg-white px-4 py-4 min-h-[132px]"
               data-testid={`card-voice-${voice.voice_id}`}
             >
-              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-green-400 via-emerald-500 to-green-400 rounded-t-lg" />
-              
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold truncate mb-1.5" data-testid="text-voice-name">
-                    {voice.name}
-                  </h3>
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {voice.labels?.language && (
-                      <Badge variant="secondary" className="text-xs">
-                        {formatLanguageName(voice.labels.language)}
-                      </Badge>
-                    )}
-                    {voice.labels?.gender && (
-                      <Badge variant="outline" className="text-xs capitalize">
-                        {voice.labels.gender}
-                      </Badge>
-                    )}
-                    {voice.labels?.accent && (
-                      <Badge variant="outline" className="text-xs capitalize">
-                        {voice.labels.accent}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-                {voice.preview_url && (
-                  <Button
-                    variant={playingVoice === voice.voice_id ? "default" : "ghost"}
-                    size="icon"
-                    onClick={() => handlePlayPreview(voice.voice_id, voice.preview_url)}
-                    data-testid="button-play-voice"
-                  >
-                    {playingVoice === voice.voice_id ? (
-                      <Square className="h-4 w-4" />
-                    ) : (
-                      <Play className="h-4 w-4" />
-                    )}
-                  </Button>
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <h3 className="font-semibold text-slate-900 truncate" data-testid="text-voice-name">
+                  {voiceTitle(voice.name, voice.labels?.descriptive || voice.labels?.use_case)}
+                </h3>
+                {voice.preview_url && playButton(
+                  playingVoice === voice.voice_id,
+                  () => handlePlayPreview(voice.voice_id, voice.preview_url),
+                  "button-play-voice"
                 )}
               </div>
-
               <div className="flex items-center gap-1.5 flex-wrap">
-                {voice.category && (
-                  <Badge className="text-xs capitalize bg-gradient-to-r from-green-500 to-emerald-500 text-white border-0">
-                    {voice.category}
-                  </Badge>
-                )}
-                {voice.labels?.age && (
-                  <Badge variant="outline" className="text-xs capitalize">
-                    {voice.labels.age}
-                  </Badge>
-                )}
+                {voice.labels?.language && <span className={pill}>{formatLanguageName(voice.labels.language)}</span>}
+                {voice.labels?.gender && <span className={pill}>{voice.labels.gender}</span>}
+                {voice.labels?.accent && <span className={pill}>{voice.labels.accent}</span>}
               </div>
-            </Card>
+              <div className="flex items-center gap-1.5 flex-wrap mt-6">
+                {voice.category && <span className={accentPill}>{voice.category}</span>}
+                {voice.labels?.age && <span className={pill}>{voice.labels.age}</span>}
+              </div>
+            </div>
+          ))}
+          {filteredOpenAIVoices.map((voice) => (
+            <div
+              key={voice.id}
+              className="rounded-2xl border border-slate-200 bg-white px-4 py-4 min-h-[132px]"
+              data-testid={`card-openai-voice-${voice.id}`}
+            >
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <h3 className="font-semibold text-slate-900 truncate" data-testid="text-openai-voice-name">
+                  {voiceTitle(voice.name, voice.style)}
+                </h3>
+                <OpenAIVoicePreviewButton voiceId={voice.id} voiceName={voice.name} />
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className={pill}>English</span>
+                <span className={pill}>{voice.gender}</span>
+                <span className={pill}>{voice.style}</span>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap mt-6">
+                <span className={accentPill}>OpenAI</span>
+              </div>
+            </div>
           ))}
         </div>
       )}
-        </TabsContent>
-
-        <TabsContent value="openai" className="space-y-4">
-          {filteredOpenAIVoices.length === 0 ? (
-            <Card className="p-16 text-center">
-              <Mic className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <h3 className="text-lg font-semibold mb-2">
-                {t('voices.noVoicesMatch', 'No voices match your search')}
-              </h3>
-              <p className="text-muted-foreground">
-                {t('voices.tryDifferentSearch', 'Try a different search term')}
-              </p>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filteredOpenAIVoices.map((voice) => (
-                <Card
-                  key={voice.id}
-                  className="p-4 hover-elevate relative overflow-visible border-violet-200 dark:border-violet-800/50"
-                  data-testid={`card-openai-voice-${voice.id}`}
-                >
-                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-violet-400 via-purple-500 to-violet-400 rounded-t-lg" />
-                  
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold truncate mb-1.5" data-testid="text-openai-voice-name">
-                        {voice.name}
-                      </h3>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <Badge variant="secondary" className="text-xs">
-                          {voice.gender}
-                        </Badge>
-                        <Badge variant="outline" className="text-xs capitalize">
-                          {voice.style}
-                        </Badge>
-                      </div>
-                    </div>
-                    <OpenAIVoicePreviewButton
-                      voiceId={voice.id}
-                      voiceName={voice.name}
-                    />
-                  </div>
-
-                  <p className="text-sm text-muted-foreground line-clamp-2">
-                    {voice.description}
-                  </p>
-
-                  <div className="mt-3">
-                    <Badge className="text-xs bg-gradient-to-r from-violet-500 to-purple-500 text-white border-0">
-                      OpenAI Realtime
-                    </Badge>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
     </div>
   );
 }

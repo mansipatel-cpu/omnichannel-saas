@@ -43,7 +43,7 @@ export function InfoTooltip({ content, className }: InfoTooltipProps) {
         side="top" 
         align="center"
         sideOffset={8}
-        className="max-w-[280px] z-[100] bg-popover text-popover-foreground border shadow-lg"
+        className="max-w-[280px] z-[100] bg-[#ffffff] dark:bg-popover text-popover-foreground border shadow-lg"
         avoidCollisions={true}
         collisionPadding={16}
       >

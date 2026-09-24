@@ -119,8 +119,13 @@ interface WaCampaign {
   deliveredCount?: number;
   failedCount?: number;
   createdAt?: string | Date | null;
+  updatedAt?: string | Date | null;
+  deletedAt?: string | Date | null;
   scheduledAt?: string | Date | null;
   createdBy?: string;
+  createdByName?: string;
+  type?: string;
+  campaignType?: string;
 }
 
 interface WaTemplate {
@@ -291,6 +296,20 @@ export default function Campaigns() {
     queryKey: ["/api/campaigns/deleted"],
   });
 
+  const { data: deletedWaCampaigns = [] } = useQuery<WaCampaign[]>({
+    queryKey: ["/api/whatsapp/campaigns/deleted"],
+    queryFn: async () => {
+      try {
+        const response = await authFetch("/api/whatsapp/campaigns/deleted");
+        if (!response.ok) return [];
+        const result = await response.json();
+        return Array.isArray(result) ? result : result?.data || [];
+      } catch {
+        return [];
+      }
+    },
+  });
+
   const { data: waCampaigns = [], isLoading: waLoading } = useQuery<WaCampaign[]>({
     queryKey: ["/api/whatsapp/campaigns"],
     queryFn: async () => {
@@ -350,14 +369,23 @@ export default function Campaigns() {
   }, [setPageMeta]);
 
   const restoreMutation = useMutation({
-    mutationFn: async (campaignId: string) => {
-      setRestoringCampaignId(campaignId);
-      const res = await apiRequest("PATCH", `/api/campaigns/${campaignId}/restore`);
+    mutationFn: async (row: DeletedRow) => {
+      setRestoringCampaignId(row.id);
+      const url =
+        row.channel === "whatsapp"
+          ? `/api/whatsapp/campaigns/${row.id}/restore`
+          : `/api/campaigns/${row.id}/restore`;
+      const res = await apiRequest("PATCH", url);
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/campaigns"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/campaigns/deleted"] });
+    onSuccess: (_data, row) => {
+      if (row.channel === "whatsapp") {
+        queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/campaigns"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/campaigns/deleted"] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["/api/campaigns"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/campaigns/deleted"] });
+      }
       toast({ title: "Campaign restored" });
       setRestoringCampaignId(null);
     },
@@ -382,11 +410,15 @@ export default function Campaigns() {
     onSuccess: (_data, row) => {
       if (row.channel === "whatsapp") {
         queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/campaigns"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/campaigns/deleted"] });
       } else {
         queryClient.invalidateQueries({ queryKey: ["/api/campaigns"] });
         queryClient.invalidateQueries({ queryKey: ["/api/campaigns/deleted"] });
       }
-      toast({ title: "Campaign deleted", description: "Campaign has been deleted successfully" });
+      toast({
+        title: "Campaign deleted",
+        description: "Moved to Deleted Campaigns. You can restore it within 30 days.",
+      });
       setCampaignToDelete(null);
     },
     onError: (error: any) => {
@@ -439,7 +471,7 @@ export default function Campaigns() {
 
   const deletedRows = useMemo<DeletedRow[]>(() => {
     const actor = user?.name || "Admin User";
-    const fromApi = deletedCampaigns.map((campaign) => {
+    const fromCalling = deletedCampaigns.map((campaign) => {
       const deletedAt = parseDate(campaign.deletedAt) || parseDate(campaign.createdAt) || new Date();
       return {
         id: campaign.id,
@@ -455,8 +487,31 @@ export default function Campaigns() {
         deletedByInitials: initialsFromName(actor),
       };
     });
-    return fromApi;
-  }, [deletedCampaigns, user?.name]);
+    const fromWhatsApp = deletedWaCampaigns.map((campaign) => {
+      const deletedAt =
+        parseDate(campaign.deletedAt) ||
+        parseDate(campaign.updatedAt) ||
+        parseDate(campaign.createdAt) ||
+        new Date();
+      const deletedBy = campaign.createdByName?.trim() || actor;
+      return {
+        id: campaign.id,
+        name: campaign.name || "Untitled campaign",
+        code: campaignCode(campaign.id, "whatsapp"),
+        channel: "whatsapp" as const,
+        channelLabel: "WhatsApp",
+        subtype: campaign.templateName || campaign.type || campaign.campaignType || "WhatsApp",
+        audience: campaign.recipientCount || campaign.totalRecipients || 0,
+        segment: "All Contacts",
+        deletedAt,
+        deletedBy,
+        deletedByInitials: initialsFromName(deletedBy),
+      };
+    });
+    return [...fromWhatsApp, ...fromCalling].sort(
+      (a, b) => b.deletedAt.getTime() - a.deletedAt.getTime()
+    );
+  }, [deletedCampaigns, deletedWaCampaigns, user?.name]);
 
   const rows = tab === "whatsapp" ? waRows : voiceRows;
   const createdByOptions = Array.from(new Set(waRows.map((row) => row.createdBy).filter((value) => value && value !== "All")));
@@ -574,7 +629,7 @@ export default function Campaigns() {
       });
       return;
     }
-    restoreMutation.mutate(row.id);
+    restoreMutation.mutate(row);
   };
 
   const handlePurgeDeleted = (row: DeletedRow) => {
@@ -618,7 +673,7 @@ export default function Campaigns() {
   };
 
   const filterTriggerClass = "h-10 w-full sm:w-[160px] bg-white border-slate-200";
-  const deletedCount = deletedCampaigns.length;
+  const deletedCount = deletedCampaigns.length + deletedWaCampaigns.length;
 
   return (
     <div className="space-y-5 pb-8">
@@ -795,6 +850,7 @@ export default function Campaigns() {
                 className="h-10 w-10 bg-white border-slate-200"
                 onClick={() => {
                   queryClient.invalidateQueries({ queryKey: ["/api/campaigns/deleted"] });
+                  queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/campaigns/deleted"] });
                   toast({ title: "Refreshed", description: "Deleted campaigns list updated." });
                 }}
               >
@@ -1079,8 +1135,8 @@ export default function Campaigns() {
             <AlertDialogTitle>Delete campaign?</AlertDialogTitle>
             <AlertDialogDescription>
               {campaignToDelete
-                ? `This will delete "${campaignToDelete.name}". This action cannot be undone.`
-                : "This action cannot be undone."}
+                ? `This will move "${campaignToDelete.name}" to Deleted Campaigns. You can restore it within ${PURGE_DAYS} days.`
+                : `This will move the campaign to Deleted Campaigns. You can restore it within ${PURGE_DAYS} days.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

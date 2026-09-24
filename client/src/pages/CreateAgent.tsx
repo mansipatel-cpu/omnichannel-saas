@@ -15,7 +15,7 @@
  * ============================================================
  */
 import { useEffect, useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useRoute } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -74,7 +74,48 @@ const openaiVoices = [
   { value: "marin", label: "Marin", description: "Fresh and lively" },
 ];
 
-type TelephonyProvider = "twilio" | "plivo" | "twilio_openai";
+type TelephonyProvider =
+  | "twilio"
+  | "plivo"
+  | "twilio_openai"
+  | "elevenlabs-sip"
+  | "openai-sip"
+  | "custom-voice-engine";
+
+type AgentType = "incoming" | "flow" | "custom_engine";
+
+interface ExistingAgent {
+  id: string;
+  type?: string | null;
+  name?: string | null;
+  description?: string | null;
+  voiceTone?: string | null;
+  personality?: string | null;
+  systemPrompt?: string | null;
+  elevenLabsVoiceId?: string | null;
+  language?: string | null;
+  llmModel?: string | null;
+  firstMessage?: string | null;
+  temperature?: number | null;
+  knowledgeBaseIds?: string[] | null;
+  transferEnabled?: boolean | null;
+  transferPhoneNumber?: string | null;
+  detectLanguageEnabled?: boolean | null;
+  endConversationEnabled?: boolean | null;
+  appointmentBookingEnabled?: boolean | null;
+  messagingEmailEnabled?: boolean | null;
+  messagingWhatsappEnabled?: boolean | null;
+  messagingEmailTemplate?: string | null;
+  messagingWhatsappTemplate?: string | null;
+  flowId?: string | null;
+  maxDurationSeconds?: number | null;
+  voiceStability?: number | null;
+  voiceSimilarityBoost?: number | null;
+  voiceSpeed?: number | null;
+  telephonyProvider?: string | null;
+  openaiVoice?: string | null;
+  config?: Record<string, unknown> | null;
+}
 
 interface KnowledgeBaseItem {
   id: string;
@@ -176,44 +217,98 @@ function SelectableCard({
   );
 }
 
+const emptyForm = {
+  type: "incoming" as AgentType,
+  name: "",
+  voiceTone: "professional",
+  personality: "helpful",
+  systemPrompt: "",
+  elevenLabsVoiceId: "",
+  language: "en",
+  llmModel: "gpt-4o-mini",
+  firstMessage: "Hello! How can I help you today?",
+  temperature: 0.5,
+  knowledgeBaseIds: [] as string[],
+  transferEnabled: false,
+  transferPhoneNumber: "",
+  detectLanguageEnabled: false,
+  endConversationEnabled: false,
+  appointmentBookingEnabled: false,
+  flowId: "",
+  voiceStability: 0.55,
+  voiceSimilarityBoost: 0.85,
+  voiceSpeed: 1.0,
+  telephonyProvider: "twilio" as TelephonyProvider,
+  openaiVoice: "alloy",
+};
+
+function mapAgentToForm(agent: ExistingAgent) {
+  const provider = (agent.telephonyProvider || "twilio") as TelephonyProvider;
+  const type: AgentType =
+    provider === "custom-voice-engine" || agent.type === "custom_engine"
+      ? "custom_engine"
+      : agent.type === "flow"
+        ? "flow"
+        : "incoming";
+
+  return {
+    type,
+    name: agent.name || "",
+    voiceTone: agent.voiceTone || "professional",
+    personality: agent.personality || "helpful",
+    systemPrompt: agent.systemPrompt || "",
+    elevenLabsVoiceId: agent.elevenLabsVoiceId || "",
+    language: agent.language || "en",
+    llmModel: agent.llmModel || "gpt-4o-mini",
+    firstMessage: agent.firstMessage || "Hello! How can I help you today?",
+    temperature: agent.temperature ?? 0.5,
+    knowledgeBaseIds: agent.knowledgeBaseIds || [],
+    transferEnabled: agent.transferEnabled ?? false,
+    transferPhoneNumber: agent.transferPhoneNumber || "",
+    detectLanguageEnabled: agent.detectLanguageEnabled ?? false,
+    endConversationEnabled: agent.endConversationEnabled ?? false,
+    appointmentBookingEnabled: agent.appointmentBookingEnabled ?? false,
+    flowId: agent.flowId || "",
+    voiceStability: agent.voiceStability ?? 0.55,
+    voiceSimilarityBoost: agent.voiceSimilarityBoost ?? 0.85,
+    voiceSpeed: agent.voiceSpeed ?? 1.0,
+    telephonyProvider: provider,
+    openaiVoice: agent.openaiVoice || "alloy",
+  };
+}
+
 export default function CreateAgent() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const [isEditRoute, editParams] = useRoute<{ id: string }>("/agents/:id/edit");
+  const agentId = isEditRoute ? editParams?.id : undefined;
+  const isEdit = Boolean(agentId);
   const { setPageMeta } = useAppHeader();
   const { isCustomVoiceEngineEnabled } = usePluginStatus();
 
-  const [formData, setFormData] = useState({
-    type: "incoming" as "incoming" | "flow",
-    name: "",
-    voiceTone: "professional",
-    personality: "helpful",
-    systemPrompt: "",
-    elevenLabsVoiceId: "",
-    language: "en",
-    llmModel: "gpt-4o-mini",
-    firstMessage: "Hello! How can I help you today?",
-    temperature: 0.5,
-    knowledgeBaseIds: [] as string[],
-    transferEnabled: false,
-    transferPhoneNumber: "",
-    detectLanguageEnabled: false,
-    endConversationEnabled: false,
-    appointmentBookingEnabled: false,
-    flowId: "",
-    voiceStability: 0.55,
-    voiceSimilarityBoost: 0.85,
-    voiceSpeed: 1.0,
-    telephonyProvider: "twilio" as TelephonyProvider,
-    openaiVoice: "alloy",
+  const [formData, setFormData] = useState(emptyForm);
+  const [sourceAgent, setSourceAgent] = useState<ExistingAgent | null>(null);
+
+  const { data: existingAgent, isLoading: isLoadingAgent, isError: isAgentError } = useQuery<ExistingAgent>({
+    queryKey: ["/api/agents", agentId],
+    enabled: isEdit,
   });
 
   useEffect(() => {
+    if (!existingAgent) return;
+    setSourceAgent(existingAgent);
+    setFormData(mapAgentToForm(existingAgent));
+  }, [existingAgent]);
+
+  useEffect(() => {
     setPageMeta({
-      title: "Create AI Agent",
-      subtitle: "Configure type, persona, telephony, model, and prompts.",
+      title: isEdit ? "Edit Agent" : "Create AI Agent",
+      subtitle: isEdit
+        ? "Update type, persona, telephony, model, and prompts."
+        : "Configure type, persona, telephony, model, and prompts.",
     });
     return () => setPageMeta(null);
-  }, [setPageMeta]);
+  }, [setPageMeta, isEdit]);
 
   const { data: knowledgeBase = [] } = useQuery<KnowledgeBaseItem[]>({
     queryKey: ["/api/knowledge-base"],
@@ -238,34 +333,108 @@ export default function CreateAgent() {
   const isPlivoEnabled = voiceEngineSettings?.plivo_openai_engine_enabled ?? true;
   const isTwilioOpenaiEnabled = voiceEngineSettings?.twilio_openai_engine_enabled ?? true;
   const isOpenAIEngine =
-    formData.telephonyProvider === "plivo" || formData.telephonyProvider === "twilio_openai";
+    formData.telephonyProvider === "plivo" ||
+    formData.telephonyProvider === "twilio_openai" ||
+    formData.telephonyProvider === "openai-sip";
+  const isCustomEngine = formData.telephonyProvider === "custom-voice-engine" || formData.type === "custom_engine";
 
-  const createMutation = useMutation({
+  const saveMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/agents", formData);
+      if (isEdit && agentId && sourceAgent?.telephonyProvider === "custom-voice-engine") {
+        const config = sourceAgent.config || {};
+        const payload = {
+          name: formData.name,
+          description: sourceAgent.description || "",
+          systemPrompt: formData.systemPrompt,
+          firstMessage: formData.firstMessage || "Hello! How can I help you today?",
+          language: formData.language || "en",
+          llmModel: formData.llmModel || "openai/gpt-4o-mini",
+          temperature: formData.temperature ?? 0.7,
+          maxTokens: 500,
+          ttsVoice: formData.openaiVoice || "aura-asteria-en",
+          ttsProvider: (config.ttsProvider as string) || "deepgram",
+          sttProvider: (config.sttProvider as string) || "deepgram",
+          sttModel: (config.sttModel as string) || "",
+          ttsModel: (config.ttsModel as string) || "",
+          interruptible: true,
+          silenceTimeoutMs: 5000,
+          maxDurationSeconds: sourceAgent.maxDurationSeconds ?? 600,
+          endCallOnSilence: false,
+          businessRules: [],
+          enableMemory: true,
+          memoryRetentionDays: 90,
+          isActive: true,
+          detectLanguageEnabled: formData.detectLanguageEnabled || false,
+          knowledgeBaseIds: formData.knowledgeBaseIds || [],
+          appointmentBookingEnabled: formData.appointmentBookingEnabled || false,
+          endConversationEnabled: formData.endConversationEnabled || false,
+          transferEnabled: formData.transferEnabled || false,
+          transferPhoneNumber: formData.transferPhoneNumber || "",
+          messagingEmailEnabled: sourceAgent.messagingEmailEnabled || false,
+          messagingWhatsappEnabled: sourceAgent.messagingWhatsappEnabled || false,
+          messagingEmailTemplate: sourceAgent.messagingEmailTemplate || "",
+          messagingWhatsappTemplate: sourceAgent.messagingWhatsappTemplate || "",
+        };
+        const res = await apiRequest("PUT", `/api/voice-engine/agents/${agentId}`, payload);
+        return res.json();
+      }
+
+      const payload = {
+        name: formData.name,
+        voiceTone: formData.voiceTone,
+        personality: formData.personality,
+        systemPrompt: formData.systemPrompt,
+        elevenLabsVoiceId: formData.elevenLabsVoiceId,
+        language: formData.language,
+        llmModel: formData.llmModel,
+        firstMessage: formData.firstMessage,
+        temperature: formData.temperature,
+        knowledgeBaseIds: formData.knowledgeBaseIds,
+        transferEnabled: formData.transferEnabled,
+        transferPhoneNumber: formData.transferPhoneNumber,
+        detectLanguageEnabled: formData.detectLanguageEnabled,
+        endConversationEnabled: formData.endConversationEnabled,
+        appointmentBookingEnabled: formData.appointmentBookingEnabled,
+        flowId: formData.flowId,
+        voiceStability: formData.voiceStability,
+        voiceSimilarityBoost: formData.voiceSimilarityBoost,
+        voiceSpeed: formData.voiceSpeed,
+        telephonyProvider: formData.telephonyProvider,
+        openaiVoice: formData.openaiVoice,
+        ...(isEdit ? {} : { type: formData.type }),
+      };
+
+      const res = isEdit && agentId
+        ? await apiRequest("PATCH", `/api/agents/${agentId}`, payload)
+        : await apiRequest("POST", "/api/agents", payload);
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/agents"] });
-      toast({ title: "Agent created" });
+      if (agentId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/agents", agentId] });
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/voice-engine/agents"] });
+      toast({ title: isEdit ? "Agent updated" : "Agent created" });
       setLocation("/agents");
     },
     onError: (error: any) => {
       toast({
-        title: "Failed to create agent",
+        title: isEdit ? "Failed to update agent" : "Failed to create agent",
         description: error.message || "Please try again",
         variant: "destructive",
       });
     },
   });
 
-  const handleCreate = () => {
+  const handleSave = () => {
+    if (isEdit && !sourceAgent) return;
     if (!formData.name.trim()) {
       toast({ title: "Missing fields", description: "Please enter an agent name.", variant: "destructive" });
       return;
     }
-    if (formData.type === "incoming") {
-      const hasVoice = isOpenAIEngine ? !!formData.openaiVoice : !!formData.elevenLabsVoiceId;
+    if (formData.type === "incoming" || formData.type === "custom_engine") {
+      const hasVoice = isOpenAIEngine || isCustomEngine ? !!formData.openaiVoice : !!formData.elevenLabsVoiceId;
       if (!hasVoice) {
         toast({ title: "Missing fields", description: "Please select a voice profile.", variant: "destructive" });
         return;
@@ -287,7 +456,18 @@ export default function CreateAgent() {
       toast({ title: "Missing fields", description: "Please select a flow.", variant: "destructive" });
       return;
     }
-    createMutation.mutate();
+    saveMutation.mutate();
+  };
+
+  const selectType = (type: AgentType) => {
+    if (isEdit) {
+      toast({
+        title: "Agent type can't be changed",
+        description: "Create a new agent if you need a different type.",
+      });
+      return;
+    }
+    update("type", type);
   };
 
   const update = <K extends keyof typeof formData>(key: K, value: (typeof formData)[K]) => {
@@ -303,9 +483,28 @@ export default function CreateAgent() {
   };
 
   const langProviders =
-    formData.telephonyProvider === "twilio"
+    formData.telephonyProvider === "twilio" || formData.telephonyProvider === "elevenlabs-sip"
       ? (["elevenlabs"] as const)
-      : (["openai"] as const);
+      : formData.telephonyProvider === "custom-voice-engine"
+        ? (["elevenlabs", "openai"] as const)
+        : (["openai"] as const);
+
+  if (isEdit && (isLoadingAgent || !sourceAgent)) {
+    return (
+      <div className="space-y-4 py-10">
+        <Link
+          href="/agents"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to AI Agents
+        </Link>
+        <p className="text-sm text-slate-500">
+          {isAgentError ? "This agent could not be loaded." : "Loading agent..."}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5 pb-8">
@@ -326,10 +525,10 @@ export default function CreateAgent() {
           </h2>
           <p className="text-sm text-slate-500">Choose the execution architecture</p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className={cn("grid grid-cols-1 gap-4", formData.type === "custom_engine" ? "md:grid-cols-3" : "md:grid-cols-2")}>
           <SelectableCard
             selected={formData.type === "incoming"}
-            onClick={() => update("type", "incoming")}
+            onClick={() => selectType("incoming")}
             testId="card-type-incoming"
           >
             <div className="flex items-start gap-3 pr-8">
@@ -355,7 +554,7 @@ export default function CreateAgent() {
 
           <SelectableCard
             selected={formData.type === "flow"}
-            onClick={() => update("type", "flow")}
+            onClick={() => selectType("flow")}
             testId="card-type-flow"
           >
             <div className="flex items-start gap-3 pr-8">
@@ -371,6 +570,26 @@ export default function CreateAgent() {
               </div>
             </div>
           </SelectableCard>
+
+          {formData.type === "custom_engine" && (
+            <SelectableCard
+              selected
+              onClick={() => selectType("custom_engine")}
+              testId="card-type-custom-engine"
+            >
+              <div className="flex items-start gap-3 pr-8">
+                <div className="h-10 w-10 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center shrink-0">
+                  <Bot className="h-5 w-5 text-slate-700" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-slate-900">Custom Engine Agent</h3>
+                  <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">
+                    Self-hosted voice pipeline. Voice, prompts, and tools use the same layout as other agents.
+                  </p>
+                </div>
+              </div>
+            </SelectableCard>
+          )}
         </div>
       </SectionCard>
 
@@ -512,6 +731,33 @@ export default function CreateAgent() {
               </div>
             </SelectableCard>
           )}
+
+          {formData.telephonyProvider === "elevenlabs-sip" && (
+            <SelectableCard selected onClick={() => setProvider("elevenlabs-sip")} testId="card-provider-elevenlabs-sip">
+              <div className="pr-6">
+                <h3 className="font-semibold text-slate-900 text-sm">ElevenLabs SIP</h3>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">Native SIP trunk with ElevenLabs voice</p>
+              </div>
+            </SelectableCard>
+          )}
+
+          {formData.telephonyProvider === "openai-sip" && (
+            <SelectableCard selected onClick={() => setProvider("openai-sip")} testId="card-provider-openai-sip">
+              <div className="pr-6">
+                <h3 className="font-semibold text-slate-900 text-sm">OpenAI SIP</h3>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">OpenAI Realtime over your SIP trunk</p>
+              </div>
+            </SelectableCard>
+          )}
+
+          {formData.telephonyProvider === "custom-voice-engine" && (
+            <SelectableCard selected onClick={() => setProvider("custom-voice-engine")} testId="card-provider-cve">
+              <div className="pr-6">
+                <h3 className="font-semibold text-slate-900 text-sm">Custom Voice Engine</h3>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">Self-hosted speech pipeline</p>
+              </div>
+            </SelectableCard>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-end">
@@ -519,7 +765,15 @@ export default function CreateAgent() {
             <Label>
               Voice Profile <span className="text-red-500">*</span>
             </Label>
-            {isOpenAIEngine ? (
+            {isCustomEngine ? (
+              <Input
+                value={formData.openaiVoice}
+                onChange={(e) => update("openaiVoice", e.target.value)}
+                placeholder="aura-asteria-en"
+                className="h-11"
+                data-testid="input-cve-voice"
+              />
+            ) : isOpenAIEngine ? (
               <Select value={formData.openaiVoice} onValueChange={(v) => update("openaiVoice", v)}>
                 <SelectTrigger className="h-11" data-testid="select-openai-voice">
                   <SelectValue />
@@ -542,7 +796,7 @@ export default function CreateAgent() {
           </div>
 
           <div className="lg:col-span-3">
-            {isOpenAIEngine ? (
+            {isCustomEngine ? null : isOpenAIEngine ? (
               <OpenAIVoicePreviewButton
                 voiceId={formData.openaiVoice}
                 voiceName={openaiVoices.find((v) => v.value === formData.openaiVoice)?.label}
@@ -668,7 +922,7 @@ export default function CreateAgent() {
             </div>
           </div>
 
-          {!isOpenAIEngine && (
+          {!isOpenAIEngine && !isCustomEngine && (
             <div className="space-y-5">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -878,12 +1132,12 @@ export default function CreateAgent() {
         <Button
           type="button"
           className="h-11 px-6 bg-[#2F6BFF] hover:bg-[#2558d9] text-white border-transparent gap-2"
-          onClick={handleCreate}
-          disabled={createMutation.isPending}
-          data-testid="button-submit-create-agent"
+          onClick={handleSave}
+          disabled={saveMutation.isPending}
+          data-testid={isEdit ? "button-save-agent" : "button-submit-create-agent"}
         >
           <Bot className="h-4 w-4" />
-          {createMutation.isPending ? "Creating..." : "Create Agent"}
+          {saveMutation.isPending ? (isEdit ? "Saving..." : "Creating...") : isEdit ? "Save Agent" : "Create Agent"}
         </Button>
       </div>
 

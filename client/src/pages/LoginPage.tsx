@@ -20,7 +20,7 @@ import { AuthStorage } from "@/lib/auth-storage";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   ArrowLeft, ArrowRight, Eye, EyeOff, Mail, KeyRound, Play, RadioTower,
-  ShieldCheck, Shield, Lock, ExternalLink, Network, MessageCircle,
+  ShieldCheck, Shield, Lock, Network,
 } from "lucide-react";
 import { useDemoMode } from "@/components/DemoModeBanner";
 
@@ -139,8 +139,7 @@ export default function LoginPage() {
 
       toast({ title: t("loginPage.toasts.welcomeBack"), description: t("loginPage.toasts.loginSuccess") });
 
-      const redirectPath = (result.user.role === 'admin' || result.user.role === 'super_admin') ? "/admin" : "/dashboard";
-      setLocation(redirectPath);
+      setLocation("/dashboard");
     } catch (error: any) {
       const raw = (error?.message || "").toLowerCase();
       const isInvalidCredentials =
@@ -287,8 +286,7 @@ export default function LoginPage() {
         description: t("loginPage.toasts.welcomeUser", { name: result.user.name }),
       });
 
-      const redirectPath = result.user.role === 'admin' ? "/admin" : "/dashboard";
-      setLocation(redirectPath);
+      setLocation("/dashboard");
     } catch (error: any) {
       toast({
         title: t("loginPage.errors.genericError"),
@@ -513,10 +511,6 @@ export default function LoginPage() {
                 <Lock className="h-3.5 w-3.5" />
                 SSO-Ready Session
               </span>
-              <Link href="/contact" className="inline-flex items-center gap-1.5 text-[13px] text-[#0066FF] hover:underline">
-                Help Center
-                <ExternalLink className="h-3.5 w-3.5" />
-              </Link>
             </div>
 
             <div className="lg:hidden mt-3 flex items-center gap-3 shrink-0">
@@ -1000,10 +994,6 @@ export default function LoginPage() {
                   <Link href="/terms" className="hover:text-[#0066FF]">Terms of Service</Link>
                   <Link href="/privacy" className="hover:text-[#0066FF]">Privacy Policy</Link>
                 </div>
-                <Link href="/contact" className="inline-flex items-center gap-1.5 hover:text-[#0066FF]">
-                  <MessageCircle className="h-3.5 w-3.5" />
-                  Need Help?
-                </Link>
               </div>
             </div>
             </div>

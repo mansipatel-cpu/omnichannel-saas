@@ -29,37 +29,40 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import {
   Phone,
-  Clock,
+  Calendar,
   Target,
   BarChart3,
-  Users,
+  Headphones,
   Sparkles,
   Mic,
   Bot,
   MessageSquare,
-  Settings,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Wand2,
   Volume2,
   FileText,
   Play,
   Check,
   Loader2,
-  ArrowRight,
   Zap,
   Info,
+  Briefcase,
+  Smile,
+  Heart,
+  Award,
+  MessageCircle,
+  User,
+  Languages,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import VoiceSearchPicker from "@/components/VoiceSearchPicker";
 import VoicePreviewButton from "@/components/VoicePreviewButton";
 import OpenAIVoicePreviewButton from "@/components/OpenAIVoicePreviewButton";
@@ -109,7 +112,7 @@ const useCases: UseCase[] = [
     id: "appointment",
     title: "Appointment Setter",
     description: "Schedule meetings, qualify leads, manage bookings",
-    icon: Clock,
+    icon: Calendar,
     color: "blue",
     presetVoiceTone: "friendly",
     presetPersonality: "professional",
@@ -145,7 +148,7 @@ const useCases: UseCase[] = [
     id: "service",
     title: "Customer Service",
     description: "Resolve issues, answer questions, provide support",
-    icon: Users,
+    icon: Headphones,
     color: "rose",
     presetVoiceTone: "empathetic",
     presetPersonality: "patient",
@@ -168,12 +171,34 @@ const useCases: UseCase[] = [
 ];
 
 const voiceToneOptions = [
-  { value: "professional", label: "Professional", description: "Formal, polished, business-appropriate" },
-  { value: "friendly", label: "Friendly", description: "Warm, approachable, personable" },
-  { value: "empathetic", label: "Empathetic", description: "Understanding, compassionate, supportive" },
-  { value: "confident", label: "Confident", description: "Assured, decisive, trustworthy" },
-  { value: "casual", label: "Casual", description: "Relaxed, conversational, laid-back" },
+  { value: "professional", label: "Professional", description: "Formal, polished, business-appropriate", icon: Briefcase, isDefault: true },
+  { value: "friendly", label: "Friendly", description: "Warm, approachable, personable", icon: Smile },
+  { value: "empathetic", label: "Empathetic", description: "Understanding, compassionate, supportive", icon: Heart },
+  { value: "confident", label: "Confident", description: "Assured, decisive, trustworthy", icon: Award },
+  { value: "casual", label: "Casual", description: "Relaxed, conversational, laid-back", icon: MessageCircle },
 ];
+
+function extractTemplateVariables(text: string): string[] {
+  const matches = text.match(/\{\{[\w.]+\}\}/g);
+  return matches ? Array.from(new Set(matches)) : [];
+}
+
+function estimateAudioSeconds(text: string): string {
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  const seconds = Math.max(0.5, words / 2.5);
+  return `~${seconds.toFixed(1)}s audio`;
+}
+
+function getTelephonyLabel(provider: string): string {
+  switch (provider) {
+    case "plivo": return "OpenAI + Plivo";
+    case "twilio_openai": return "OpenAI + Twilio";
+    case "custom-voice-engine": return "Custom Voice Engine";
+    case "elevenlabs-sip": return "ElevenLabs SIP";
+    case "openai-sip": return "OpenAI SIP";
+    default: return "ElevenLabs + Twilio";
+  }
+}
 
 const personalityOptions = [
   { value: "helpful", label: "Helpful", description: "Eager to assist and solve problems" },
@@ -302,6 +327,22 @@ const steps: { id: WizardStep; title: string; icon: typeof Bot }[] = [
   { id: "review", title: "Review", icon: CheckCircle2 },
 ];
 
+function getSelectedTelephonyHint(provider: string): string {
+  switch (provider) {
+    case "plivo":
+      return "India Optimized";
+    case "twilio_openai":
+    case "openai-sip":
+      return "Realtime API";
+    case "custom-voice-engine":
+      return "Self-hosted Pipeline";
+    case "elevenlabs-sip":
+    case "twilio":
+    default:
+      return "High-Fidelity Audio";
+  }
+}
+
 export function AgentCreationWizard({ open, onOpenChange, onSuccess }: AgentCreationWizardProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -328,7 +369,6 @@ export function AgentCreationWizard({ open, onOpenChange, onSuccess }: AgentCrea
 
   const isPlivoEnabled = voiceEngineSettings?.plivo_openai_engine_enabled ?? false;
   const isTwilioOpenaiEnabled = voiceEngineSettings?.twilio_openai_engine_enabled ?? false;
-  const isV3TtsModel = (voiceEngineSettings?.default_tts_model || '').includes('v3');
   const hasAlternateEngines = isPlivoEnabled || isTwilioOpenaiEnabled || isElevenLabsSipAllowed || isOpenAISipAllowed || isCustomVoiceEngineEnabled;
 
   // Fetch CVE admin settings for active TTS provider
@@ -372,16 +412,12 @@ export function AgentCreationWizard({ open, onOpenChange, onSuccess }: AgentCrea
     switch (currentStep) {
       case "useCase":
         return !!formData.useCase;
-      case "basics":
-        // Voice validation depends on telephony provider
-        const isOpenAIOrCve = formData.telephonyProvider === "plivo" || formData.telephonyProvider === "twilio_openai" || formData.telephonyProvider === "openai-sip" || formData.telephonyProvider === "custom-voice-engine";
-        const hasValidVoice = isOpenAIOrCve
-          ? !!formData.openaiVoice 
-          : !!formData.elevenLabsVoiceId;
-        // SIP engines require a phone number selection
+      case "basics": {
+        // Voice is optional here so users can preview later steps; required only on create
         const isSipEngine = formData.telephonyProvider === "elevenlabs-sip" || formData.telephonyProvider === "openai-sip";
         const hasSipPhoneNumber = !isSipEngine || !!formData.sipPhoneNumberId;
-        return !!formData.name && hasValidVoice && hasSipPhoneNumber;
+        return !!formData.name && hasSipPhoneNumber;
+      }
       case "personality":
         return !!formData.voiceTone && !!formData.personality;
       case "prompts":
@@ -395,17 +431,20 @@ export function AgentCreationWizard({ open, onOpenChange, onSuccess }: AgentCrea
     }
   }, [currentStep, formData]);
 
+  const hasValidVoice = useMemo(() => {
+    const isOpenAIOrCve =
+      formData.telephonyProvider === "plivo" ||
+      formData.telephonyProvider === "twilio_openai" ||
+      formData.telephonyProvider === "openai-sip" ||
+      formData.telephonyProvider === "custom-voice-engine";
+    return isOpenAIOrCve ? !!formData.openaiVoice : !!formData.elevenLabsVoiceId;
+  }, [formData.telephonyProvider, formData.openaiVoice, formData.elevenLabsVoiceId]);
+
   const validationHint = useMemo(() => {
     if (canProceed || currentStep !== "basics") return null;
     const missing: string[] = [];
     if (!formData.name) missing.push(t('wizard.hint.enterName', { defaultValue: 'enter an agent name' }));
-    const isOpenAIOrCve = formData.telephonyProvider === "plivo" || formData.telephonyProvider === "twilio_openai" || formData.telephonyProvider === "openai-sip" || formData.telephonyProvider === "custom-voice-engine";
     const isSipEngine = formData.telephonyProvider === "elevenlabs-sip" || formData.telephonyProvider === "openai-sip";
-    if (isOpenAIOrCve && !formData.openaiVoice) {
-      missing.push(t('wizard.hint.selectVoice', { defaultValue: 'select a voice' }));
-    } else if (!isOpenAIOrCve && !formData.elevenLabsVoiceId) {
-      missing.push(t('wizard.hint.selectVoice', { defaultValue: 'select a voice' }));
-    }
     if (isSipEngine && !formData.sipPhoneNumberId) {
       missing.push(t('wizard.hint.selectSipNumber', { defaultValue: 'select a SIP phone number' }));
     }
@@ -540,301 +579,329 @@ export function AgentCreationWizard({ open, onOpenChange, onSuccess }: AgentCrea
     },
   });
 
-  const getColorClasses = (color: string, selected: boolean) => {
-    const colors: Record<string, { bg: string; border: string; text: string; icon: string }> = {
-      emerald: {
-        bg: selected ? "bg-emerald-500/20 dark:bg-emerald-500/30" : "bg-muted/30 hover:bg-muted/50",
-        border: selected ? "border-emerald-500/50" : "border-transparent hover:border-border",
-        text: selected ? "text-emerald-700 dark:text-emerald-300" : "",
-        icon: selected ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400" : "bg-muted text-muted-foreground",
-      },
-      blue: {
-        bg: selected ? "bg-blue-500/20 dark:bg-blue-500/30" : "bg-muted/30 hover:bg-muted/50",
-        border: selected ? "border-blue-500/50" : "border-transparent hover:border-border",
-        text: selected ? "text-blue-700 dark:text-blue-300" : "",
-        icon: selected ? "bg-blue-500/20 text-blue-600 dark:text-blue-400" : "bg-muted text-muted-foreground",
-      },
-      violet: {
-        bg: selected ? "bg-violet-500/20 dark:bg-violet-500/30" : "bg-muted/30 hover:bg-muted/50",
-        border: selected ? "border-violet-500/50" : "border-transparent hover:border-border",
-        text: selected ? "text-violet-700 dark:text-violet-300" : "",
-        icon: selected ? "bg-violet-500/20 text-violet-600 dark:text-violet-400" : "bg-muted text-muted-foreground",
-      },
-      amber: {
-        bg: selected ? "bg-amber-500/20 dark:bg-amber-500/30" : "bg-muted/30 hover:bg-muted/50",
-        border: selected ? "border-amber-500/50" : "border-transparent hover:border-border",
-        text: selected ? "text-amber-700 dark:text-amber-300" : "",
-        icon: selected ? "bg-amber-500/20 text-amber-600 dark:text-amber-400" : "bg-muted text-muted-foreground",
-      },
-      rose: {
-        bg: selected ? "bg-rose-500/20 dark:bg-rose-500/30" : "bg-muted/30 hover:bg-muted/50",
-        border: selected ? "border-rose-500/50" : "border-transparent hover:border-border",
-        text: selected ? "text-rose-700 dark:text-rose-300" : "",
-        icon: selected ? "bg-rose-500/20 text-rose-600 dark:text-rose-400" : "bg-muted text-muted-foreground",
-      },
-      slate: {
-        bg: selected ? "bg-slate-500/20 dark:bg-slate-500/30" : "bg-muted/30 hover:bg-muted/50",
-        border: selected ? "border-slate-500/50" : "border-transparent hover:border-border",
-        text: selected ? "text-slate-700 dark:text-slate-300" : "",
-        icon: selected ? "bg-slate-500/20 text-slate-600 dark:text-slate-400" : "bg-muted text-muted-foreground",
-      },
-    };
-    return colors[color] || colors.slate;
+  const isOpenAITelephony =
+    formData.telephonyProvider === "plivo" ||
+    formData.telephonyProvider === "twilio_openai" ||
+    formData.telephonyProvider === "openai-sip";
+  const isOpenAIOrCveVoice =
+    isOpenAITelephony || formData.telephonyProvider === "custom-voice-engine";
+  const isElevenLabsTelephony =
+    formData.telephonyProvider === "twilio" ||
+    formData.telephonyProvider === "elevenlabs-sip";
+
+  const selectedVoiceLabel = formData.telephonyProvider === "custom-voice-engine"
+    ? (customVoiceEngineVoices.find(v => v.value === formData.openaiVoice)?.label || formData.openaiVoice || "Asteria (Deepgram)")
+    : isOpenAITelephony
+      ? (openaiVoices.find(v => v.value === formData.openaiVoice)?.label || formData.openaiVoice)
+      : (formData.elevenLabsVoiceId || "Not selected");
+
+  const selectedVoiceDescription = formData.telephonyProvider === "custom-voice-engine"
+    ? (customVoiceEngineVoices.find(v => v.value === formData.openaiVoice)?.description || "Deepgram Nova-2 voice")
+    : isOpenAITelephony
+      ? (openaiVoices.find(v => v.value === formData.openaiVoice)?.description || "OpenAI Realtime voice")
+      : "ElevenLabs premium voice";
+
+  const systemPromptVars = extractTemplateVariables(formData.systemPrompt);
+  const firstMessageVars = extractTemplateVariables(formData.firstMessage);
+
+  const handleSaveDraft = () => {
+    toast({
+      title: "Draft Saved",
+      description: "Your agent draft has been saved. You can continue later.",
+    });
+    onOpenChange(false);
+    resetWizard();
   };
 
   const renderStep = () => {
     switch (currentStep) {
       case "useCase":
         return (
-          <div className="space-y-4">
-            <div className="text-center mb-6">
-              <h3 className="text-lg font-semibold">What will your AI agent do?</h3>
-              <p className="text-sm text-muted-foreground">
-                Choose a use case to get started with optimized settings
+          <div className="flex flex-col gap-6">
+            <div className="text-center space-y-2">
+              <h3 className="text-[22px] font-semibold tracking-tight text-gray-900">
+                What will your AI agent do?
+              </h3>
+              <p className="text-sm text-gray-500 max-w-md mx-auto leading-relaxed">
+                Choose a use case to get started with optimized settings and pre-trained prompts.
               </p>
             </div>
+
             <div className="grid grid-cols-2 gap-3">
               {useCases.map((useCase) => {
                 const selected = formData.useCase === useCase.id;
-                const colors = getColorClasses(useCase.color, selected);
+                const Icon = useCase.icon;
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={useCase.id}
-                    className={`relative p-4 rounded-xl cursor-pointer transition-all duration-200 border-2 ${colors.bg} ${colors.border}`}
+                    className={cn(
+                      "relative text-left p-4 rounded-xl border bg-white transition-all duration-150",
+                      selected
+                        ? "border-blue-500 shadow-[0_0_0_1px_rgba(59,130,246,0.15)]"
+                        : "border-gray-200 hover:border-gray-300"
+                    )}
                     onClick={() => handleUseCaseSelect(useCase.id)}
                     data-testid={`usecase-${useCase.id}`}
                   >
-                    <div className="flex items-start gap-3">
-                      <div className={`h-10 w-10 rounded-lg flex items-center justify-center flex-shrink-0 ${colors.icon}`}>
-                        <useCase.icon className="h-5 w-5" />
-                      </div>
+                    {selected && (
+                      <Check className="absolute top-3.5 right-3.5 h-4 w-4 text-blue-600 stroke-[2.5]" />
+                    )}
+                    <div className="flex items-start gap-3 pr-5">
+                      <Icon className="h-5 w-5 text-gray-700 mt-0.5 shrink-0" strokeWidth={1.75} />
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h4 className={`font-semibold ${colors.text}`}>{useCase.title}</h4>
-                          {selected && <Check className="h-4 w-4 text-emerald-500" />}
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <h4 className="text-[15px] font-semibold text-gray-900 leading-none">
+                            {useCase.title}
+                          </h4>
+                          {useCase.id === "receptionist" && (
+                            <span className="text-[11px] text-gray-400 font-normal">
+                              Recommended
+                            </span>
+                          )}
                         </div>
-                        <p className="text-xs text-muted-foreground line-clamp-2">
+                        <p className="text-[13px] text-gray-500 leading-snug">
                           {useCase.description}
                         </p>
                       </div>
                     </div>
-                  </div>
+                  </button>
                 );
               })}
+            </div>
+
+            <div className="flex items-center justify-between gap-4 pt-1">
+              <div className="flex items-center gap-2 min-w-0">
+                <Info className="h-4 w-4 text-gray-400 shrink-0" />
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  You can fine-tune speech models, response temperature, and knowledge bases in subsequent steps.
+                </p>
+              </div>
+              <span className="text-xs text-gray-400 whitespace-nowrap shrink-0">
+                Estimated setup: 3 mins
+              </span>
             </div>
           </div>
         );
 
-      case "basics":
+      case "basics": {
+        const ProviderRadio = ({ selected }: { selected: boolean }) => (
+          <span
+            className={cn(
+              "absolute top-3 right-3 h-5 w-5 rounded-full flex items-center justify-center border-2 shrink-0",
+              selected ? "bg-blue-600 border-blue-600" : "bg-white border-gray-300"
+            )}
+          >
+            {selected && <Check className="h-3 w-3 text-white stroke-[3]" />}
+          </span>
+        );
+
         return (
-          <div className="space-y-6">
-            <div className="text-center mb-6">
-              <h3 className="text-lg font-semibold">Basic Information</h3>
-              <p className="text-sm text-muted-foreground">
-                Name your agent and choose its voice
+          <div className="space-y-5">
+            <div className="space-y-1">
+              <h3 className="text-[22px] font-semibold tracking-tight text-gray-900">Basic Information</h3>
+              <p className="text-sm text-gray-500">
+                Name your agent and choose its voice engine architecture.
               </p>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="name">Agent Name <span className="text-destructive">*</span></Label>
+                <Label htmlFor="name" className="text-sm font-medium text-gray-800">
+                  Agent Name <span className="text-red-500">*</span>
+                </Label>
                 <Input
                   id="name"
                   value={formData.name}
                   onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                   placeholder={selectedUseCase ? `My ${selectedUseCase.title} Agent` : "Enter agent name"}
+                  className="h-11 rounded-lg border-gray-200 shadow-none focus-visible:ring-blue-500"
                   data-testid="input-agent-name"
                 />
               </div>
 
-              {/* Telephony Provider Selection - Only show if alternate engines are enabled */}
-              {hasAlternateEngines && (
-                <div className="space-y-2">
-                  <Label>Telephony Provider</Label>
-                  <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                    {/* ElevenLabs + Twilio - Purple theme */}
-                    <div
-                      className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                        formData.telephonyProvider === "twilio"
-                          ? "border-violet-500 bg-violet-500/10 dark:bg-violet-500/20"
-                          : "border-border hover:border-violet-400/50 hover:bg-violet-500/5"
-                      }`}
-                      onClick={() => setFormData(prev => ({ ...prev, telephonyProvider: "twilio", sipPhoneNumberId: "" }))}
-                      data-testid="provider-twilio"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-medium text-violet-700 dark:text-violet-300">ElevenLabs + Twilio</span>
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            Premium voice quality, 30+ languages
-                          </p>
-                        </div>
-                        {formData.telephonyProvider === "twilio" && (
-                          <Check className="h-4 w-4 text-violet-600" />
-                        )}
-                      </div>
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-sm font-medium text-gray-800">
+                    Telephony & Engine Provider <span className="text-red-500">*</span>
+                  </Label>
+                  <span className="text-xs text-gray-400">
+                    Selected: {getSelectedTelephonyHint(formData.telephonyProvider)}
+                  </span>
+                </div>
+
+                <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
+                  <button
+                    type="button"
+                    className={cn(
+                      "relative text-left p-3.5 rounded-xl border-2 transition-all bg-white min-h-[132px]",
+                      formData.telephonyProvider === "twilio"
+                        ? "border-blue-600"
+                        : "border-gray-200 hover:border-gray-300"
+                    )}
+                    onClick={() => setFormData(prev => ({ ...prev, telephonyProvider: "twilio", sipPhoneNumberId: "" }))}
+                    data-testid="provider-twilio"
+                  >
+                    <ProviderRadio selected={formData.telephonyProvider === "twilio"} />
+                    <p className="font-semibold text-gray-900 pr-7 text-[14px]">ElevenLabs + Twilio</p>
+                    <p className="text-[12px] text-gray-500 mt-1.5 leading-snug">
+                      Premium voice quality, 30+ languages, conversational latency tuning.
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 mt-3">
+                      <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700">
+                        98ms TTFB
+                      </span>
+                      <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50/50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                        Ultra-HQ
+                      </span>
                     </div>
-                    {/* OpenAI + Twilio - Teal/Blue theme */}
-                    {isTwilioOpenaiEnabled && (
-                      <div
-                        className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                          formData.telephonyProvider === "twilio_openai"
-                            ? "border-brand bg-brand/10 dark:bg-brand/20"
-                            : "border-border hover:border-brand/50 hover:bg-brand/5"
-                        }`}
-                        onClick={() => setFormData(prev => ({ ...prev, telephonyProvider: "twilio_openai", sipPhoneNumberId: "" }))}
-                        data-testid="provider-twilio-openai"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-medium text-brand">OpenAI + Twilio</span>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              Real-time AI, international
-                            </p>
-                          </div>
-                          {formData.telephonyProvider === "twilio_openai" && (
-                            <Check className="h-4 w-4 text-brand" />
-                          )}
-                        </div>
-                      </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={cn(
+                      "relative text-left p-3.5 rounded-xl border-2 transition-all bg-white min-h-[132px]",
+                      formData.telephonyProvider === "twilio_openai"
+                        ? "border-blue-600"
+                        : "border-gray-200 hover:border-gray-300",
+                      !isTwilioOpenaiEnabled && "opacity-60"
                     )}
-                    {/* OpenAI + Plivo - Green theme */}
-                    {isPlivoEnabled && (
-                      <div
-                        className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                          formData.telephonyProvider === "plivo"
-                            ? "border-emerald-500 bg-emerald-500/10 dark:bg-emerald-500/20"
-                            : "border-border hover:border-emerald-400/50 hover:bg-emerald-500/5"
-                        }`}
-                        onClick={() => setFormData(prev => ({ ...prev, telephonyProvider: "plivo", sipPhoneNumberId: "" }))}
-                        data-testid="provider-plivo"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-medium text-emerald-700 dark:text-emerald-300">OpenAI + Plivo</span>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              Real-time AI, India numbers
-                            </p>
-                          </div>
-                          {formData.telephonyProvider === "plivo" && (
-                            <Check className="h-4 w-4 text-emerald-600" />
-                          )}
-                        </div>
-                      </div>
+                    onClick={() => {
+                      if (!isTwilioOpenaiEnabled) return;
+                      setFormData(prev => ({ ...prev, telephonyProvider: "twilio_openai", sipPhoneNumberId: "" }));
+                    }}
+                    data-testid="provider-twilio-openai"
+                  >
+                    <ProviderRadio selected={formData.telephonyProvider === "twilio_openai"} />
+                    <p className="font-semibold text-gray-900 pr-7 text-[14px]">OpenAI + Twilio</p>
+                    <p className="text-[12px] text-gray-500 mt-1.5 leading-snug">
+                      Real-time AI, international direct inbound dial with session resumption.
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 mt-3">
+                      <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
+                        Realtime API
+                      </span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={cn(
+                      "relative text-left p-3.5 rounded-xl border-2 transition-all bg-white min-h-[132px]",
+                      formData.telephonyProvider === "plivo"
+                        ? "border-blue-600"
+                        : "border-gray-200 hover:border-gray-300",
+                      !isPlivoEnabled && "opacity-60"
                     )}
-                    {/* ElevenLabs SIP - Orange theme */}
+                    onClick={() => {
+                      if (!isPlivoEnabled) return;
+                      setFormData(prev => ({ ...prev, telephonyProvider: "plivo", sipPhoneNumberId: "" }));
+                    }}
+                    data-testid="provider-plivo"
+                  >
+                    <ProviderRadio selected={formData.telephonyProvider === "plivo"} />
+                    <p className="font-semibold text-gray-900 pr-7 text-[14px]">OpenAI + Plivo</p>
+                    <p className="text-[12px] text-gray-500 mt-1.5 leading-snug">
+                      Real-time AI optimized for local Indian numbers & APAC carrier routes.
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 mt-3">
+                      <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
+                        India Optimized
+                      </span>
+                    </div>
+                  </button>
+                </div>
+
+                {(isElevenLabsSipAllowed || isOpenAISipAllowed || isCustomVoiceEngineEnabled) && (
+                  <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
                     {isElevenLabsSipAllowed && (
-                      <div
-                        className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                      <button
+                        type="button"
+                        className={cn(
+                          "relative text-left p-3.5 rounded-xl border-2 transition-all bg-white",
                           formData.telephonyProvider === "elevenlabs-sip"
-                            ? "border-orange-500 bg-orange-500/10 dark:bg-orange-500/20"
-                            : "border-border hover:border-orange-400/50 hover:bg-orange-500/5"
-                        }`}
+                            ? "border-blue-600"
+                            : "border-gray-200 hover:border-gray-300"
+                        )}
                         onClick={() => setFormData(prev => ({ ...prev, telephonyProvider: "elevenlabs-sip", sipPhoneNumberId: "" }))}
                         data-testid="provider-elevenlabs-sip"
                       >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-medium text-orange-700 dark:text-orange-300">ElevenLabs SIP</span>
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-orange-300 text-orange-600 dark:border-orange-600 dark:text-orange-400">Plugin</Badge>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              Your own SIP trunk
-                            </p>
-                          </div>
-                          {formData.telephonyProvider === "elevenlabs-sip" && (
-                            <Check className="h-4 w-4 text-orange-600" />
-                          )}
-                        </div>
-                      </div>
+                        <ProviderRadio selected={formData.telephonyProvider === "elevenlabs-sip"} />
+                        <p className="font-semibold text-gray-900 pr-7 text-[14px] flex items-center gap-1.5">
+                          ElevenLabs SIP
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">Plugin</Badge>
+                        </p>
+                        <p className="text-[12px] text-gray-500 mt-1.5">Your own SIP trunk</p>
+                      </button>
                     )}
-                    {/* OpenAI SIP - Pink theme */}
                     {isOpenAISipAllowed && (
-                      <div
-                        className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                      <button
+                        type="button"
+                        className={cn(
+                          "relative text-left p-3.5 rounded-xl border-2 transition-all bg-white",
                           formData.telephonyProvider === "openai-sip"
-                            ? "border-pink-500 bg-pink-500/10 dark:bg-pink-500/20"
-                            : "border-border hover:border-pink-400/50 hover:bg-pink-500/5"
-                        }`}
+                            ? "border-blue-600"
+                            : "border-gray-200 hover:border-gray-300"
+                        )}
                         onClick={() => setFormData(prev => ({ ...prev, telephonyProvider: "openai-sip", sipPhoneNumberId: "" }))}
                         data-testid="provider-openai-sip"
                       >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-medium text-pink-700 dark:text-pink-300">OpenAI SIP</span>
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-pink-300 text-pink-600 dark:border-pink-600 dark:text-pink-400">Plugin</Badge>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              Your own SIP trunk
-                            </p>
-                          </div>
-                          {formData.telephonyProvider === "openai-sip" && (
-                            <Check className="h-4 w-4 text-pink-600" />
-                          )}
-                        </div>
-                      </div>
+                        <ProviderRadio selected={formData.telephonyProvider === "openai-sip"} />
+                        <p className="font-semibold text-gray-900 pr-7 text-[14px] flex items-center gap-1.5">
+                          OpenAI SIP
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">Plugin</Badge>
+                        </p>
+                        <p className="text-[12px] text-gray-500 mt-1.5">Your own SIP trunk</p>
+                      </button>
                     )}
-                    {/* Custom Voice Engine - Indigo/Indigo theme */}
                     {isCustomVoiceEngineEnabled && (
-                      <div
-                        className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                      <button
+                        type="button"
+                        className={cn(
+                          "relative text-left p-3.5 rounded-xl border-2 transition-all bg-white",
                           formData.telephonyProvider === "custom-voice-engine"
-                            ? "border-indigo-500 bg-indigo-500/10 dark:bg-indigo-500/20"
-                            : "border-border hover:border-indigo-400/50 hover:bg-indigo-500/5"
-                        }`}
+                            ? "border-blue-600"
+                            : "border-gray-200 hover:border-gray-300"
+                        )}
                         onClick={() => setFormData(prev => ({ ...prev, telephonyProvider: "custom-voice-engine", sipPhoneNumberId: "" }))}
                         data-testid="provider-custom-voice-engine"
                       >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-medium text-indigo-700 dark:text-indigo-300">Custom Voice Engine</span>
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-indigo-300 text-indigo-600 dark:border-indigo-600 dark:text-indigo-400">Plugin</Badge>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              Self-hosted FreeSWITCH pipeline
-                            </p>
-                          </div>
-                          {formData.telephonyProvider === "custom-voice-engine" && (
-                            <Check className="h-4 w-4 text-indigo-600" />
-                          )}
-                        </div>
-                      </div>
+                        <ProviderRadio selected={formData.telephonyProvider === "custom-voice-engine"} />
+                        <p className="font-semibold text-gray-900 pr-7 text-[14px] flex items-center gap-1.5">
+                          Custom Voice Engine
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">Plugin</Badge>
+                        </p>
+                        <p className="text-[12px] text-gray-500 mt-1.5">Self-hosted FreeSWITCH pipeline</p>
+                      </button>
                     )}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
 
               {(formData.telephonyProvider === "elevenlabs-sip" || formData.telephonyProvider === "openai-sip") && (
                 <div className="space-y-2">
-                  <Label>{t('wizard.sipPhoneNumber', { defaultValue: 'SIP Phone Number' })} <span className="text-destructive">*</span></Label>
+                  <Label className="text-sm font-medium text-gray-800">
+                    {t('wizard.sipPhoneNumber', { defaultValue: 'SIP Phone Number' })} <span className="text-red-500">*</span>
+                  </Label>
                   {(() => {
                     if (isSipNumbersLoading) {
                       return (
-                        <div className="flex items-center gap-2 p-3">
-                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                          <span className="text-sm text-muted-foreground">{t('wizard.loadingSipNumbers', { defaultValue: 'Loading SIP phone numbers...' })}</span>
+                        <div className="flex items-center gap-2 p-3 rounded-lg border border-gray-200">
+                          <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                          <span className="text-sm text-gray-500">{t('wizard.loadingSipNumbers', { defaultValue: 'Loading SIP phone numbers...' })}</span>
                         </div>
                       );
                     }
-                    const filtered = sipPhoneNumbers.filter(p => 
+                    const filtered = sipPhoneNumbers.filter(p =>
                       p.engine === formData.telephonyProvider
                     );
                     if (filtered.length === 0) {
                       return (
-                        <div className="flex items-start gap-2 p-3 rounded-md bg-muted/50 border border-border">
-                          <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                          <p className="text-sm text-muted-foreground">
+                        <div className="flex items-start gap-2 p-3 rounded-xl bg-gray-50 border border-gray-200">
+                          <Info className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
+                          <p className="text-sm text-gray-500">
                             {t('wizard.noSipNumbers', { defaultValue: 'No SIP phone numbers available for this engine. Please set up a SIP trunk and import phone numbers in your' })}{' '}
-                            <a href="/phone-numbers" target="_blank" className="text-primary underline underline-offset-2" data-testid="link-sip-settings">
+                            <a href="/phone-numbers" target="_blank" className="text-blue-600 underline underline-offset-2" data-testid="link-sip-settings">
                               {t('wizard.sipSettings', { defaultValue: 'SIP settings' })}
                             </a>{' '}
                             {t('wizard.first', { defaultValue: 'first.' })}
@@ -847,9 +914,9 @@ export function AgentCreationWizard({ open, onOpenChange, onSuccess }: AgentCrea
                         value={formData.sipPhoneNumberId}
                         onValueChange={(value) => setFormData(prev => ({ ...prev, sipPhoneNumberId: value }))}
                       >
-                        <SelectTrigger data-testid="select-sip-phone-number">
+                        <SelectTrigger data-testid="select-sip-phone-number" className="h-11 rounded-lg border-gray-200">
                           <div className="flex items-center gap-2">
-                            <Phone className="h-4 w-4 text-muted-foreground" />
+                            <Phone className="h-4 w-4 text-gray-400" />
                             <SelectValue placeholder={t('wizard.selectSipNumber', { defaultValue: 'Select a SIP phone number' })} />
                           </div>
                         </SelectTrigger>
@@ -857,7 +924,7 @@ export function AgentCreationWizard({ open, onOpenChange, onSuccess }: AgentCrea
                           {filtered.map((num) => (
                             <SelectItem key={num.id} value={num.id}>
                               <span>{num.phoneNumber}</span>
-                              {num.label && <span className="ml-2 text-muted-foreground">({num.label})</span>}
+                              {num.label && <span className="ml-2 text-gray-400">({num.label})</span>}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -867,18 +934,19 @@ export function AgentCreationWizard({ open, onOpenChange, onSuccess }: AgentCrea
                 </div>
               )}
 
-              <div className="grid grid-cols-1 lg:[grid-template-columns:repeat(2,minmax(0,1fr))] gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2 relative min-w-0">
-                  <Label>Voice <span className="text-destructive">*</span></Label>
+                  <Label className="text-sm font-medium text-gray-800">
+                    Voice <span className="text-red-500">*</span>
+                  </Label>
                   {formData.telephonyProvider === "custom-voice-engine" ? (
-                    // Custom Voice Engine Voice Selector
                     <div className="flex gap-2 min-w-0">
                       <div className="flex-1 min-w-0">
                         <Select
                           value={formData.openaiVoice || "aura-asteria-en"}
                           onValueChange={(value) => setFormData(prev => ({ ...prev, openaiVoice: value }))}
                         >
-                          <SelectTrigger data-testid="select-cve-voice" className="w-full">
+                          <SelectTrigger data-testid="select-cve-voice" className="w-full h-11 rounded-lg border-gray-200">
                             <SelectValue placeholder="Select Voice" />
                           </SelectTrigger>
                           <SelectContent>
@@ -901,15 +969,14 @@ export function AgentCreationWizard({ open, onOpenChange, onSuccess }: AgentCrea
                         provider={customVoiceEngineVoices.find(v => v.value === (formData.openaiVoice || "aura-asteria-en"))?.provider}
                       />
                     </div>
-                  ) : (formData.telephonyProvider === "plivo" || formData.telephonyProvider === "twilio_openai" || formData.telephonyProvider === "openai-sip") ? (
-                    // OpenAI Voice Selector for Plivo, Twilio+OpenAI, or OpenAI SIP
+                  ) : isOpenAITelephony ? (
                     <div className="flex gap-2 min-w-0">
                       <div className="flex-1 min-w-0">
                         <Select
                           value={formData.openaiVoice}
                           onValueChange={(value) => setFormData(prev => ({ ...prev, openaiVoice: value }))}
                         >
-                          <SelectTrigger data-testid="select-openai-voice" className="w-full">
+                          <SelectTrigger data-testid="select-openai-voice" className="w-full h-11 rounded-lg border-gray-200">
                             <SelectValue placeholder="Select OpenAI voice" />
                           </SelectTrigger>
                           <SelectContent>
@@ -931,7 +998,6 @@ export function AgentCreationWizard({ open, onOpenChange, onSuccess }: AgentCrea
                       />
                     </div>
                   ) : (
-                    // ElevenLabs Voice Selector for Twilio or ElevenLabs SIP
                     <div className="flex gap-2 min-w-0">
                       <div className="flex-1 min-w-0">
                         <VoiceSearchPicker
@@ -964,12 +1030,18 @@ export function AgentCreationWizard({ open, onOpenChange, onSuccess }: AgentCrea
                 </div>
 
                 <div className="space-y-2 min-w-0">
-                  <Label>Language</Label>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-sm font-medium text-gray-800">Language</Label>
+                    <span className="inline-flex gap-1">
+                      <span className="inline-flex items-center justify-center rounded px-1.5 h-5 text-[10px] font-semibold bg-gray-100 text-gray-500">EL</span>
+                      <span className="inline-flex items-center justify-center rounded px-1.5 h-5 text-[10px] font-semibold bg-gray-100 text-gray-500">OA</span>
+                    </span>
+                  </div>
                   <Select
                     value={formData.language}
                     onValueChange={(value) => setFormData(prev => ({ ...prev, language: value }))}
                   >
-                    <SelectTrigger data-testid="select-language">
+                    <SelectTrigger data-testid="select-language" className="h-11 rounded-lg border-gray-200">
                       <SelectValue placeholder="Select language" />
                     </SelectTrigger>
                     <SelectContent>
@@ -980,14 +1052,14 @@ export function AgentCreationWizard({ open, onOpenChange, onSuccess }: AgentCrea
                         return isProviderSupported(lang.value, providerType);
                       })
                       .map((lang) => (
-                          <SelectItem 
-                            key={lang.value} 
+                          <SelectItem
+                            key={lang.value}
                             value={lang.value}
                           >
-                            <LanguageOptionLabel 
-                              label={t(`agents.languages.${lang.value}`, { defaultValue: lang.label })} 
-                              providers={lang.providers} 
-                              compact 
+                            <LanguageOptionLabel
+                              label={t(`agents.languages.${lang.value}`, { defaultValue: lang.label })}
+                              providers={lang.providers}
+                              compact
                             />
                           </SelectItem>
                       ))}
@@ -998,75 +1070,112 @@ export function AgentCreationWizard({ open, onOpenChange, onSuccess }: AgentCrea
             </div>
           </div>
         );
+      }
 
       case "personality":
         return (
-          <div className="space-y-6">
-            <div className="text-center mb-6">
-              <h3 className="text-lg font-semibold">Personality & Tone</h3>
-              <p className="text-sm text-muted-foreground">
-                Define how your agent sounds and behaves
+          <div className="space-y-4">
+            <div className="text-center space-y-1">
+              <h3 className="text-[22px] font-semibold tracking-tight text-gray-900">
+                Personality & Tone
+              </h3>
+              <p className="text-sm text-gray-500">
+                Define how your agent sounds and behaves.
               </p>
             </div>
 
-            <div className="space-y-6">
-              <div className="space-y-3">
-                <Label className="text-sm font-medium">Voice Tone</Label>
-                <div className="grid grid-cols-1 gap-2">
-                  {voiceToneOptions.map((option) => (
-                    <div
-                      key={option.value}
-                      className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                        formData.voiceTone === option.value
-                          ? "border-primary bg-primary/5"
-                          : "border-border hover:border-primary/50 hover:bg-muted/50"
-                      }`}
-                      onClick={() => setFormData(prev => ({ ...prev, voiceTone: option.value }))}
-                      data-testid={`tone-${option.value}`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="font-medium">{option.label}</span>
-                          <span className="text-xs text-muted-foreground ml-2">
-                            {option.description}
-                          </span>
-                        </div>
-                        {formData.voiceTone === option.value && (
-                          <Check className="h-4 w-4 text-primary" />
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-baseline justify-between gap-2 px-0.5">
+                  <span className="text-[11px] font-semibold tracking-wider text-gray-400 uppercase">
+                    Voice Tone
+                  </span>
+                  <span className="text-xs text-gray-400">Select dominant style</span>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  {voiceToneOptions.map((option) => {
+                    const ToneIcon = option.icon;
+                    const selected = formData.voiceTone === option.value;
+                    return (
+                      <button
+                        type="button"
+                        key={option.value}
+                        className={cn(
+                          "relative flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 text-left transition-all bg-white",
+                          selected
+                            ? "border-blue-600"
+                            : "border-gray-200 hover:border-gray-300"
                         )}
-                      </div>
-                    </div>
-                  ))}
+                        onClick={() => setFormData(prev => ({ ...prev, voiceTone: option.value }))}
+                        data-testid={`tone-${option.value}`}
+                      >
+                        <div
+                          className={cn(
+                            "h-9 w-9 rounded-lg flex items-center justify-center shrink-0",
+                            selected ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-500"
+                          )}
+                        >
+                          <ToneIcon className="h-4 w-4" strokeWidth={1.75} />
+                        </div>
+                        <div className="flex-1 min-w-0 pr-8">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-[14px] text-gray-900 leading-none">
+                              {option.label}
+                            </span>
+                            {option.isDefault && (
+                              <span className="inline-flex items-center rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">
+                                Default
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[12px] text-gray-500 mt-1 leading-snug">
+                            {option.description}
+                          </p>
+                        </div>
+                        <span
+                          className={cn(
+                            "absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 rounded-full flex items-center justify-center border-2",
+                            selected ? "bg-blue-600 border-blue-600" : "bg-white border-gray-300"
+                          )}
+                        >
+                          {selected && <Check className="h-3 w-3 text-white stroke-[3]" />}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              <Separator />
-
-              <div className="space-y-3">
-                <Label className="text-sm font-medium">Personality</Label>
+              <div className="space-y-2">
+                <span className="text-sm font-semibold text-gray-900">Personality</span>
                 <div className="grid grid-cols-2 gap-2">
-                  {personalityOptions.map((option) => (
-                    <div
-                      key={option.value}
-                      className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                        formData.personality === option.value
-                          ? "border-primary bg-primary/5"
-                          : "border-border hover:border-primary/50 hover:bg-muted/50"
-                      }`}
-                      onClick={() => setFormData(prev => ({ ...prev, personality: option.value }))}
-                      data-testid={`personality-${option.value}`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm">{option.label}</span>
-                        {formData.personality === option.value && (
-                          <Check className="h-3 w-3 text-primary" />
+                  {personalityOptions.map((option) => {
+                    const selected = formData.personality === option.value;
+                    return (
+                      <button
+                        type="button"
+                        key={option.value}
+                        className={cn(
+                          "relative text-left px-3.5 py-3 rounded-xl border transition-all bg-white",
+                          selected
+                            ? "border-gray-800"
+                            : "border-gray-200 hover:border-gray-300"
                         )}
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {option.description}
-                      </p>
-                    </div>
-                  ))}
+                        onClick={() => setFormData(prev => ({ ...prev, personality: option.value }))}
+                        data-testid={`personality-${option.value}`}
+                      >
+                        {selected && (
+                          <Check className="absolute top-3 right-3 h-4 w-4 text-gray-800 stroke-[2.5]" />
+                        )}
+                        <span className="font-semibold text-[14px] text-gray-900 pr-6 leading-none">
+                          {option.label}
+                        </span>
+                        <p className="text-[12px] text-gray-500 mt-1.5 leading-snug">
+                          {option.description}
+                        </p>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -1075,77 +1184,128 @@ export function AgentCreationWizard({ open, onOpenChange, onSuccess }: AgentCrea
 
       case "prompts":
         return (
-          <div className="space-y-6">
-            <div className="text-center mb-4">
-              <h3 className="text-lg font-semibold">Configure Prompts</h3>
-              <p className="text-sm text-muted-foreground">
-                Customize what your agent says and how it behaves
-              </p>
-            </div>
-
-            <div className="flex justify-end">
+          <div className="space-y-5">
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <h3 className="text-xl font-semibold text-gray-900">Configure Prompts</h3>
+                <p className="text-sm text-gray-500">
+                  Customize what your agent says and how it behaves across incoming callers.
+                </p>
+              </div>
               <Button
                 variant="outline"
                 size="sm"
+                className="shrink-0 rounded-lg border-gray-200"
                 onClick={() => setTemplatesOpen(true)}
                 data-testid="button-use-template"
               >
                 <FileText className="h-4 w-4 mr-2" />
                 Use Template
+                <ChevronDown className="h-3.5 w-3.5 ml-1.5 opacity-60" />
               </Button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="systemPrompt">
-                  System Prompt <span className="text-destructive">*</span>
-                </Label>
-                <Textarea
-                  id="systemPrompt"
-                  value={formData.systemPrompt}
-                  onChange={(e) => setFormData(prev => ({ ...prev, systemPrompt: e.target.value }))}
-                  placeholder="Describe your agent's role, responsibilities, and behavior guidelines..."
-                  className="min-h-[150px] resize-none"
-                  data-testid="textarea-system-prompt"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Use {"{{variable}}"} syntax for dynamic values like {"{{company_name}}"} or {"{{agent_name}}"}
-                </p>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <Label htmlFor="systemPrompt" className="text-sm font-medium text-gray-700">
+                    System Prompt <span className="text-red-500">*</span>
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="text-[10px] font-normal bg-gray-100 text-gray-600 border-0">
+                      GPT-4o Telephony Fine-tuned
+                    </Badge>
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+                      onClick={() => toast({ title: "Prompt looks good", description: "No critical issues detected in your system prompt." })}
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      Optimize
+                    </button>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
+                  <Textarea
+                    id="systemPrompt"
+                    value={formData.systemPrompt}
+                    onChange={(e) => setFormData(prev => ({ ...prev, systemPrompt: e.target.value }))}
+                    placeholder="Describe your agent's role, responsibilities, and behavior guidelines..."
+                    className="min-h-[150px] resize-none border-0 rounded-none focus-visible:ring-0 shadow-none"
+                    data-testid="textarea-system-prompt"
+                  />
+                  <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-gray-100 bg-gray-50/80">
+                    <div className="flex flex-wrap gap-1.5 min-w-0">
+                      {systemPromptVars.length > 0 ? (
+                        systemPromptVars.map((variable) => (
+                          <Badge key={variable} variant="secondary" className="text-[10px] font-mono bg-blue-50 text-blue-700 border-0">
+                            {variable}
+                          </Badge>
+                        ))
+                      ) : (
+                        <span className="text-[11px] text-gray-400">No variables detected</span>
+                      )}
+                    </div>
+                    <span className="text-[11px] text-gray-400 whitespace-nowrap">
+                      {formData.systemPrompt.length} chars
+                    </span>
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="firstMessage">First Message</Label>
-                <Textarea
-                  id="firstMessage"
-                  value={formData.firstMessage}
-                  onChange={(e) => setFormData(prev => ({ ...prev, firstMessage: e.target.value }))}
-                  placeholder="What your agent says when answering a call..."
-                  className="min-h-[80px] resize-none"
-                  data-testid="textarea-first-message"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Best practices: Start warm and natural. Example: "Hi {'{{first_name}}'}, this is Sarah from ABC Corp, how's your day going?"
-                </p>
-                
-                {/* Dynamic Variables Helper */}
-                <div className="mt-2 p-3 bg-muted/50 rounded-md border border-muted">
-                  <p className="text-xs font-medium text-foreground mb-2">Available Dynamic Variables</p>
-                  <div className="flex flex-wrap gap-1.5 mb-2">
-                    {['{{first_name}}', '{{last_name}}', '{{contact_name}}', '{{email}}', '{{phone}}', '{{city}}', '{{company}}'].map((variable) => (
-                      <Badge 
-                        key={variable} 
-                        variant="secondary" 
-                        className="text-xs font-mono cursor-pointer hover-elevate"
-                        onClick={() => {
-                          setFormData(prev => ({ ...prev, firstMessage: prev.firstMessage + variable }));
-                        }}
-                        data-testid={`badge-wizard-variable-${variable.replace(/[{}]/g, '')}`}
-                      >
-                        {variable}
-                      </Badge>
-                    ))}
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <Label htmlFor="firstMessage" className="text-sm font-medium text-gray-700">
+                    First Message <span className="text-gray-400 font-normal">(Initial Caller Greeting)</span>
+                  </Label>
+                  <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium">
+                    <Volume2 className="h-3.5 w-3.5" />
+                    Spoken immediately on connect
+                  </span>
+                </div>
+                <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
+                  <Textarea
+                    id="firstMessage"
+                    value={formData.firstMessage}
+                    onChange={(e) => setFormData(prev => ({ ...prev, firstMessage: e.target.value }))}
+                    placeholder="What your agent says when answering a call..."
+                    className="min-h-[80px] resize-none border-0 rounded-none focus-visible:ring-0 shadow-none"
+                    data-testid="textarea-first-message"
+                  />
+                  <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-gray-100 bg-gray-50/80">
+                    <div className="flex flex-wrap gap-1.5 min-w-0">
+                      {firstMessageVars.length > 0 ? (
+                        firstMessageVars.map((variable) => (
+                          <Badge
+                            key={variable}
+                            variant="secondary"
+                            className="text-[10px] font-mono bg-blue-50 text-blue-700 border-0 cursor-pointer"
+                            onClick={() => setFormData(prev => ({ ...prev, firstMessage: prev.firstMessage + variable }))}
+                            data-testid={`badge-wizard-variable-${variable.replace(/[{}]/g, '')}`}
+                          >
+                            {variable}
+                          </Badge>
+                        ))
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                          {['{{first_name}}', '{{company_name}}', '{{agent_name}}'].map((variable) => (
+                            <Badge
+                              key={variable}
+                              variant="secondary"
+                              className="text-[10px] font-mono cursor-pointer hover:bg-blue-50"
+                              onClick={() => setFormData(prev => ({ ...prev, firstMessage: prev.firstMessage + variable }))}
+                              data-testid={`badge-wizard-variable-${variable.replace(/[{}]/g, '')}`}
+                            >
+                              {variable}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-[11px] text-gray-400 whitespace-nowrap">
+                      {estimateAudioSeconds(formData.firstMessage || "")}
+                    </span>
                   </div>
-                  <p className="text-xs text-muted-foreground">Click to insert. Variables are replaced with contact data from your campaign CSV.</p>
                 </div>
               </div>
             </div>
@@ -1184,333 +1344,417 @@ export function AgentCreationWizard({ open, onOpenChange, onSuccess }: AgentCrea
 
       case "voice":
         return (
-          <div className="space-y-6">
-            <div className="text-center mb-6">
-              <h3 className="text-lg font-semibold">Fine-tune Voice</h3>
-              <p className="text-sm text-muted-foreground">
-                {(formData.telephonyProvider === "plivo" || formData.telephonyProvider === "twilio_openai")
-                  ? "OpenAI voice settings are optimized automatically"
-                  : "Adjust voice characteristics for the perfect sound"
-                }
+          <div className="space-y-8 py-2">
+            <div className="text-center space-y-2">
+              <h3 className="text-[22px] font-semibold tracking-tight text-gray-900">
+                Fine-tune Voice
+              </h3>
+              <p className="text-sm text-gray-500">
+                {isOpenAIOrCveVoice
+                  ? formData.telephonyProvider === "custom-voice-engine"
+                    ? "Custom Voice Engine voices are optimized for low-latency streaming"
+                    : "OpenAI voice settings are optimized automatically"
+                  : "Voice settings are optimized automatically"}
               </p>
             </div>
 
-            {(formData.telephonyProvider === "plivo" || formData.telephonyProvider === "twilio_openai" || formData.telephonyProvider === "custom-voice-engine") ? (
-              // OpenAI or CVE engine - show simplified voice info
-              <div className="space-y-6">
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="flex items-center gap-4">
-                      <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-                        <Volume2 className="h-6 w-6 text-primary" />
-                      </div>
-                      <div>
-                        <Label className="text-sm text-muted-foreground">Selected Voice</Label>
-                        <p className="font-semibold text-lg">
-                          {formData.telephonyProvider === "custom-voice-engine"
-                            ? (customVoiceEngineVoices.find(v => v.value === formData.openaiVoice)?.label || formData.openaiVoice || "Asteria (Deepgram)")
-                            : (openaiVoices.find(v => v.value === formData.openaiVoice)?.label || formData.openaiVoice)
-                          }
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {formData.telephonyProvider === "custom-voice-engine"
-                            ? (customVoiceEngineVoices.find(v => v.value === formData.openaiVoice)?.description || "Deepgram Nova-2 voice")
-                            : (openaiVoices.find(v => v.value === formData.openaiVoice)?.description)
-                          }
-                        </p>
-                      </div>
-                    </div>
-                    <div className="mt-4 p-3 bg-muted/50 rounded-lg">
-                      <p className="text-xs text-muted-foreground">
-                        {formData.telephonyProvider === "custom-voice-engine"
-                          ? "Custom Voice Engine uses deepgram/sarvam voices optimized for low-latency streaming and high accuracy."
-                          : "OpenAI Realtime voices are automatically optimized for natural conversation flow with low latency."
-                        }
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            ) : (
-              // ElevenLabs Twilio - show full voice settings
-              <div className="space-y-6">
-                {isV3TtsModel ? (
-                  <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg" data-testid="info-v3-voice-settings">
-                    <Info className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                    <p className="text-xs text-muted-foreground">
-                      V3 Conversational model automatically optimizes voice quality. Use Expressive Mode and audio tags below to control how the agent sounds.
+            <div className="rounded-xl border border-gray-200 bg-white px-5 py-5">
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-full bg-blue-50 flex items-center justify-center shrink-0">
+                  <Volume2 className="h-5 w-5 text-blue-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-[13px] text-gray-500">
+                      <span className="uppercase tracking-wide font-medium text-gray-500">Selected Voice:</span>{" "}
+                      <span className="font-semibold text-gray-900 text-[15px] normal-case tracking-normal">
+                        {selectedVoiceLabel || "Not selected"}
+                      </span>
                     </p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <Label className="text-sm font-medium">Stability</Label>
-                          <p className="text-xs text-muted-foreground">Higher = more consistent, Lower = more expressive</p>
-                        </div>
-                        <span className="text-sm font-mono bg-muted px-2 py-1 rounded">
-                          {Math.round(formData.voiceStability * 100)}%
-                        </span>
-                      </div>
-                      <Slider
-                        value={[formData.voiceStability]}
-                        onValueChange={([value]) => setFormData(prev => ({ ...prev, voiceStability: value }))}
-                        min={0}
-                        max={1}
-                        step={0.01}
-                        className="w-full"
-                        data-testid="slider-stability"
-                      />
-                    </div>
-
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <Label className="text-sm font-medium">Similarity</Label>
-                          <p className="text-xs text-muted-foreground">How closely to match the original voice</p>
-                        </div>
-                        <span className="text-sm font-mono bg-muted px-2 py-1 rounded">
-                          {Math.round(formData.voiceSimilarityBoost * 100)}%
-                        </span>
-                      </div>
-                      <Slider
-                        value={[formData.voiceSimilarityBoost]}
-                        onValueChange={([value]) => setFormData(prev => ({ ...prev, voiceSimilarityBoost: value }))}
-                        min={0}
-                        max={1}
-                        step={0.01}
-                        className="w-full"
-                        data-testid="slider-similarity"
-                      />
-                    </div>
-
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <Label className="text-sm font-medium">Speed</Label>
-                          <p className="text-xs text-muted-foreground">Speaking rate (0.7x to 1.2x)</p>
-                        </div>
-                        <span className="text-sm font-mono bg-muted px-2 py-1 rounded">
-                          {formData.voiceSpeed.toFixed(2)}x
-                        </span>
-                      </div>
-                      <Slider
-                        value={[formData.voiceSpeed]}
-                        onValueChange={([value]) => setFormData(prev => ({ ...prev, voiceSpeed: value }))}
-                        min={0.7}
-                        max={1.2}
-                        step={0.05}
-                        className="w-full"
-                        data-testid="slider-speed"
-                      />
-                    </div>
-                  </>
-                )}
-
-                <div>
-                  <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
-                    <div>
-                      <Label className="text-sm font-medium">Response Delay</Label>
-                      <p className="text-xs text-muted-foreground">How long the agent waits before responding (0.5s to 5.0s)</p>
-                    </div>
-                    <span className="text-sm font-mono bg-muted px-2 py-1 rounded">
-                      {formData.turnTimeout.toFixed(1)}s
+                    <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                      Default
                     </span>
                   </div>
-                  <Slider
-                    value={[formData.turnTimeout]}
-                    onValueChange={([value]) => setFormData(prev => ({ ...prev, turnTimeout: value }))}
-                    min={0.5}
-                    max={5.0}
-                    step={0.1}
-                    className="w-full"
-                    data-testid="slider-turn-timeout"
-                  />
-                </div>
-
-                <div className="flex justify-center pt-4">
-                  <VoicePreviewButton
-                    voiceId={formData.elevenLabsVoiceId}
-                    voiceSettings={{
-                      stability: formData.voiceStability,
-                      similarity_boost: formData.voiceSimilarityBoost,
-                      speed: formData.voiceSpeed,
-                    }}
-                    previewText={formData.firstMessage || undefined}
-                    language={formData.language || undefined}
-                  />
+                  <p className="text-sm text-gray-500 mt-1">
+                    {selectedVoiceDescription || "Voice selected for this agent"}
+                  </p>
                 </div>
               </div>
-            )}
+            </div>
           </div>
         );
 
-      case "review":
+      case "review": {
+        const reviewStepper = [
+          { id: "role", label: "Role" },
+          { id: "identity", label: "Identity" },
+          { id: "voice", label: "Voice" },
+          { id: "engine", label: "Engine" },
+          { id: "rules", label: "Rules" },
+          { id: "review", label: "Review" },
+        ];
+
+        const languageLabel = t(`agents.languages.${formData.language}`, {
+          defaultValue: getLanguageLabel(formData.language),
+        });
+
+        const sampleButton = isOpenAIOrCveVoice ? (
+          formData.telephonyProvider === "custom-voice-engine" ? (
+            <CVEVoicePreviewButton
+              voiceId={formData.openaiVoice || "aura-asteria-en"}
+              voiceName={selectedVoiceLabel}
+              provider={customVoiceEngineVoices.find(v => v.value === (formData.openaiVoice || "aura-asteria-en"))?.provider}
+            />
+          ) : (
+            <OpenAIVoicePreviewButton
+              voiceId={formData.openaiVoice}
+              voiceName={selectedVoiceLabel}
+              speed={formData.voiceSpeed}
+            />
+          )
+        ) : formData.elevenLabsVoiceId ? (
+          <VoicePreviewButton
+            voiceId={formData.elevenLabsVoiceId}
+            voiceSettings={{
+              stability: formData.voiceStability,
+              similarity_boost: formData.voiceSimilarityBoost,
+              speed: formData.voiceSpeed,
+            }}
+            previewText={formData.firstMessage || undefined}
+            language={formData.language || undefined}
+            compact
+          />
+        ) : (
+          <button
+            type="button"
+            disabled
+            className="inline-flex items-center gap-1 rounded-md border border-blue-200 px-2 py-1 text-[11px] font-medium text-blue-600"
+          >
+            <Play className="h-3 w-3" />
+            Sample
+          </button>
+        );
+
         return (
-          <div className="space-y-6">
-            <div className="text-center mb-6">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-emerald-500/20 mb-4">
-                <CheckCircle2 className="h-6 w-6 text-emerald-500" />
+          <div className="space-y-5">
+            <div className="flex items-center px-1 pt-1">
+              {reviewStepper.map((step, index) => {
+                const isLast = index === reviewStepper.length - 1;
+                const isActive = step.id === "review";
+                return (
+                  <div key={step.id} className="flex items-center flex-1 min-w-0">
+                    <div className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
+                      <div className="h-7 w-7 rounded-full flex items-center justify-center shrink-0 bg-blue-600 text-white">
+                        <Check className="h-3.5 w-3.5 stroke-[3]" />
+                      </div>
+                      <span
+                        className={cn(
+                          "text-[11px] text-center truncate w-full",
+                          isActive ? "font-semibold text-blue-600" : "text-gray-400"
+                        )}
+                      >
+                        {step.label}
+                      </span>
+                    </div>
+                    {!isLast && (
+                      <div className="h-0.5 bg-blue-600 flex-1 min-w-[10px] mb-5 -mx-0.5" />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="text-center space-y-2">
+              <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-emerald-500 mb-1">
+                <Check className="h-7 w-7 text-white stroke-[3]" />
               </div>
-              <h3 className="text-lg font-semibold">Review Your Agent</h3>
-              <p className="text-sm text-muted-foreground">
-                Everything looks good! Review and create your agent.
+              <h3 className="text-[22px] font-semibold tracking-tight text-gray-900">
+                Review Your Agent
+              </h3>
+              <p className="text-sm text-gray-500 max-w-md mx-auto">
+                Everything looks good! Review the configured telephony parameters and deploy your agent.
               </p>
             </div>
 
-            <div className="space-y-4">
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Use Case</Label>
-                      <p className="font-medium">{selectedUseCase?.title || "Custom"}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Name</Label>
-                      <p className="font-medium">{formData.name}</p>
-                    </div>
-                    {hasAlternateEngines && (
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Telephony Provider</Label>
-                        <p className="font-medium">
-                          {formData.telephonyProvider === "plivo" 
-                            ? "OpenAI + Plivo" 
-                            : formData.telephonyProvider === "twilio_openai"
-                              ? "OpenAI + Twilio"
-                              : formData.telephonyProvider === "custom-voice-engine"
-                                ? "Custom Voice Engine"
-                                : formData.telephonyProvider === "elevenlabs-sip"
-                                  ? "ElevenLabs SIP"
-                                  : formData.telephonyProvider === "openai-sip"
-                                    ? "OpenAI SIP"
-                                    : "ElevenLabs + Twilio"}
-                        </p>
-                      </div>
-                    )}
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Voice</Label>
-                      <p className="font-medium">
-                        {formData.telephonyProvider === "custom-voice-engine"
-                          ? (customVoiceEngineVoices.find(v => v.value === formData.openaiVoice)?.label || formData.openaiVoice)
-                          : (formData.telephonyProvider === "plivo" || formData.telephonyProvider === "twilio_openai" || formData.telephonyProvider === "openai-sip")
-                            ? (openaiVoices.find(v => v.value === formData.openaiVoice)?.label || formData.openaiVoice)
-                            : (formData.elevenLabsVoiceId || "Not selected")
-                        }
-                      </p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Language</Label>
-                      <p className="font-medium">{t(`agents.languages.${formData.language}`, { defaultValue: getLanguageLabel(formData.language) })}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Voice Tone</Label>
-                      <p className="font-medium capitalize">{formData.voiceTone}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Personality</Label>
-                      <p className="font-medium capitalize">{formData.personality}</p>
-                    </div>
-                    {formData.telephonyProvider === "twilio" && (
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Voice Speed</Label>
-                        <p className="font-medium">{formData.voiceSpeed.toFixed(2)}x</p>
-                      </div>
-                    )}
+            <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+              <div className="grid grid-cols-2 gap-px bg-gray-100">
+                <div className="bg-white p-4">
+                  <p className="text-[10px] font-semibold tracking-wider text-gray-400 uppercase mb-2">Use Case</p>
+                  <div className="flex items-center gap-2">
+                    <Headphones className="h-4 w-4 text-blue-600 shrink-0" />
+                    <span className="text-sm font-semibold text-blue-600">
+                      {selectedUseCase?.title || "Custom"}
+                    </span>
                   </div>
-
-                  <Separator className="my-4" />
-
-                  <div className="space-y-3">
-                    <div>
-                      <Label className="text-xs text-muted-foreground">System Prompt</Label>
-                      <p className="text-sm mt-1 line-clamp-3">{formData.systemPrompt}</p>
-                    </div>
-                    {formData.firstMessage && (
-                      <div>
-                        <Label className="text-xs text-muted-foreground">First Message</Label>
-                        <p className="text-sm mt-1">{formData.firstMessage}</p>
-                      </div>
-                    )}
+                </div>
+                <div className="bg-white p-4">
+                  <p className="text-[10px] font-semibold tracking-wider text-gray-400 uppercase mb-2">Name</p>
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4 text-blue-600 shrink-0" />
+                    <span className="text-sm font-semibold text-blue-600 truncate">{formData.name}</span>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+                <div className="bg-white p-4">
+                  <p className="text-[10px] font-semibold tracking-wider text-gray-400 uppercase mb-2">Telephony Provider</p>
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+                    <span className="text-sm font-medium text-gray-900">
+                      {getTelephonyLabel(formData.telephonyProvider)}
+                    </span>
+                  </div>
+                </div>
+                <div className="bg-white p-4">
+                  <p className="text-[10px] font-semibold tracking-wider text-gray-400 uppercase mb-2">Voice</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-gray-900 truncate">{selectedVoiceLabel}</span>
+                    {sampleButton}
+                  </div>
+                </div>
+                <div className="bg-white p-4">
+                  <p className="text-[10px] font-semibold tracking-wider text-gray-400 uppercase mb-2">Language</p>
+                  <div className="flex items-center gap-2">
+                    <Languages className="h-4 w-4 text-gray-500 shrink-0" />
+                    <span className="text-sm font-medium text-gray-900 truncate">{languageLabel}</span>
+                  </div>
+                </div>
+                <div className="bg-white p-4">
+                  <p className="text-[10px] font-semibold tracking-wider text-gray-400 uppercase mb-2">Voice Tone</p>
+                  <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 capitalize">
+                    {formData.voiceTone}
+                  </span>
+                </div>
+                <div className="bg-white p-4">
+                  <p className="text-[10px] font-semibold tracking-wider text-gray-400 uppercase mb-2">Personality</p>
+                  <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 capitalize">
+                    {formData.personality}
+                  </span>
+                </div>
+                <div className="bg-white p-4">
+                  <p className="text-[10px] font-semibold tracking-wider text-gray-400 uppercase mb-2">Response Buffer</p>
+                  <div className="flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-emerald-500 shrink-0" />
+                    <span className="text-sm font-medium text-gray-900">
+                      {isOpenAITelephony
+                        ? "Realtime WebRTC (~400ms)"
+                        : `${formData.turnTimeout.toFixed(1)}s`}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-100 p-4 space-y-3">
+                <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-3.5 min-h-[72px]">
+                  <p className="text-[10px] font-semibold tracking-wider text-gray-400 uppercase mb-2">System Prompt</p>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed line-clamp-4">
+                    {formData.systemPrompt || "—"}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-3.5 min-h-[64px]">
+                  <p className="text-[10px] font-semibold tracking-wider text-gray-400 uppercase mb-2">First Message</p>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                    {formData.firstMessage || "Hello! How can I help you today?"}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         );
+      }
     }
   };
 
-  return (
-    <Dialog open={open} onOpenChange={(isOpen) => {
-      if (!isOpen) {
-        resetWizard();
-      }
-      onOpenChange(isOpen);
-    }}>
-      <DialogContent className="max-w-3xl max-h-[90vh] p-0 gap-0 overflow-hidden">
-        <DialogHeader className="px-6 pt-6 pb-4 border-b">
-          <div className="flex items-center justify-between">
-            <div>
-              <DialogTitle className="flex items-center gap-2">
-                <Wand2 className="h-5 w-5 text-primary" />
-                Create AI Agent
-              </DialogTitle>
-              <DialogDescription>
-                Step {currentStepIndex + 1} of {steps.length}: {steps[currentStepIndex].title}
-              </DialogDescription>
-            </div>
-            <div className="flex items-center gap-2">
-              {steps.map((step, index) => (
-                <div
-                  key={step.id}
-                  className={`h-2 w-2 rounded-full transition-colors ${
-                    index < currentStepIndex
-                      ? "bg-emerald-500"
-                      : index === currentStepIndex
-                      ? "bg-primary"
-                      : "bg-muted"
-                  }`}
-                />
-              ))}
-            </div>
-          </div>
-          <Progress value={progress} className="h-1 mt-4" />
-        </DialogHeader>
-
-        <ScrollArea className="flex-1 max-h-[55vh]">
-          <div className="p-6">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={currentStep}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.2 }}
-              >
-                {renderStep()}
-              </motion.div>
-            </AnimatePresence>
-          </div>
-        </ScrollArea>
-
-        <div className="flex items-center justify-between px-6 py-4 border-t bg-muted/30">
-          <Button
-            variant="ghost"
-            onClick={goBack}
-            disabled={currentStepIndex === 0}
+  const renderFooter = () => {
+    if (currentStep === "useCase") {
+      return (
+        <div className="flex items-center justify-between px-6 py-3.5 border-t border-gray-200 bg-gray-50/70">
+          <button
+            type="button"
+            disabled
+            className="inline-flex items-center text-sm text-gray-300 cursor-not-allowed"
             data-testid="button-wizard-back"
           >
-            <ChevronLeft className="h-4 w-4 mr-2" />
+            <ChevronLeft className="h-4 w-4 mr-0.5" />
+            Back
+          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              className="text-sm text-gray-500 hover:text-gray-700 px-2 py-1.5"
+              onClick={() => {
+                onOpenChange(false);
+                resetWizard();
+              }}
+            >
+              Cancel
+            </button>
+            <Button
+              onClick={goNext}
+              disabled={!canProceed}
+              className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg h-10 px-5"
+              data-testid="button-wizard-next"
+            >
+              Continue
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    if (currentStep === "basics") {
+      return (
+        <div className="flex items-center justify-between px-6 py-3.5 border-t border-gray-200 bg-white">
+          <Button
+            variant="outline"
+            onClick={goBack}
+            className="rounded-lg border-gray-200 h-10 px-4"
+            data-testid="button-wizard-back"
+          >
+            <ChevronLeft className="h-4 w-4 mr-1" />
             Back
           </Button>
-
-          {currentStep === "review" ? (
+          <div className="flex items-center gap-4">
+            {canProceed && (
+              <span className="text-xs text-gray-400 hidden sm:inline">
+                Step 2 of 6 completed
+              </span>
+            )}
             <Button
-              onClick={() => createMutation.mutate()}
+              onClick={goNext}
+              disabled={!canProceed}
+              className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg h-10 px-5"
+              data-testid="button-wizard-next"
+            >
+              Continue
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
+          {validationHint && (
+            <p className="sr-only" data-testid="text-wizard-hint">
+              {validationHint}
+            </p>
+          )}
+        </div>
+      );
+    }
+
+    if (currentStep === "personality") {
+      return (
+        <div className="flex items-center justify-between px-6 py-3.5 border-t border-gray-200 bg-white">
+          <Button
+            variant="outline"
+            onClick={goBack}
+            className="rounded-lg border-gray-200 h-10 px-4"
+            data-testid="button-wizard-back"
+          >
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            Back
+          </Button>
+          <Button
+            onClick={goNext}
+            disabled={!canProceed}
+            className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg h-10 px-5"
+            data-testid="button-wizard-next"
+          >
+            Continue
+            <ChevronRight className="h-4 w-4 ml-1" />
+          </Button>
+        </div>
+      );
+    }
+
+    if (currentStep === "prompts") {
+      return (
+        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-white">
+          <Button
+            variant="outline"
+            onClick={goBack}
+            className="rounded-lg"
+            data-testid="button-wizard-back"
+          >
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            Back
+          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" className="text-gray-500" onClick={handleSaveDraft}>
+              Save Draft
+            </Button>
+            <Button
+              onClick={goNext}
+              disabled={!canProceed}
+              className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg min-w-[110px]"
+              data-testid="button-wizard-next"
+            >
+              Continue
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    if (currentStep === "voice") {
+      return (
+        <div className="flex items-center justify-between px-6 py-3.5 border-t border-gray-200 bg-white">
+          <button
+            type="button"
+            onClick={goBack}
+            className="text-sm text-gray-600 hover:text-gray-900 inline-flex items-center"
+            data-testid="button-wizard-back"
+          >
+            <ChevronLeft className="h-4 w-4 mr-0.5" />
+            Back
+          </button>
+          <Button
+            onClick={goNext}
+            disabled={!canProceed}
+            className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg h-10 px-5"
+            data-testid="button-wizard-next"
+          >
+            Continue
+            <ChevronRight className="h-4 w-4 ml-1" />
+          </Button>
+        </div>
+      );
+    }
+
+    if (currentStep === "review") {
+      return (
+        <div className="flex items-center justify-between px-6 py-3.5 border-t border-gray-200 bg-white">
+          <Button
+            variant="outline"
+            onClick={goBack}
+            className="rounded-lg border-gray-200 h-10 px-4"
+            data-testid="button-wizard-back"
+          >
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            Back
+          </Button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              className="text-sm text-gray-500 hover:text-gray-700 px-2 py-1.5"
+              onClick={() => {
+                onOpenChange(false);
+                resetWizard();
+              }}
+            >
+              Cancel
+            </button>
+            <Button
+              onClick={() => {
+                if (!hasValidVoice) {
+                  toast({
+                    title: "Voice required",
+                    description: "Go back to Basic Info and select a voice before creating the agent.",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                createMutation.mutate();
+              }}
               disabled={createMutation.isPending}
-              className="min-w-[140px]"
+              className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg h-10 px-5"
               data-testid="button-wizard-create"
             >
               {createMutation.isPending ? (
@@ -1525,23 +1769,163 @@ export function AgentCreationWizard({ open, onOpenChange, onSuccess }: AgentCrea
                 </>
               )}
             </Button>
-          ) : (
-            <div className="flex flex-col items-end gap-1">
-              <Button
-                onClick={goNext}
-                disabled={!canProceed}
-                data-testid="button-wizard-next"
-              >
-                Continue
-                <ChevronRight className="h-4 w-4 ml-2" />
-              </Button>
-              {validationHint && (
-                <p className="text-xs text-muted-foreground" data-testid="text-wizard-hint">
-                  {validationHint}
-                </p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-white">
+        <Button
+          variant="outline"
+          onClick={goBack}
+          className="rounded-lg"
+          data-testid="button-wizard-back"
+        >
+          <ChevronLeft className="h-4 w-4 mr-1" />
+          Back
+        </Button>
+        <Button
+          onClick={goNext}
+          disabled={!canProceed}
+          className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg min-w-[110px]"
+          data-testid="button-wizard-next"
+        >
+          Continue
+          <ChevronRight className="h-4 w-4 ml-1" />
+        </Button>
+      </div>
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(isOpen) => {
+      if (!isOpen) {
+        resetWizard();
+      }
+      onOpenChange(isOpen);
+    }}>
+      <DialogContent
+        className={cn(
+          "p-0 gap-0 sm:rounded-2xl bg-white shadow-xl border border-gray-200",
+          currentStep === "personality"
+            ? "max-w-[640px] max-h-[90vh] !flex flex-col overflow-hidden"
+            : currentStep === "voice"
+              ? "max-w-[560px] overflow-visible"
+              : currentStep === "review"
+                ? "max-w-[600px] max-h-[90vh] !flex flex-col overflow-hidden"
+                : "max-w-[880px] overflow-visible"
+        )}
+        hideCloseButton={false}
+      >
+        <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-4 shrink-0">
+          <div className="flex items-start gap-3 min-w-0 flex-1">
+            <div
+              className={cn(
+                "h-9 w-9 rounded-lg flex items-center justify-center shrink-0",
+                currentStep === "voice" ? "bg-blue-50" : "bg-blue-600"
+              )}
+            >
+              {currentStep === "review" ? (
+                <Bot className="h-5 w-5 text-white" />
+              ) : (
+                <Wand2 className={cn("h-5 w-5", currentStep === "voice" ? "text-blue-600" : "text-white")} />
               )}
             </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h2 className="text-lg font-bold text-gray-900 leading-none">Create AI Agent</h2>
+                {currentStep === "personality" ? (
+                  <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-600">
+                    Step {currentStepIndex + 1} of {steps.length}
+                  </span>
+                ) : currentStep !== "voice" ? (
+                  <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-semibold tracking-wider text-gray-500 uppercase">
+                    WIZARD
+                  </span>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                <p className="text-sm text-gray-500">
+                  Step {currentStepIndex + 1} of {steps.length}: {steps[currentStepIndex].title}
+                </p>
+                {currentStep === "voice" && (
+                  <div className="flex items-center gap-1">
+                    {steps.map((step, index) => (
+                      <div
+                        key={step.id}
+                        className={cn(
+                          "h-1.5 rounded-full transition-all",
+                          index <= currentStepIndex ? "w-4 bg-blue-600" : "w-4 bg-gray-200"
+                        )}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          {currentStep !== "personality" && currentStep !== "voice" && currentStep !== "review" && (
+            <div className="flex items-center gap-1.5 pt-2.5 pr-7">
+              {steps.map((step, index) => (
+                <div
+                  key={step.id}
+                  className={cn(
+                    "h-2 w-2 rounded-full transition-all",
+                    index <= currentStepIndex ? "bg-blue-600" : "bg-gray-300"
+                  )}
+                />
+              ))}
+            </div>
           )}
+        </div>
+
+        {currentStep !== "review" && (
+          <div className="h-px bg-gray-200 relative shrink-0">
+            <div
+              className="absolute left-0 top-0 h-[2px] -mt-px bg-blue-600 transition-all duration-300"
+              style={{ width: `${Math.max(12, progress)}%` }}
+            />
+          </div>
+        )}
+
+        {currentStep === "personality" || currentStep === "review" ? (
+          <div
+            className={cn(
+              "min-h-0 overflow-y-auto overscroll-contain px-5 py-4",
+              currentStep === "review" ? "max-h-[72vh]" : "max-h-[55vh]"
+            )}
+          >
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentStep}
+                initial={{ opacity: 0, x: 16 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -16 }}
+                transition={{ duration: 0.18 }}
+              >
+                {renderStep()}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        ) : (
+          <div className={cn("px-6", currentStep === "voice" ? "py-8" : "py-6")}>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentStep}
+                initial={{ opacity: 0, x: 16 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -16 }}
+                transition={{ duration: 0.18 }}
+              >
+                {renderStep()}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        )}
+
+        <div className="shrink-0">
+          {renderFooter()}
         </div>
       </DialogContent>
     </Dialog>

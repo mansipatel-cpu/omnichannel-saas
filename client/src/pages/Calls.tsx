@@ -22,11 +22,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DataPagination } from "@/components/ui/data-pagination";
-import { Search, Download, Loader2, Phone, Calendar, Clock, MessageSquare, Eye, Play, Pause, Volume2, PhoneIncoming, PhoneOutgoing, CheckCircle2, XCircle, Mic, FileText, Sparkles, Globe, Video } from "lucide-react";
+import { Search, Download, Loader2, Phone, Clock, Calendar, Eye, Play, Pause, PhoneIncoming, PhoneOff, CheckCircle2, ArrowDown, ArrowUp, XCircle, FileText, Mic, Globe, Video } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { format, formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { AuthStorage } from "@/lib/auth-storage";
 import { formatSipEndpoint } from "@/lib/formatters";
@@ -280,79 +279,46 @@ export default function Calls() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "completed":
-        return <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20">{t('calls.status.completed')}</Badge>;
+        return <span className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-600">{t('calls.status.completed')}</span>;
       case "failed":
-        return <Badge className="bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/20">{t('calls.status.failed')}</Badge>;
+        return <span className="inline-flex items-center rounded-md border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-500">{t('calls.status.failed')}</span>;
       case "credit_failed":
         return (
           <Badge
-            className="bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/20 gap-1"
+            className="bg-rose-50 text-rose-600 border-rose-200 font-medium gap-1"
             data-testid="badge-credit-failed"
           >
             <XCircle className="h-3 w-3" />
-            Not Billed - Low Credits
+            Not Billed
           </Badge>
         );
       case "in_progress":
       case "in-progress":
-        return <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20">{t('calls.status.inProgress')}</Badge>;
+        return <Badge className="bg-amber-50 text-amber-600 border-amber-200 font-medium">{t('calls.status.inProgress')}</Badge>;
+      case "initiated":
+      case "pending":
+        return <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">{status}</span>;
       case "ended":
-        return <Badge className="bg-slate-500/10 text-slate-700 dark:text-slate-400 border-slate-500/20">{t('calls.status.ended')}</Badge>;
+        return <Badge className="bg-slate-50 text-slate-500 border-slate-200 font-medium">{t('calls.status.ended')}</Badge>;
       default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
-  };
-
-  const getSentimentBadge = (sentiment: string | null) => {
-    if (!sentiment) return null;
-    switch (sentiment) {
-      case "positive":
-        return <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20">{t('calls.sentiment.positive')}</Badge>;
-      case "negative":
-        return <Badge className="bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/20">{t('calls.sentiment.negative')}</Badge>;
-      case "neutral":
-        return <Badge className="bg-slate-500/10 text-slate-700 dark:text-slate-400 border-slate-500/20">{t('calls.sentiment.neutral')}</Badge>;
-      default:
-        return <Badge variant="outline">{sentiment}</Badge>;
-    }
-  };
-
-  const getClassificationBadge = (classification: string | null) => {
-    if (!classification) return null;
-    switch (classification) {
-      case "hot":
-        return <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20">{t('calls.classification.hot')}</Badge>;
-      case "warm":
-        return <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20">{t('calls.classification.warm')}</Badge>;
-      case "cold":
-        return <Badge className="bg-slate-500/10 text-slate-700 dark:text-slate-400 border-slate-500/20">{t('calls.classification.cold')}</Badge>;
-      case "lost":
-        return <Badge className="bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/20">{t('calls.classification.lost')}</Badge>;
-      case "completed_successful":
-        return <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20">{t('calls.classification.successful')}</Badge>;
-      case "completed_failed":
-        return <Badge className="bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/20">{t('calls.status.failed')}</Badge>;
-      case "completed":
-        return <Badge className="bg-slate-500/10 text-slate-700 dark:text-slate-400 border-slate-500/20">{t('calls.status.completed')}</Badge>;
-      default:
-        return <Badge variant="outline">{classification}</Badge>;
+        return <Badge className="bg-slate-50 text-slate-500 border-slate-200 font-medium">{status}</Badge>;
     }
   };
 
   const getEngineBadge = (engine?: string) => {
     if (engine === 'twilio-openai') {
-      return <Badge className="bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-500/20">Twilio+OpenAI</Badge>;
+      return <span className="inline-flex items-center rounded-md border border-violet-200 bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-600">OpenAI + Twilio</span>;
     }
     if (engine === 'plivo-openai') {
-      return <Badge className="bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20">Plivo+OpenAI</Badge>;
+      return <Badge className="bg-orange-50 text-orange-600 border-orange-200 font-medium">Plivo + OpenAI</Badge>;
     }
     if (engine === 'openai') {
-      return <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20">OpenAI</Badge>;
+      return <Badge className="bg-emerald-50 text-emerald-600 border-emerald-200 font-medium">OpenAI</Badge>;
     }
     if (engine === 'custom-voice-engine') {
-      return <Badge className="bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20">Custom Voice</Badge>;
+      return <Badge className="bg-blue-50 text-blue-600 border-blue-200 font-medium">Custom Voice</Badge>;
     }
-    return <Badge className="bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/20">ElevenLabs</Badge>;
+      return <span className="inline-flex items-center rounded-md bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-600">ElevenLabs</span>;
   };
 
   const getWidgetBadge = (call: Call) => {
@@ -378,10 +344,6 @@ export default function Calls() {
     if (call.recordingUrl || call.elevenLabsConversationId) return true;
     if (call.engine === 'twilio-openai' || call.engine === 'plivo-openai' || call.engine === 'custom-voice-engine') return true;
     return false;
-  };
-
-  const isOpenAIEngine = (call: Call) => {
-    return call.engine === 'openai';
   };
 
   const handlePlayRecording = async (e: React.MouseEvent, call: Call) => {
@@ -477,13 +439,6 @@ export default function Calls() {
     }
   };
 
-  const getDirectionIcon = (direction: string | null) => {
-    if (direction === 'incoming') {
-      return <PhoneIncoming className="h-4 w-4 text-emerald-500" />;
-    }
-    return <PhoneOutgoing className="h-4 w-4 text-blue-500" />;
-  };
-
   const totalCalls = paginatedData?.stats?.totalCalls || 0;
   const completedCalls = paginatedData?.stats?.completedCalls || 0;
   const incomingCalls = paginatedData?.stats?.incomingCalls || 0;
@@ -501,267 +456,255 @@ export default function Calls() {
     );
   }
 
-  const renderCallCard = (call: Call, testIdPrefix: string = "") => (
-    <div 
-      key={call.id}
-      className="group bg-card border rounded-lg overflow-hidden hover:shadow-lg transition-all duration-200 cursor-pointer"
-      onClick={() => setLocation(`/calls/${call.id}`)}
-      data-testid={`card-call-${testIdPrefix}${call.id}`}
-    >
-      <div className="flex">
-        <div className={`w-1 ${call.status === 'completed' ? 'bg-emerald-500' : (call.status === 'failed' || call.status === 'credit_failed') ? 'bg-rose-500' : 'bg-amber-500'}`} />
-        
-        <div className="flex-1 p-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-3 min-w-0">
-              <div className={`flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center ${
-                call.callDirection === 'incoming' 
-                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' 
-                  : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
-              }`}>
-                {getDirectionIcon(call.callDirection)}
-              </div>
-              
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-semibold text-foreground truncate">
-                    {(() => {
-                      // Widget calls: show widget name or "Website Widget"
-                      if (call.widgetId) {
-                        return call.widget?.name || (call.metadata as any)?.widgetName || 'Website Widget';
-                      }
-                      const hasContactName = call.contact?.firstName && call.contact.firstName.toLowerCase() !== 'unknown';
-                      if (hasContactName) {
-                        return `${call.contact!.firstName} ${call.contact!.lastName || ""}`.trim();
-                      }
-                      if (call.callDirection === 'incoming') {
-                        return formatSipEndpoint(call.fromNumber, call.engine) || call.contact?.phone || call.phoneNumber || `Call ${call.id.slice(0, 8)}`;
-                      }
-                      return formatSipEndpoint(call.toNumber, call.engine) || call.contact?.phone || call.phoneNumber || `Call ${call.id.slice(0, 8)}`;
-                    })()}
-                  </h3>
-                  {getEngineBadge(call.engine)}
-                  {getWidgetBadge(call)}
-                  {getStatusBadge(call.status)}
-                  {getSentimentBadge(call.sentiment)}
-                  {getClassificationBadge(call.classification)}
-                </div>
-                
-                <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground flex-wrap">
-                  {call.callDirection === 'incoming' ? (
-                    <>
-                      {call.fromNumber && (
-                        <span className="font-mono text-xs flex items-center gap-1">
-                          <span className="text-muted-foreground/70">From:</span> {formatSipEndpoint(call.fromNumber, call.engine)}
-                        </span>
-                      )}
-                      {call.toNumber && (
-                        <span className="font-mono text-xs flex items-center gap-1">
-                          <span className="text-muted-foreground/70">To:</span> {formatSipEndpoint(call.toNumber, call.engine)}
-                        </span>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      {call.toNumber && (
-                        <span className="font-mono text-xs flex items-center gap-1">
-                          <span className="text-muted-foreground/70">To:</span> {formatSipEndpoint(call.toNumber, call.engine)}
-                        </span>
-                      )}
-                      {call.fromNumber && (
-                        <span className="font-mono text-xs flex items-center gap-1">
-                          <span className="text-muted-foreground/70">From:</span> {formatSipEndpoint(call.fromNumber, call.engine)}
-                        </span>
-                      )}
-                    </>
-                  )}
-                  {call.campaign && (
-                    <span className="truncate max-w-[150px]">{call.campaign.name}</span>
-                  )}
-                </div>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-2 flex-shrink-0">
-              {hasRecording(call) && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-9 w-9 rounded-full"
-                  onClick={(e) => handlePlayRecording(e, call)}
-                  disabled={loadingRecording === call.id}
-                  data-testid={`button-play-${testIdPrefix}${call.id}`}
-                >
-                  {loadingRecording === call.id ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : playingCallId === call.id ? (
-                    <Pause className="h-4 w-4 text-primary" />
-                  ) : (
-                    <Play className="h-4 w-4" />
-                  )}
-                </Button>
-              )}
-            </div>
+  const callTitle = (call: Call) => {
+    if (call.widgetId) {
+      return call.widget?.name || (call.metadata as any)?.widgetName || "Website Widget";
+    }
+    if (call.callDirection === "incoming") {
+      return formatSipEndpoint(call.fromNumber, call.engine) || call.contact?.phone || call.phoneNumber || `Call ${call.id.slice(0, 8)}`;
+    }
+    return formatSipEndpoint(call.toNumber, call.engine) || call.contact?.phone || call.phoneNumber || `Call ${call.id.slice(0, 8)}`;
+  };
+
+  const iconFor = (call: Call) => {
+    if (call.status === "failed" || call.status === "busy" || call.status === "no-answer" || call.status === "credit_failed") {
+      return (
+        <div className="h-10 w-10 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center shrink-0">
+          <PhoneOff className="h-4 w-4" />
+        </div>
+      );
+    }
+    if (call.callDirection === "incoming") {
+      return (
+        <div className="h-10 w-10 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center shrink-0">
+          <PhoneIncoming className="h-4 w-4" />
+        </div>
+      );
+    }
+    return (
+      <div className="h-10 w-10 rounded-full bg-sky-50 text-sky-500 flex items-center justify-center shrink-0">
+        <Phone className="h-[18px] w-[18px]" />
+      </div>
+    );
+  };
+
+  const renderCallCard = (call: Call, testIdPrefix: string = "") => {
+    const missed = call.status === "failed" || call.status === "busy" || call.status === "no-answer" || call.status === "no_answer";
+    const accent =
+      call.status === "completed" ? "bg-emerald-500" :
+      missed || call.status === "credit_failed" ? "bg-rose-500" :
+      "bg-amber-400";
+    return (
+      <div
+        key={call.id}
+        className="relative flex items-center gap-4 bg-white border border-slate-200 rounded-2xl pl-5 pr-4 py-4"
+        data-testid={`card-call-${testIdPrefix}${call.id}`}
+      >
+        <span className={`absolute left-0 top-3 bottom-3 w-1 rounded-r-full ${accent}`} />
+        {iconFor(call)}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-[15px] font-semibold text-slate-900 truncate">{callTitle(call)}</h3>
+            {getEngineBadge(call.engine)}
+            {getWidgetBadge(call)}
+            {getStatusBadge(call.status)}
           </div>
-          
-          <div className="flex items-center gap-4 mt-3 flex-wrap">
-            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <div className="flex items-center gap-4 mt-1.5 text-xs text-slate-500">
+            <span className="inline-flex items-center gap-1.5">
               <Clock className="h-3.5 w-3.5" />
-              <span className="font-medium">{formatDuration(call.duration)}</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              {formatDuration(call.duration)}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
               <Calendar className="h-3.5 w-3.5" />
-              <span>{formatCallDate(call.createdAt)}</span>
-            </div>
+              {formatRelativeTime(call.createdAt) || formatCallDate(call.createdAt)}
+            </span>
           </div>
-          
-          {(call.aiSummary || call.transcript) && (
-            <div className="mt-3 pt-3 border-t border-border/50">
-              {call.aiSummary && (
-                <div className="flex items-start gap-2">
-                  <Sparkles className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
-                  <p className="text-sm text-muted-foreground line-clamp-2">
-                    {call.aiSummary}
-                  </p>
-                </div>
+          {(hasRecording(call) || call.transcript || missed) && (
+            <div className="flex items-center gap-2 mt-2">
+              {hasRecording(call) && (
+                <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-500">
+                  <Mic className="h-3 w-3" />
+                  Recording
+                </span>
               )}
-              {!call.aiSummary && call.transcript && (
-                <div className="flex items-start gap-2">
-                  <MessageSquare className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                  <p className="text-sm text-muted-foreground line-clamp-2">
-                    {call.transcript}
-                  </p>
-                </div>
+              {call.transcript && (
+                <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs text-emerald-600">
+                  <FileText className="h-3 w-3" />
+                  Transcript
+                </span>
+              )}
+              {missed && (
+                <span className="inline-flex items-center rounded-md border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs text-rose-500">
+                  Line Busy / No Answer
+                </span>
               )}
             </div>
           )}
-          
-          <div className="flex items-center justify-between gap-2 mt-3">
-            <div className="flex items-center gap-2">
-              {hasRecording(call) ? (
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Mic className="h-3 w-3" />
-                  <span>{t('calls.details.recording')}</span>
-                </div>
-              ) : isOpenAIEngine(call) ? (
-                <div className="flex items-center gap-1 text-xs text-muted-foreground/50" title="OpenAI calls don't have server-side recordings">
-                  <Mic className="h-3 w-3" />
-                  <span className="line-through">Recording N/A</span>
-                </div>
-              ) : null}
-              {call.transcript && (
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <FileText className="h-3 w-3" />
-                  <span>{t('calls.details.transcript')}</span>
-                </div>
-              )}
-              {call.aiSummary && (
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Sparkles className="h-3 w-3" />
-                  <span>{t('calls.details.aiAnalysis')}</span>
-                </div>
-              )}
-            </div>
-            
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                setLocation(`/calls/${call.id}`);
-              }}
-              data-testid={`button-view-details-${testIdPrefix}${call.id}`}
+        </div>
+        <div className="flex items-center gap-2 shrink-0 self-center">
+          {hasRecording(call) && (
+            <button
+              type="button"
+              className="h-10 w-10 rounded-full border border-slate-200 bg-white text-slate-700 inline-flex items-center justify-center hover:bg-slate-50"
+              onClick={(e) => handlePlayRecording(e, call)}
+              disabled={loadingRecording === call.id}
+              data-testid={`button-play-${testIdPrefix}${call.id}`}
             >
-              <Eye className="h-4 w-4 mr-1" />
-              {t('calls.viewDetails')}
-            </Button>
-          </div>
+              {loadingRecording === call.id ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : playingCallId === call.id ? (
+                <Pause className="h-4 w-4" />
+              ) : (
+                <Play className="h-4 w-4 ml-0.5" />
+              )}
+            </button>
+          )}
+          <button
+            type="button"
+            className="h-10 px-3.5 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 inline-flex items-center gap-2 hover:bg-slate-50"
+            onClick={() => setLocation(`/calls/${call.id}`)}
+            data-testid={`button-view-details-${testIdPrefix}${call.id}`}
+          >
+            <Eye className="h-4 w-4 text-slate-500" />
+            View Details
+          </button>
         </div>
       </div>
+    );
+  };
+
+  const callsPagination = (testId: string) => {
+    const totalItems = paginatedData?.pagination.totalItems || 0;
+    const totalPages = paginatedData?.pagination.totalPages || 1;
+    if (totalItems === 0) return null;
+    const startItem = (page - 1) * pageSize + 1;
+    const endItem = Math.min(page * pageSize, totalItems);
+    const pages: number[] = [];
+    const windowStart = Math.max(1, Math.min(page - 1, totalPages - 3));
+    for (let i = windowStart; i <= Math.min(totalPages, windowStart + 3); i++) pages.push(i);
+    return (
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pt-2" data-testid={testId}>
+        <div className="flex items-center gap-3 text-sm text-slate-500">
+          <span>Showing {startItem} to {endItem} of {totalItems} calls</span>
+          <span className="hidden sm:inline">Per page:</span>
+          <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))}>
+            <SelectTrigger className="h-8 w-[68px] rounded-md border-slate-200 bg-white text-slate-700">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {[10, 25, 50].map((option) => (
+                <SelectItem key={option} value={String(option)}>{option}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            className="h-8 px-3 rounded-md border border-slate-200 bg-white text-sm text-slate-600 disabled:opacity-40"
+            onClick={() => setPage(page - 1)}
+            disabled={page <= 1}
+          >
+            Previous
+          </button>
+          {pages.map((n) => (
+            <button
+              key={n}
+              type="button"
+              className={`h-8 min-w-8 px-2 rounded-md text-sm ${n === page ? "bg-[#2F6BFF] text-white" : "bg-white border border-slate-200 text-slate-600"}`}
+              onClick={() => setPage(n)}
+            >
+              {n}
+            </button>
+          ))}
+          {totalPages > pages[pages.length - 1] && (
+            <>
+              <span className="px-1 text-slate-400">...</span>
+              <button
+                type="button"
+                className="h-8 min-w-8 px-2 rounded-md bg-white border border-slate-200 text-sm text-slate-600"
+                onClick={() => setPage(totalPages)}
+              >
+                {totalPages}
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            className="h-8 px-3 rounded-md border border-slate-200 bg-white text-sm text-slate-600 disabled:opacity-40"
+            onClick={() => setPage(page + 1)}
+            disabled={page >= totalPages}
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const statCard = (icon: React.ReactNode, value: number, label: string, testId?: string) => (
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3.5">
+      <div className="flex items-center gap-2 text-slate-900">
+        {icon}
+        <span className="text-[22px] leading-none font-semibold" data-testid={testId}>{value}</span>
+      </div>
+      <p className="text-xs text-slate-500 mt-2">{label}</p>
     </div>
   );
 
   return (
-    <div className="space-y-6">
-      <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-blue-50 via-indigo-50 to-sky-50 dark:from-blue-950/40 dark:via-indigo-950/30 dark:to-sky-950/40 border p-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
-              <Phone className="h-6 w-6 text-white" />
+    <div className="space-y-4">
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="h-11 w-11 rounded-xl bg-[#2F6BFF] flex items-center justify-center shrink-0">
+              <Phone className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">{t('calls.title')}</h1>
-              <p className="text-muted-foreground text-sm">{t('calls.description')}</p>
+              <h1 className="text-[17px] font-semibold text-slate-900 leading-tight">Calls & Conversations</h1>
+              <p className="text-sm text-slate-500 mt-0.5">View recordings, transcripts, and AI analysis</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             {isDemoMode && (
-              <Button
-                variant="outline"
-                onClick={() => setIsVideoOpen(true)}
-                className="bg-white/80 dark:bg-white/10 hover:bg-white text-blue-900 dark:text-blue-100 border-blue-200 dark:border-blue-800 font-semibold shadow"
-                data-testid="button-watch-demo-calls"
-              >
-                <Video className="h-4 w-4 mr-2 text-blue-600 dark:text-blue-400" />
-                <span>Watch Demo Video</span>
+              <Button variant="outline" onClick={() => setIsVideoOpen(true)} data-testid="button-watch-demo-calls">
+                <Video className="h-4 w-4 mr-2" />
+                Watch Demo
               </Button>
             )}
-            <Button 
-              variant="default"
+            <button
+              type="button"
               onClick={handleExportCsv}
+              className="inline-flex items-center gap-2 h-9 px-3.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium"
               data-testid="button-export-calls"
             >
-              <Download className="h-4 w-4 mr-2" />
-              {t('common.export')}
-            </Button>
+              <Download className="h-4 w-4" />
+              Export
+            </button>
           </div>
         </div>
-        
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
-          <div className="bg-background/60 backdrop-blur-sm rounded-lg p-3 border">
-            <div className="flex items-center gap-2">
-              <Phone className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-              <span className="text-2xl font-bold text-foreground" data-testid="text-total-calls">{totalCalls}</span>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">{t('calls.stats.totalCalls')}</p>
-          </div>
-          <div className="bg-background/60 backdrop-blur-sm rounded-lg p-3 border">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              <span className="text-2xl font-bold text-foreground">{completedCalls}</span>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">{t('calls.status.completed')}</p>
-          </div>
-          <div className="bg-background/60 backdrop-blur-sm rounded-lg p-3 border">
-            <div className="flex items-center gap-2">
-              <PhoneIncoming className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              <span className="text-2xl font-bold text-foreground">{incomingCalls}</span>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">{t('calls.filters.incoming')}</p>
-          </div>
-          <div className="bg-background/60 backdrop-blur-sm rounded-lg p-3 border">
-            <div className="flex items-center gap-2">
-              <PhoneOutgoing className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-              <span className="text-2xl font-bold text-foreground">{outgoingCalls}</span>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">{t('calls.filters.outgoing')}</p>
-          </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {statCard(<Phone className="h-4 w-4 text-sky-500" />, totalCalls, "Total Calls", "text-total-calls")}
+          {statCard(<CheckCircle2 className="h-4 w-4 text-emerald-500" />, completedCalls, "Completed")}
+          {statCard(<ArrowDown className="h-4 w-4 text-emerald-500" />, incomingCalls, "Incoming")}
+          {statCard(<ArrowUp className="h-4 w-4 text-sky-500" />, outgoingCalls, "Outgoing")}
         </div>
       </div>
 
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[200px] w-full sm:w-auto">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="relative w-full max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
-            placeholder={t('calls.searchPlaceholder')}
-            className="pl-9"
+            placeholder="Search calls..."
+            className="pl-9 h-10 rounded-lg border-slate-200 bg-white shadow-none"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             data-testid="input-search-calls"
           />
         </div>
+        <div className="flex items-center gap-2 flex-wrap ml-auto">
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full sm:w-[130px]" data-testid="select-filter-status">
+          <SelectTrigger className="w-[128px] h-10 rounded-lg border-slate-200 bg-white" data-testid="select-filter-status">
             <SelectValue placeholder={t('calls.details.status')} />
           </SelectTrigger>
           <SelectContent>
@@ -773,7 +716,7 @@ export default function Calls() {
           </SelectContent>
         </Select>
         <Select value={sentimentFilter} onValueChange={setSentimentFilter}>
-          <SelectTrigger className="w-full sm:w-[130px]" data-testid="select-filter-sentiment">
+          <SelectTrigger className="w-[140px] h-10 rounded-lg border-slate-200 bg-white" data-testid="select-filter-sentiment">
             <SelectValue placeholder={t('calls.details.sentiment')} />
           </SelectTrigger>
           <SelectContent>
@@ -784,7 +727,7 @@ export default function Calls() {
           </SelectContent>
         </Select>
         <Select value={directionFilter} onValueChange={setDirectionFilter}>
-          <SelectTrigger className="w-full sm:w-[130px]" data-testid="select-filter-direction">
+          <SelectTrigger className="w-[140px] h-10 rounded-lg border-slate-200 bg-white" data-testid="select-filter-direction">
             <SelectValue placeholder={t('calls.details.direction')} />
           </SelectTrigger>
           <SelectContent>
@@ -794,7 +737,7 @@ export default function Calls() {
           </SelectContent>
         </Select>
         <Select value={leadFilter} onValueChange={setLeadFilter}>
-          <SelectTrigger className="w-full sm:w-[130px]" data-testid="select-filter-lead">
+          <SelectTrigger className="w-[110px] h-10 rounded-lg border-slate-200 bg-white" data-testid="select-filter-lead">
             <SelectValue placeholder={t('calls.filters.leadQuality')} />
           </SelectTrigger>
           <SelectContent>
@@ -805,17 +748,18 @@ export default function Calls() {
             <SelectItem value="lost">{t('calls.classification.lost')}</SelectItem>
           </SelectContent>
         </Select>
+        </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="all" data-testid="tab-all">
+        <TabsList className="h-10 bg-slate-100 p-1 rounded-lg">
+          <TabsTrigger value="all" className="rounded-md px-3 data-[state=active]:bg-white data-[state=active]:shadow-sm" data-testid="tab-all">
             {t('calls.allCalls')} ({allCount})
           </TabsTrigger>
-          <TabsTrigger value="transcribed" data-testid="tab-transcribed">
+          <TabsTrigger value="transcribed" className="rounded-md px-3 data-[state=active]:bg-white data-[state=active]:shadow-sm" data-testid="tab-transcribed">
             {t('calls.transcribed')} ({transcribedCount})
           </TabsTrigger>
-          <TabsTrigger value="recordings" data-testid="tab-recordings">
+          <TabsTrigger value="recordings" className="rounded-md px-3 data-[state=active]:bg-white data-[state=active]:shadow-sm" data-testid="tab-recordings">
             {t('calls.recordings')} ({recordingsCount})
           </TabsTrigger>
         </TabsList>
@@ -836,15 +780,7 @@ export default function Calls() {
               <div className="grid gap-3">
                 {calls.map((call) => renderCallCard(call))}
               </div>
-              <DataPagination
-                currentPage={page}
-                totalPages={paginatedData?.pagination.totalPages || 1}
-                totalItems={paginatedData?.pagination.totalItems || 0}
-                itemsPerPage={pageSize}
-                onPageChange={setPage}
-                onItemsPerPageChange={setPageSize}
-                data-testid="pagination-all-calls"
-              />
+              {callsPagination("pagination-all-calls")}
             </>
           )}
         </TabsContent>
@@ -863,15 +799,7 @@ export default function Calls() {
               <div className="grid gap-3">
                 {calls.map((call) => renderCallCard(call, "transcribed-"))}
               </div>
-              <DataPagination
-                currentPage={page}
-                totalPages={paginatedData?.pagination.totalPages || 1}
-                totalItems={paginatedData?.pagination.totalItems || 0}
-                itemsPerPage={pageSize}
-                onPageChange={setPage}
-                onItemsPerPageChange={setPageSize}
-                data-testid="pagination-transcribed-calls"
-              />
+              {callsPagination("pagination-transcribed-calls")}
             </>
           )}
         </TabsContent>
@@ -890,15 +818,7 @@ export default function Calls() {
               <div className="grid gap-3">
                 {calls.map((call) => renderCallCard(call, "recording-"))}
               </div>
-              <DataPagination
-                currentPage={page}
-                totalPages={paginatedData?.pagination.totalPages || 1}
-                totalItems={paginatedData?.pagination.totalItems || 0}
-                itemsPerPage={pageSize}
-                onPageChange={setPage}
-                onItemsPerPageChange={setPageSize}
-                data-testid="pagination-recordings-calls"
-              />
+              {callsPagination("pagination-recordings-calls")}
             </>
           )}
         </TabsContent>

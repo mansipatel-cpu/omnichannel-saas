@@ -21,7 +21,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, ArrowRight, Play, Pause, Download, Loader2, Phone, Clock, Calendar, MessageSquare, PhoneIncoming, PhoneOutgoing, CheckCircle2, XCircle, User, Volume2, Heart, Target, Mail, Bot, ChevronLeft, ChevronRight, Globe, AlertTriangle, RotateCcw, RotateCw } from "lucide-react";
+import { ArrowLeft, Play, Pause, Download, Loader2, Phone, Clock, Calendar, MessageSquare, CheckCircle2, XCircle, User, Volume2, Target, Mail, Bot, ChevronLeft, ChevronRight, Globe, AlertTriangle, RotateCcw, RotateCw } from "lucide-react";
 import { format } from "date-fns";
 import { AuthStorage } from "@/lib/auth-storage";
 import { formatSipEndpoint } from "@/lib/formatters";
@@ -261,24 +261,21 @@ export default function CallDetail() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "completed":
-        return <Badge className="bg-green-500/10 text-green-500 border-green-500/20">Successful</Badge>;
+        return <span className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-600">completed</span>;
       case "failed":
-        return <Badge className="bg-red-500/10 text-red-500 border-red-500/20">Failed</Badge>;
+        return <span className="inline-flex items-center rounded-md border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-500">failed</span>;
       case "credit_failed":
         return (
-          <Badge
-            className="bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20"
-            data-testid="badge-status-credit-failed"
-          >
-            Not Billed - Low Credits
-          </Badge>
+          <span className="inline-flex items-center rounded-md border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-500" data-testid="badge-status-credit-failed">
+            Not Billed
+          </span>
         );
       case "no-answer":
-        return <Badge className="bg-yellow-500/10 text-yellow-500 border-yellow-500/20">No answer</Badge>;
+        return <span className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-600">No answer</span>;
       case "busy":
-        return <Badge className="bg-orange-500/10 text-orange-500 border-orange-500/20">Busy</Badge>;
+        return <span className="inline-flex items-center rounded-md border border-orange-200 bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-600">Busy</span>;
       default:
-        return <Badge variant="outline">{status}</Badge>;
+        return <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">{status}</span>;
     }
   };
 
@@ -298,18 +295,18 @@ export default function CallDetail() {
 
   const getEngineBadge = (engine?: string) => {
     if (engine === 'twilio-openai') {
-      return <Badge className="bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-500/20">Twilio+OpenAI</Badge>;
+      return <span className="inline-flex items-center rounded-md bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-600">OpenAI + Twilio</span>;
     }
     if (engine === 'plivo-openai') {
-      return <Badge className="bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20">Plivo+OpenAI</Badge>;
+      return <span className="inline-flex items-center rounded-md bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-600">Plivo + OpenAI</span>;
     }
     if (engine === 'openai') {
-      return <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20">OpenAI</Badge>;
+      return <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-600">OpenAI</span>;
     }
     if (engine === 'custom-voice-engine') {
-      return <Badge className="bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20">Custom Voice</Badge>;
+      return <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">Custom Voice</span>;
     }
-    return <Badge className="bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/20">ElevenLabs</Badge>;
+    return <span className="inline-flex items-center rounded-md bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-600">ElevenLabs</span>;
   };
 
   const getWidgetBadge = () => {
@@ -348,9 +345,45 @@ export default function CallDetail() {
     || (call.metadata as any)?.creditDeductionError
     || 'Insufficient credits';
   const creditsRequired = (call.metadata as any)?.creditsRequired;
+  const callTime = call.startedAt || call.createdAt;
+  const dateTimeLabel = formatCallDate(callTime);
+  const callDateLine = callTime
+    ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: systemTimezone }).format(new Date(callTime))
+    : "—";
+  const callClockLine = callTime
+    ? new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: systemTimezone }).format(new Date(callTime))
+    : "";
+
+  const handleExportLogs = () => {
+    const payload = {
+      id: call.id,
+      status: call.status,
+      direction: call.callDirection,
+      from: call.fromNumber,
+      to: call.toNumber,
+      duration: call.duration,
+      transcript: call.transcript,
+      aiSummary: call.aiSummary,
+      createdAt: call.createdAt,
+      startedAt: call.startedAt,
+      endedAt: call.endedAt,
+      metadata: call.metadata,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `call-logs-${call.id}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const pillButton = "h-9 px-3.5 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-600 inline-flex items-center gap-1.5 hover:bg-slate-50 disabled:opacity-40";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {call.status === 'credit_failed' && (
         <div
           className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 flex flex-col sm:flex-row sm:items-center gap-3"
@@ -379,141 +412,82 @@ export default function CallDetail() {
         </div>
       )}
 
-      {/* Page Header with Blue/Indigo Gradient */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-50 via-indigo-100/50 to-sky-50 dark:from-blue-950/40 dark:via-indigo-900/30 dark:to-sky-950/40 border border-blue-100 dark:border-blue-900/50 p-6 md:p-8">
-        <div className="absolute inset-0 bg-grid-slate-200/50 dark:bg-grid-slate-700/20 [mask-image:linear-gradient(0deg,transparent,rgba(255,255,255,0.5))]" />
-        
-        {/* Navigation row */}
-        <div className="relative mb-4 flex items-center justify-between">
-          <Button 
-            variant="ghost" 
-            onClick={() => setLocation("/calls")} 
-            className="-ml-2"
-            data-testid="button-back"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Calls
-          </Button>
-          
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => prevCall && setLocation(`/calls/${prevCall.id}`)}
-              disabled={!prevCall}
-              className="bg-background/80"
-              data-testid="button-prev-call"
-            >
-              <ChevronLeft className="h-4 w-4 mr-1" />
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => nextCall && setLocation(`/calls/${nextCall.id}`)}
-              disabled={!nextCall}
-              className="bg-background/80"
-              data-testid="button-next-call"
-            >
-              Next
-              <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
-          </div>
+      <div className="flex items-center justify-between gap-3">
+        <button type="button" className={pillButton} onClick={() => setLocation("/calls")} data-testid="button-back">
+          <ArrowLeft className="h-4 w-4" />
+          Back to Calls
+        </button>
+        <div className="flex items-center gap-2">
+          <button type="button" className={pillButton} onClick={() => prevCall && setLocation(`/calls/${prevCall.id}`)} disabled={!prevCall} data-testid="button-prev-call">
+            <ChevronLeft className="h-4 w-4" />
+            Previous
+          </button>
+          <button type="button" className={pillButton} onClick={() => nextCall && setLocation(`/calls/${nextCall.id}`)} disabled={!nextCall} data-testid="button-next-call">
+            Next
+            <ChevronRight className="h-4 w-4" />
+          </button>
         </div>
+      </div>
 
-        <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
-              {isIncoming ? (
-                <PhoneIncoming className="h-7 w-7 text-white" />
-              ) : (
-                <PhoneOutgoing className="h-7 w-7 text-white" />
-              )}
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="h-11 w-11 rounded-xl bg-[#2F6BFF] flex items-center justify-center shrink-0">
+              <Phone className="h-5 w-5 text-white" />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-2xl md:text-3xl font-bold text-foreground">
-                  {contactName}
-                </h1>
+                <h1 className="text-[17px] font-semibold text-slate-900 truncate">{primaryNumber}</h1>
                 {getEngineBadge(call.engine)}
                 {getWidgetBadge()}
                 {getStatusBadge(call.status)}
-                {getSentimentBadge(call.sentiment)}
               </div>
-              <div className="flex items-center gap-2 mt-0.5 flex-wrap text-muted-foreground">
-                <span>{isIncoming ? "Incoming Call" : "Outgoing Call"}</span>
-                <span>•</span>
-                {isIncoming ? (
-                  <>
-                    <span className="font-mono text-sm">From: {primaryNumber}</span>
-                    {secondaryNumber !== "Your number" && <span className="font-mono text-sm">To: {secondaryNumber}</span>}
-                  </>
-                ) : (
-                  <>
-                    <span className="font-mono text-sm">To: {primaryNumber}</span>
-                    {secondaryNumber !== "Your number" && <span className="font-mono text-sm">From: {secondaryNumber}</span>}
-                  </>
-                )}
-              </div>
+              <p className="text-sm text-slate-500 mt-0.5">
+                {isIncoming ? "Incoming Call" : "Outgoing Call"}
+                {" - "}
+                {isIncoming ? `From: ${primaryNumber}` : `To: ${primaryNumber}`}
+              </p>
             </div>
           </div>
-          {hasRecording && recordingBlobUrl && (
-            <Button 
-              data-testid="button-download"
-              onClick={() => {
-                if (recordingBlobUrl) {
-                  const link = document.createElement('a');
-                  link.href = recordingBlobUrl;
-                  link.download = `call-recording-${call.id}.mp3`;
-                  document.body.appendChild(link);
-                  link.click();
-                  document.body.removeChild(link);
-                }
-              }}
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Download Recording
-            </Button>
-          )}
+          <button
+            type="button"
+            className="h-9 px-3.5 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 inline-flex items-center gap-2 hover:bg-slate-50 shrink-0"
+            onClick={handleExportLogs}
+            data-testid="button-download"
+          >
+            <Download className="h-4 w-4" />
+            Export Logs
+          </button>
         </div>
 
-        {/* Stats Row */}
-        <div className="relative mt-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          <div className="bg-white/80 dark:bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-blue-100/50 dark:border-blue-800/30">
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-              <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">{formatDuration(call.duration)}</div>
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3.5">
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <Clock className="h-4 w-4" />
+              Duration
             </div>
-            <div className="text-blue-600/70 dark:text-blue-400/70 text-sm">Duration</div>
+            <p className="mt-2 text-[22px] leading-none font-semibold text-[#2F6BFF]">{formatDuration(call.duration)}</p>
           </div>
-          <div className="bg-white/80 dark:bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-indigo-100/50 dark:border-indigo-800/30">
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-              <div className="text-lg font-bold text-indigo-700 dark:text-indigo-300">{formatCallDate(call.createdAt)}</div>
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3.5">
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <Calendar className="h-4 w-4" />
+              Date & Time
             </div>
-            <div className="text-indigo-600/70 dark:text-indigo-400/70 text-sm">Date & Time</div>
+            <p className="mt-2 text-sm font-semibold text-slate-900">{dateTimeLabel || "—"}</p>
           </div>
-          <div className="bg-white/80 dark:bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-emerald-100/50 dark:border-emerald-800/30">
-            <div className="flex items-center gap-2">
-              {call.transcript ? (
-                <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              ) : (
-                <XCircle className="h-4 w-4 text-slate-400" />
-              )}
-              <div className="text-lg font-bold text-emerald-700 dark:text-emerald-300">{call.transcript ? "Available" : "None"}</div>
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3.5">
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <MessageSquare className="h-4 w-4" />
+              Transcript
             </div>
-            <div className="text-emerald-600/70 dark:text-emerald-400/70 text-sm">Transcript</div>
+            <p className="mt-2 text-sm font-semibold text-slate-900">{call.transcript ? "Available" : "None"}</p>
           </div>
-          <div className="bg-white/80 dark:bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-sky-100/50 dark:border-sky-800/30">
-            <div className="flex items-center gap-2">
-              {hasRecording ? (
-                <Volume2 className="h-4 w-4 text-sky-600 dark:text-sky-400" />
-              ) : (
-                <XCircle className="h-4 w-4 text-slate-400" />
-              )}
-              <div className="text-lg font-bold text-sky-700 dark:text-sky-300">{hasRecording ? "Available" : "None"}</div>
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3.5">
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <Volume2 className="h-4 w-4" />
+              Recording
             </div>
-            <div className="text-sky-600/70 dark:text-sky-400/70 text-sm">Recording</div>
+            <p className="mt-2 text-sm font-semibold text-slate-900">{hasRecording ? "Available" : "None"}</p>
           </div>
         </div>
       </div>
@@ -671,95 +645,46 @@ export default function CallDetail() {
       )}
 
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
-          <TabsTrigger value="transcription" data-testid="tab-transcription">Transcription</TabsTrigger>
-          <TabsTrigger value="metadata" data-testid="tab-metadata">Client data</TabsTrigger>
+        <TabsList className="h-auto w-full justify-start gap-6 rounded-none bg-transparent p-0 border-b border-slate-200">
+          <TabsTrigger value="overview" className="rounded-none border-b-2 border-transparent px-0 pb-2.5 shadow-none data-[state=active]:border-[#2F6BFF] data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-slate-900 text-slate-500" data-testid="tab-overview">Overview</TabsTrigger>
+          <TabsTrigger value="transcription" className="rounded-none border-b-2 border-transparent px-0 pb-2.5 shadow-none data-[state=active]:border-[#2F6BFF] data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-slate-900 text-slate-500" data-testid="tab-transcription">Transcription</TabsTrigger>
+          <TabsTrigger value="metadata" className="rounded-none border-b-2 border-transparent px-0 pb-2.5 shadow-none data-[state=active]:border-[#2F6BFF] data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-slate-900 text-slate-500" data-testid="tab-metadata">Client data</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-6">
-          {/* AI Summary Card */}
-          <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-indigo-50/80 via-blue-50/50 to-slate-50 dark:from-indigo-950/40 dark:via-blue-950/30 dark:to-slate-950/40 border border-indigo-100/50 dark:border-indigo-900/30 p-6">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-indigo-500/10 to-transparent rounded-full -mr-16 -mt-16" />
-            <div className="relative">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="h-8 w-8 rounded-lg bg-indigo-500/10 dark:bg-indigo-500/20 flex items-center justify-center">
-                  <MessageSquare className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-                </div>
-                <h3 className="text-lg font-semibold text-indigo-900 dark:text-indigo-100">AI Summary</h3>
-              </div>
-              <p className="text-indigo-800/80 dark:text-indigo-200/80 leading-relaxed">
-                {call.aiSummary || "No AI summary available for this call. The call may still be processing or did not complete successfully."}
-              </p>
+        <TabsContent value="overview" className="space-y-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <MessageSquare className="h-4 w-4 text-slate-400" />
+              <h3 className="text-sm font-semibold text-slate-900">AI Summary</h3>
+            </div>
+            <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500 leading-relaxed">
+              {call.aiSummary || "No AI summary available for this call. The call may still be processing or did not complete successfully."}
             </div>
           </div>
 
-          {/* Call Metrics Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {/* Call Status */}
-            <div className="bg-white dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-800 hover-elevate">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="bg-white rounded-xl p-4 border border-slate-200">
               <div className="flex items-center gap-2 mb-3">
                 <CheckCircle2 className="h-4 w-4 text-slate-400" />
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Status</p>
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Status</p>
               </div>
               <div>{getStatusBadge(call.status)}</div>
             </div>
-
-            {/* Duration */}
-            <div className="bg-white dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-800 hover-elevate">
+            <div className="bg-white rounded-xl p-4 border border-slate-200">
               <div className="flex items-center gap-2 mb-3">
                 <Clock className="h-4 w-4 text-slate-400" />
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Duration</p>
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Duration</p>
               </div>
-              <p className="text-2xl font-bold text-foreground">{formatDuration(call.duration)}</p>
+              <p className="text-2xl font-bold text-slate-900">{formatDuration(call.duration)}</p>
             </div>
-
-            {/* Sentiment */}
-            {call.sentiment && (
-              <div className="bg-white dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-800 hover-elevate">
-                <div className="flex items-center gap-2 mb-3">
-                  <Heart className="h-4 w-4 text-slate-400" />
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Sentiment</p>
-                </div>
-                <div>{getSentimentBadge(call.sentiment)}</div>
+            <div className="bg-white rounded-xl p-4 border border-slate-200">
+              <div className="flex items-center gap-2 mb-3">
+                <Calendar className="h-4 w-4 text-slate-400" />
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Call Time</p>
               </div>
-            )}
-
-            {/* Lead Classification */}
-            {call.classification && (
-              <div className="bg-white dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-800 hover-elevate">
-                <div className="flex items-center gap-2 mb-3">
-                  <Target className="h-4 w-4 text-slate-400" />
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Classification</p>
-                </div>
-                <Badge variant="outline" className="text-sm font-medium">
-                  {call.classification.charAt(0).toUpperCase() + call.classification.slice(1)}
-                </Badge>
-              </div>
-            )}
-
-            {/* Call Time */}
-            {call.startedAt && (
-              <div className="bg-white dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-800 hover-elevate">
-                <div className="flex items-center gap-2 mb-3">
-                  <Calendar className="h-4 w-4 text-slate-400" />
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Call Time</p>
-                </div>
-                <p className="text-sm font-medium text-foreground">{format(new Date(call.startedAt), "MMM d, yyyy")}</p>
-                <p className="text-xs text-muted-foreground">{format(new Date(call.startedAt), "h:mm a")}</p>
-              </div>
-            )}
-
-            {/* Direction (for incoming calls) */}
-            {call.callDirection === 'incoming' && (
-              <div className="bg-white dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-800 hover-elevate">
-                <div className="flex items-center gap-2 mb-3">
-                  <PhoneIncoming className="h-4 w-4 text-slate-400" />
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Direction</p>
-                </div>
-                <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20">Incoming</Badge>
-              </div>
-            )}
+              <p className="text-sm font-semibold text-slate-900">{callDateLine}</p>
+              {callClockLine ? <p className="text-xs text-slate-500 mt-0.5">{callClockLine}</p> : null}
+            </div>
           </div>
 
           {/* Contact & Campaign Info */}
@@ -841,7 +766,7 @@ export default function CallDetail() {
         </TabsContent>
 
         <TabsContent value="transcription">
-          <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-slate-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 border border-slate-200 dark:border-slate-800 p-6">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5">
             <div className="flex items-center gap-2 mb-6">
               <div className="h-8 w-8 rounded-lg bg-blue-500/10 dark:bg-blue-500/20 flex items-center justify-center">
                 <MessageSquare className="h-4 w-4 text-blue-600 dark:text-blue-400" />
@@ -971,7 +896,7 @@ export default function CallDetail() {
         </TabsContent>
 
         <TabsContent value="metadata">
-          <Card className="p-6">
+          <Card className="p-5 rounded-2xl border-slate-200 shadow-none">
             <h3 className="text-lg font-semibold mb-4">Call Metadata</h3>
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-2 text-sm">

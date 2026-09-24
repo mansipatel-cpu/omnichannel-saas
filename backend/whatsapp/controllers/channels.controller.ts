@@ -16,7 +16,7 @@
  */
 
 import type { Request, Response } from 'express';
-import { DiployError, asyncHandler as _dHandler, diployLogger, HTTP_STATUS } from "@diploy/core";
+import { diployLogger, HTTP_STATUS } from "@diploy/core";
 import { storage } from '../storage';
 import { insertChannelSchema, Channel, whatsappBusinessAccountsConfig, channelSignupLogs, channels, users } from '@shared/whatsapp-schema';
 import { AppError, asyncHandler } from '../middlewares/error.middleware';
@@ -26,14 +26,14 @@ import { db } from '../db';
 import { eq, ne, desc, like, or, and, sql, count } from 'drizzle-orm';
 import { getOAuthError } from '@shared/whatsapp-error-codes';
 import { MESSAGING_TIER_LIMITS } from '../utils/messaging-tiers';
-import { WhatsAppApiService } from 'server/services/whatsapp-api';
+import { WhatsAppApiService } from '../services/whatsapp-api';
 
 
 
 const WHATSAPP_API_VERSION = process.env.WHATSAPP_API_VERSION || "v25.0";
 
 export const getAllChannels = asyncHandler(async (req: Request, res: Response) => {
-  const user = (req.session as any)?.user;
+  const user = (req as any).session?.user;
   if (!user || user.role !== 'superadmin') {
     return res.status(403).json({ error: 'Access denied' });
   }
@@ -44,7 +44,7 @@ export const getAllChannels = asyncHandler(async (req: Request, res: Response) =
 
 export const getChannels = asyncHandler(async (req: Request, res: Response) => {
   // @ts-ignore: custom property added by auth middleware
-  const user = (req.session as any).user;
+  const user = (req as any).session.user;
 
   if (!user) {
     return res.status(401).json({ message: 'Not authenticated' });
@@ -66,7 +66,7 @@ export const getChannels = asyncHandler(async (req: Request, res: Response) => {
 
 export const getChannelsByUserId = asyncHandler(async (req: Request, res: Response) => {
   const { userId, page = 1, limit = 10 } = req.body;
-  const user = (req.session as any)?.user;
+  const user = (req as any).session?.user;
 
   if (!userId) {
     return res.status(400).json({ message: "userId is required" });
@@ -97,15 +97,15 @@ export const getChannelsByUserId = asyncHandler(async (req: Request, res: Respon
 
 
 // export const getActiveChannel = asyncHandler(async (req: Request, res: Response) => {
-//   const userId =  req.user.id ; 
+//   const userId = req.user?.id; 
 
 //   if(!userId){
-//     throw new AppError(404, 'No active channel found');
+//     throw new AppError('No active channel found', HTTP_STATUS.NOT_FOUND);
 //   }
   
 //   const channel = await storage.getActiveChannelByUserId(userId);
 //   if (!channel) {
-//     throw new AppError(404, 'No active channel found');
+//     throw new AppError('No active channel found', HTTP_STATUS.NOT_FOUND);
 //   }
 //   res.json(channel);
 // });
@@ -115,20 +115,20 @@ export const getChannelsByUserId = asyncHandler(async (req: Request, res: Respon
 //   const user = req.user;
 
 //   if (!user) {
-//     throw new AppError(401, 'User not found');
+//     throw new AppError('User not found', HTTP_STATUS.UNAUTHORIZED);
 //   }
 
 //   // 🟩 Team member? use parent user (createdBy)
-//   const userId = user.role === "team" ? user.createdBy : user.id;
+//   const userId = user.role === "team" ? (user as { createdBy?: string }).createdBy : user.id;
 
 //   if (!userId) {
-//     throw new AppError(404, 'No active channel found');
+//     throw new AppError('No active channel found', HTTP_STATUS.NOT_FOUND);
 //   }
 
 //   const channel = await storage.getActiveChannelByUserId(userId);
 
 //   if (!channel) {
-//     throw new AppError(404, 'No active channel found');
+//     throw new AppError('No active channel found', HTTP_STATUS.NOT_FOUND);
 //   }
 
 //   res.json(channel);
@@ -139,20 +139,20 @@ export const getActiveChannel = asyncHandler(async (req: Request, res: Response)
   const user = req.user;
 
   if (!user) {
-    throw new AppError(401, 'User not found');
+    throw new AppError('User not found', HTTP_STATUS.UNAUTHORIZED);
   }
 
   // 🟩 Team member? use parent user (createdBy)
-  const userId = user.role === "team" ? user.createdBy : user.id;
+  const userId = user.role === "team" ? (user as { createdBy?: string }).createdBy : user.id;
 
   if (!userId) {
-    throw new AppError(404, 'No active channel found');
+    throw new AppError('No active channel found', HTTP_STATUS.NOT_FOUND);
   }
 
   const channel = await storage.getActiveChannelByUserId(userId);
 
   if (!channel) {
-    throw new AppError(404, 'No active channel found');
+    throw new AppError('No active channel found', HTTP_STATUS.NOT_FOUND);
   }
 
   // ✅ Messaging limit fetch karo Meta se
@@ -232,6 +232,7 @@ export async function subscribeChannelToWebhook(channel: {
   whatsappBusinessAccountId?: string | null;
   accessToken: string;
   name: string;
+  phoneNumberId?: string;
 }): Promise<{ success: boolean; error?: string }> {
   const wabaId = channel.whatsappBusinessAccountId;
   if (!wabaId) {
@@ -259,7 +260,7 @@ export async function subscribeChannelToWebhook(channel: {
 export const createChannel = asyncHandler(async (req: Request, res: Response) => {
   const validatedChannel = insertChannelSchema.parse(req.body);
   // 2️⃣ Add creator info 
-  const createdBy = (req.session as any).user.id || 'unknown';
+  const createdBy = (req as any).session.user.id || 'unknown';
   validatedChannel.createdBy = createdBy;
   validatedChannel.connectionMethod = 'manual';
   // Newly added channels should be visible/active by default
@@ -359,7 +360,7 @@ export const createChannel = asyncHandler(async (req: Request, res: Response) =>
 export const disconnectChannel = asyncHandler(
   async (req: Request, res: Response) => {
     const { id } = req.params;
-    const user = (req.session as any).user;
+    const user = (req as any).session.user;
 
     if (!user) {
       return res.status(401).json({ message: "Not authenticated" });
@@ -367,7 +368,7 @@ export const disconnectChannel = asyncHandler(
 
     const channel = await storage.getChannel(id);
     if (!channel) {
-      throw new AppError(404, "Channel not found");
+      throw new AppError("Channel not found", HTTP_STATUS.NOT_FOUND);
     }
 
     if (user.role !== "superadmin" && channel.createdBy !== user.id) {
@@ -401,7 +402,7 @@ export const disconnectChannel = asyncHandler(
 export const embeddedSignup = asyncHandler(
   async (req: Request, res: Response) => {
     const { code, coexistence } = req.body;
-    const user = (req.session as any).user;
+    const user = (req as any).session.user;
 
     if (!code) {
       return res.status(400).json({ message: "Code missing" });
@@ -774,10 +775,10 @@ export const embeddedSignup = asyncHandler(
 
 export const updateChannel = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const userId =  req.user.id ; 
+  const userId = req.user?.id;
 
-  if(!userId){
-    throw new AppError(404, 'No active channel found');
+  if (!userId) {
+    throw new AppError('Not authenticated', HTTP_STATUS.UNAUTHORIZED);
   }
   
   // If setting this channel as active, deactivate all others
@@ -792,7 +793,7 @@ export const updateChannel = asyncHandler(async (req: Request, res: Response) =>
   
   const channel = await storage.updateChannel(id, req.body);
   if (!channel) {
-    throw new AppError(404, 'Channel not found');
+    throw new AppError('Channel not found', HTTP_STATUS.NOT_FOUND);
   }
 
   // Re-subscribe to webhooks whenever access token or WABA ID key is present in the update payload
@@ -810,14 +811,14 @@ export const updateChannel = asyncHandler(async (req: Request, res: Response) =>
 
 export const deleteChannel = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const user = (req.session as any)?.user;
+  const user = (req as any).session?.user;
   if (!user) {
     return res.status(401).json({ error: 'Not authenticated' });
   }
 
   const channel = await storage.getChannel(id);
   if (!channel) {
-    throw new AppError(404, 'Channel not found');
+    throw new AppError('Channel not found', HTTP_STATUS.NOT_FOUND);
   }
 
   if (user.role !== 'superadmin' && channel.createdBy !== user.id) {
@@ -826,7 +827,7 @@ export const deleteChannel = asyncHandler(async (req: Request, res: Response) =>
 
   const success = await storage.deleteChannel(id);
   if (!success) {
-    throw new AppError(404, 'Channel not found');
+    throw new AppError('Channel not found', HTTP_STATUS.NOT_FOUND);
   }
   res.status(204).send();
 });
@@ -835,7 +836,7 @@ export const deleteChannel = asyncHandler(async (req: Request, res: Response) =>
 //   const { id } = req.params;
 //   const channel = await storage.getChannel(id);
 //   if (!channel) {
-//     throw new AppError(404, 'Channel not found');
+//     throw new AppError('Channel not found', HTTP_STATUS.NOT_FOUND);
 //   }
 
 //   try {
@@ -934,7 +935,7 @@ export const checkChannelHealth = asyncHandler(async (req: Request, res: Respons
   const { id } = req.params;
   const channel = await storage.getChannel(id);
   if (!channel) {
-    throw new AppError(404, 'Channel not found');
+    throw new AppError('Channel not found', HTTP_STATUS.NOT_FOUND);
   }
 
   try {
@@ -1035,10 +1036,10 @@ export const getDisplayName = asyncHandler(async (req: Request, res: Response) =
   const { id } = req.params;
   const channel = await storage.getChannel(id);
   if (!channel) {
-    throw new AppError(404, 'Channel not found');
+    throw new AppError('Channel not found', HTTP_STATUS.NOT_FOUND);
   }
 
-  const user = (req.session as any)?.user;
+  const user = (req as any).session?.user;
   if (user?.role !== 'superadmin' && channel.createdBy !== user?.id) {
     return res.status(403).json({ error: 'Access denied' });
   }
@@ -1093,10 +1094,10 @@ export const updateDisplayName = asyncHandler(async (req: Request, res: Response
 
   const channel = await storage.getChannel(id);
   if (!channel) {
-    throw new AppError(404, 'Channel not found');
+    throw new AppError('Channel not found', HTTP_STATUS.NOT_FOUND);
   }
 
-  const user = (req.session as any)?.user;
+  const user = (req as any).session?.user;
   if (user?.role !== 'superadmin' && channel.createdBy !== user?.id) {
     return res.status(403).json({ error: 'Access denied' });
   }
@@ -1152,7 +1153,7 @@ export const getBusinessProfile = asyncHandler(async (req: Request, res: Respons
     return res.status(404).json({ error: 'Channel not found' });
   }
 
-  const user = (req.session as any)?.user;
+  const user = (req as any).session?.user;
   if (user?.role !== 'superadmin' && channel.createdBy !== user?.id) {
     return res.status(403).json({ error: 'Access denied' });
   }
@@ -1178,7 +1179,7 @@ export const updateBusinessProfile = asyncHandler(async (req: Request, res: Resp
     return res.status(404).json({ error: 'Channel not found' });
   }
 
-  const user = (req.session as any)?.user;
+  const user = (req as any).session?.user;
   if (user?.role !== 'superadmin' && channel.createdBy !== user?.id) {
     return res.status(403).json({ error: 'Access denied' });
   }
@@ -1253,7 +1254,7 @@ export const uploadProfilePhoto = asyncHandler(async (req: Request, res: Respons
     return res.status(404).json({ error: 'Channel not found' });
   }
 
-  const user = (req.session as any)?.user;
+  const user = (req as any).session?.user;
   if (user?.role !== 'superadmin' && channel.createdBy !== user?.id) {
     return res.status(403).json({ error: 'Access denied' });
   }
@@ -1617,16 +1618,16 @@ export const getSignupLogs = asyncHandler(async (req: Request, res: Response) =>
  */
 export const getWebhookSubscription = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const requestingUser = (req.session as any)?.user;
-  if (!requestingUser) throw new AppError(401, "Not authenticated");
+  const requestingUser = (req as any).session?.user;
+  if (!requestingUser) throw new AppError("Not authenticated", HTTP_STATUS.UNAUTHORIZED);
 
   const channel = await storage.getChannel(id);
   if (!channel) {
-    throw new AppError(404, "Channel not found");
+    throw new AppError("Channel not found", HTTP_STATUS.NOT_FOUND);
   }
 
   if (requestingUser.role !== "superadmin" && channel.createdBy !== requestingUser.id) {
-    throw new AppError(403, "Access denied");
+    throw new AppError("Access denied", HTTP_STATUS.FORBIDDEN);
   }
 
   const wabaId = channel.whatsappBusinessAccountId;
@@ -1683,16 +1684,16 @@ export const getWebhookSubscription = asyncHandler(async (req: Request, res: Res
  */
 export const resubscribeWebhook = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const requestingUser = (req.session as any)?.user;
-  if (!requestingUser) throw new AppError(401, "Not authenticated");
+  const requestingUser = (req as any).session?.user;
+  if (!requestingUser) throw new AppError("Not authenticated", HTTP_STATUS.UNAUTHORIZED);
 
   const channel = await storage.getChannel(id);
   if (!channel) {
-    throw new AppError(404, "Channel not found");
+    throw new AppError("Channel not found", HTTP_STATUS.NOT_FOUND);
   }
 
   if (requestingUser.role !== "superadmin" && channel.createdBy !== requestingUser.id) {
-    throw new AppError(403, "Access denied");
+    throw new AppError("Access denied", HTTP_STATUS.FORBIDDEN);
   }
 
   const result = await subscribeChannelToWebhook(channel);
@@ -1707,8 +1708,8 @@ export const resubscribeWebhook = asyncHandler(async (req: Request, res: Respons
  * Re-subscribe ALL active channels to webhook events (bulk operation).
  */
 export const resubscribeAllWebhooks = asyncHandler(async (req: Request, res: Response) => {
-  const requestingUser = (req.session as any)?.user;
-  if (!requestingUser) throw new AppError(401, "Not authenticated");
+  const requestingUser = (req as any).session?.user;
+  if (!requestingUser) throw new AppError("Not authenticated", HTTP_STATUS.UNAUTHORIZED);
 
   // Superadmin can resubscribe all channels; regular users only their own
   const allChannels =

@@ -460,13 +460,94 @@ getCampaignByUserID: asyncHandler(async (req, res) => {
     res.json(campaign);
   }),
 
-  // Delete campaign
+  // Delete campaign (soft-delete → Deleted Campaigns; restorable)
   deleteCampaign: asyncHandler(async (req, res) => {
     const deleted = await storage.deleteCampaign(req.params.id);
     if (!deleted) {
       return res.status(404).json({ error: "Campaign not found" });
     }
     res.json({ success: true });
+  }),
+
+  // List soft-deleted WhatsApp campaigns
+  getDeletedCampaigns: asyncHandler(async (req, res) => {
+    const channelId = req.headers["x-channel-id"] as string;
+    const page = Number(req.query.page || 1);
+    const limit = Number(req.query.limit || 100);
+    const user = (req.session as any)?.user;
+
+    let result: { data: any[]; total: number; page: number; limit: number };
+
+    if (channelId) {
+      if (user && user.role !== "superadmin") {
+        const ownerId = user.role === "team" ? user.createdBy : user.id;
+        const channels = await storage.getChannelsByUserId(ownerId);
+        const channelIds = channels.map((ch: any) => ch.id);
+        if (!channelIds.includes(channelId)) {
+          return res.status(403).json({ error: "Access denied to this channel" });
+        }
+      }
+      result = await storage.getDeletedCampaignsByChannel(channelId, page, limit);
+    } else if (user && user.role === "superadmin") {
+      result = await storage.getDeletedCampaigns(page, limit);
+    } else {
+      const ownerId = user?.role === "team" ? user?.createdBy : user?.id;
+      if (!ownerId) {
+        return res.json({ data: [], total: 0, page, limit });
+      }
+      const channels = await storage.getChannelsByUserId(ownerId);
+      const byChannels =
+        channels.length > 0
+          ? await storage.getDeletedCampaignsByChannelIds(
+              channels.map((ch: any) => ch.id),
+              page,
+              Math.max(limit, 200)
+            )
+          : { data: [], total: 0, page, limit };
+      const byUser = await storage.getDeletedCampaignsByUserId(ownerId, page, Math.max(limit, 200));
+      const seen = new Set<string>();
+      const merged: any[] = [];
+      for (const campaign of [...byChannels.data, ...byUser.data]) {
+        if (seen.has(campaign.id)) continue;
+        seen.add(campaign.id);
+        merged.push(campaign);
+      }
+      merged.sort((a, b) => {
+        const aTime = new Date(a.deletedAt || a.updatedAt || 0).getTime();
+        const bTime = new Date(b.deletedAt || b.updatedAt || 0).getTime();
+        return bTime - aTime;
+      });
+      result = { data: merged.slice(0, limit), total: merged.length, page, limit };
+    }
+
+    res.json(result.data);
+  }),
+
+  // Restore a soft-deleted WhatsApp campaign
+  restoreCampaign: asyncHandler(async (req, res) => {
+    const existing = await storage.getCampaignIncludingDeleted(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ error: "Campaign not found" });
+    }
+    if (existing.status !== "deleted") {
+      return res.status(400).json({ error: "Campaign is not deleted" });
+    }
+
+    const user = (req.session as any)?.user;
+    if (user && user.role !== "superadmin" && existing.channelId) {
+      const ownerId = user.role === "team" ? user.createdBy : user.id;
+      const channels = await storage.getChannelsByUserId(ownerId);
+      const channelIds = channels.map((ch: any) => ch.id);
+      if (!channelIds.includes(existing.channelId)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+    }
+
+    const restored = await storage.restoreCampaign(req.params.id);
+    if (!restored) {
+      return res.status(404).json({ error: "Campaign not found" });
+    }
+    res.json(restored);
   }),
 
   // Start campaign execution

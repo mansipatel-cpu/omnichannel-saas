@@ -123,12 +123,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           const { h, s, l } = hslData;
           const hslStr = `hsl(${h}, ${s}%, ${l}%)`;
           
+          const isDark = l < 60; // Using 60 as threshold for better readability on light-ish colors
+
           root.style.setProperty('--background', hslStr);
           root.style.setProperty('--card', hslStr);
-          root.style.setProperty('--popover', hslStr);
-          
-          // Contrast logic for text and UI elements
-          const isDark = l < 60; // Using 60 as threshold for better readability on light-ish colors
+          root.style.setProperty('--popover', isDark ? hslStr : 'hsl(0, 0%, 100%)');
           
           const foreground = isDark ? "hsl(0, 0%, 100%)" : "hsl(240, 10%, 3.9%)";
           const mutedForeground = isDark ? "hsl(240, 5%, 80%)" : "hsl(240, 3.8%, 46.1%)";

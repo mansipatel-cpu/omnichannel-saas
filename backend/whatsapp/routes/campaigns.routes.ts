@@ -32,6 +32,14 @@ export function registerCampaignRoutes(app: Express) {
     campaignsController.getCampaigns
   );
 
+  // Soft-deleted campaigns (must be before /:id)
+  app.get("/api/whatsapp/campaigns/deleted",
+    extractChannelId,
+    requireAuth,
+    requirePermission(PERMISSIONS.CAMPAIGNS_VIEW),
+    campaignsController.getDeletedCampaigns
+  );
+
   // Get campaign by ID
   app.get("/api/whatsapp/campaigns/:id", requireAuth,
     requirePermission(PERMISSIONS.CAMPAIGNS_VIEW),
@@ -65,7 +73,13 @@ export function registerCampaignRoutes(app: Express) {
     campaignsController.updateCampaignStatus
   );
 
-  // Delete campaign
+  // Restore soft-deleted campaign
+  app.patch("/api/whatsapp/campaigns/:id/restore", requireAuth,
+    requirePermission(PERMISSIONS.CAMPAIGNS_EDIT),
+    campaignsController.restoreCampaign
+  );
+
+  // Delete campaign (soft-delete)
   app.delete("/api/whatsapp/campaigns/:id", requireAuth,
     requirePermission(PERMISSIONS.CAMPAIGNS_DELETE),
     campaignsController.deleteCampaign

@@ -18,10 +18,9 @@ import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
-import { Plus, Phone, Trash2, Link as LinkIcon, PhoneIncoming, Bot, ArrowRight, Mic } from "lucide-react";
+import { Plus, Phone, Trash2, Link as LinkIcon, ArrowRight, Mic } from "lucide-react";
 import { SiOpenai, SiTwilio } from "react-icons/si";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -32,6 +31,7 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/comp
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePluginStatus } from "@/hooks/use-plugin-status";
+import { useAppHeaderOptional } from "@/components/AppPageHeader";
 
 // ElevenLabs icon SVG component
 function ElevenLabsIcon({ className }: { className?: string }) {
@@ -175,6 +175,13 @@ export default function IncomingConnectionsPage() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const setPageMeta = useAppHeaderOptional()?.setPageMeta;
+
+  useEffect(() => {
+    if (!setPageMeta) return;
+    setPageMeta({ hideTitle: true });
+    return () => setPageMeta(null);
+  }, [setPageMeta]);
   const [activeTab, setActiveTab] = useState<EngineTab>('twilio-elevenlabs');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [deleteConnection, setDeleteConnection] = useState<IncomingConnection | null>(null);
@@ -228,24 +235,7 @@ export default function IncomingConnectionsPage() {
   });
   const isFreePlan = currentUser?.planType === 'free';
 
-  // Calculate enabled engines for tab columns
-  const enabledEngineCount = useMemo(() => {
-    let count = 1; // Twilio + ElevenLabs is always enabled
-    if (isCustomVoiceEngineEnabled) count++;
-    if (plivoEnabled) count++;
-    if (twilioOpenaiEnabled) count++;
-    return count;
-  }, [isCustomVoiceEngineEnabled, plivoEnabled, twilioOpenaiEnabled]);
-
-  // Reset activeTab to always-enabled engine if current tab becomes disabled
-  useEffect(() => {
-    if (activeTab === 'plivo-openai' && !plivoEnabled) {
-      setActiveTab('twilio-elevenlabs');
-    }
-    if (activeTab === 'twilio-openai' && !twilioOpenaiEnabled) {
-      setActiveTab('twilio-elevenlabs');
-    }
-  }, [activeTab, plivoEnabled, twilioOpenaiEnabled]);
+  const tabCount = isCustomVoiceEngineEnabled ? 4 : 3;
 
   // Filter connections and agents by provider
   const rawConnections = data?.connections || [];
@@ -546,242 +536,200 @@ export default function IncomingConnectionsPage() {
   // Calculate total stats
   const totalConnections = connections.length + plivoStats.totalConnections + twilioOpenaiStats.totalConnections;
 
+  const engineTileClass = (isActive: boolean) =>
+    `rounded-xl border bg-white px-4 py-3.5 cursor-pointer transition-all ${
+      isActive ? "border-[#C7D7FF] shadow-sm" : "border-slate-200 hover:border-slate-300"
+    }`;
+
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-50 via-gray-50 to-zinc-50 dark:from-slate-950/40 dark:via-gray-900/30 dark:to-zinc-950/40 border p-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-slate-600 to-gray-700 flex items-center justify-center shadow-lg">
-              <PhoneIncoming className="h-6 w-6 text-white" />
+    <div className="space-y-4">
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center w-11 h-11 rounded-xl bg-slate-900">
+              <LinkIcon className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground" data-testid="heading-incoming-connections">
+              <h1 className="text-[17px] font-semibold text-slate-900 leading-tight" data-testid="heading-incoming-connections">
                 {t("incomingConnections.title")}
               </h1>
-              <p className="text-sm text-muted-foreground">
-                {t("incomingConnections.subtitle")}
+              <p className="text-sm text-slate-500 mt-0.5">
+                {t("incomingConnections.subtitle", { defaultValue: "Connect incoming agents to your phone numbers for receiving calls" })}
               </p>
             </div>
           </div>
-          <Button onClick={handleNewConnection} data-testid="button-create-connection">
-            <Plus className="w-4 h-4 mr-2" />
-           { t("incomingConnections.newconnection" , 'New Connection ')}
-          </Button>
+          <button
+            type="button"
+            onClick={handleNewConnection}
+            className="h-9 px-4 rounded-full bg-slate-900 text-white text-sm font-medium inline-flex items-center gap-1.5 hover:bg-slate-800"
+            data-testid="button-create-connection"
+          >
+            <Plus className="w-4 h-4" />
+            {t("incomingConnections.newconnection", { defaultValue: "New Connection" })}
+          </button>
         </div>
 
-        {/* Engine Summary Cards */}
-        <div className={`mt-6 grid grid-cols-1 gap-4 ${
-          enabledEngineCount === 1 ? 'md:grid-cols-1' : 
-          enabledEngineCount === 2 ? 'md:grid-cols-2' : 
-          enabledEngineCount === 3 ? 'md:grid-cols-3' : 
-          'md:grid-cols-4'
-        }`}>
-          {/* Twilio + ElevenLabs Summary - Always shown */}
-          <div 
-            className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-              activeTab === 'twilio-elevenlabs' 
-                ? 'border-violet-500 bg-violet-500/10 dark:bg-violet-500/20' 
-                : 'border-border bg-background/50 hover:border-violet-300'
-            }`}
+        <div className={`grid grid-cols-1 gap-3 ${tabCount === 4 ? "md:grid-cols-4" : "md:grid-cols-3"}`}>
+          <div
+            className={engineTileClass(activeTab === 'twilio-elevenlabs')}
             onClick={() => setActiveTab('twilio-elevenlabs')}
             data-testid="engine-card-twilio-elevenlabs"
           >
             <div className="flex items-center gap-2 mb-2">
+              <span className="h-2 w-2 rounded-full bg-red-500" />
               <SiTwilio className="h-4 w-4 text-red-500" />
-              <span className="font-medium text-sm">+</span>
+              <span className="text-slate-400">+</span>
               <ElevenLabsIcon className="h-4 w-4 text-violet-600" />
-              <span className="font-semibold text-sm">Twilio + ElevenLabs</span>
+              <span className="text-sm font-medium text-slate-800">Twilio + ElevenLabs</span>
             </div>
-            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-              <span><strong className="text-violet-600">{connections.length}</strong> active</span>
-              <span><strong>{availablePhoneNumbers.length}</strong> available</span>
-              <span><strong>{agents.length}</strong> agents</span>
-            </div>
+            <p className="text-xs text-slate-500">
+              {connections.length} active · {availablePhoneNumbers.length} available · {agents.length} agents
+            </p>
           </div>
 
-          {/* Custom Voice Engine Summary - Only shown when enabled */}
-          {isCustomVoiceEngineEnabled && (
-            <div 
-              className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                activeTab === 'custom-voice' 
-                  ? 'border-indigo-500 bg-indigo-500/10 dark:bg-indigo-500/20' 
-                  : 'border-border bg-background/50 hover:border-indigo-300'
-              }`}
-              onClick={() => setActiveTab('custom-voice')}
-              data-testid="engine-card-custom-voice"
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <Mic className="h-4 w-4 text-indigo-600" />
-                <span className="font-semibold text-sm">Custom Voice</span>
-              </div>
-              <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                <span><strong className="text-indigo-600">{cveConnections.length}</strong> active</span>
-                <span><strong>{allAvailableNumbersForCve.length}</strong> available</span>
-                <span><strong>{cveAgents.length}</strong> agents</span>
-              </div>
-            </div>
-          )}
-
-          {/* Plivo + OpenAI Summary - Only shown when enabled */}
-          {plivoEnabled && (
-            <div 
-              className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                activeTab === 'plivo-openai' 
-                  ? 'border-emerald-500 bg-emerald-500/10 dark:bg-emerald-500/20' 
-                  : 'border-border bg-background/50 hover:border-emerald-300'
-              }`}
+          <div
+              className={engineTileClass(activeTab === 'plivo-openai')}
               onClick={() => setActiveTab('plivo-openai')}
               data-testid="engine-card-plivo-openai"
             >
               <div className="flex items-center gap-2 mb-2">
-                <Phone className="h-4 w-4 text-green-600" />
-                <span className="font-medium text-sm">+</span>
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                <Phone className="h-4 w-4 text-emerald-600" />
+                <span className="text-slate-400">+</span>
                 <SiOpenai className="h-4 w-4 text-emerald-600" />
-                <span className="font-semibold text-sm">Plivo + OpenAI</span>
+                <span className="text-sm font-medium text-slate-800">Plivo + OpenAI</span>
               </div>
-              <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                <span><strong className="text-emerald-600">{plivoStats.totalConnections}</strong> active</span>
-                <span><strong>{plivoStats.availableNumbers}</strong> available</span>
-                <span><strong>{plivoStats.totalAgents}</strong> agents</span>
-              </div>
+              <p className="text-xs text-slate-500">
+                {plivoStats.totalConnections} active · {plivoStats.availableNumbers} available · {plivoStats.totalAgents} agents
+              </p>
             </div>
-          )}
 
-          {/* Twilio + OpenAI Summary - Only shown when enabled */}
-          {twilioOpenaiEnabled && (
-            <div 
-              className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                activeTab === 'twilio-openai' 
-                  ? 'border-brand bg-brand/10 dark:bg-brand/20' 
-                  : 'border-border bg-background/50 hover:border-brand/30'
-              }`}
+          <div
+              className={engineTileClass(activeTab === 'twilio-openai')}
               onClick={() => setActiveTab('twilio-openai')}
               data-testid="engine-card-twilio-openai"
             >
               <div className="flex items-center gap-2 mb-2">
+                <span className="h-2 w-2 rounded-full bg-red-400" />
                 <SiTwilio className="h-4 w-4 text-red-500" />
-                <span className="font-medium text-sm">+</span>
-                <SiOpenai className="h-4 w-4 text-brand" />
-                <span className="font-semibold text-sm">Twilio + OpenAI</span>
+                <span className="text-slate-400">+</span>
+                <SiOpenai className="h-4 w-4 text-emerald-600" />
+                <span className="text-sm font-medium text-slate-800">Twilio + OpenAI</span>
               </div>
-              <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                <span><strong className="text-brand">{twilioOpenaiStats.totalConnections}</strong> active</span>
-                <span><strong>{twilioOpenaiStats.availableNumbers}</strong> available</span>
-                <span><strong>{twilioOpenaiStats.totalAgents}</strong> agents</span>
+              <p className="text-xs text-slate-500">
+                {twilioOpenaiStats.totalConnections} active · {twilioOpenaiStats.availableNumbers} available · {twilioOpenaiStats.totalAgents} agents
+              </p>
+            </div>
+
+          {isCustomVoiceEngineEnabled && (
+            <div
+              className={engineTileClass(activeTab === 'custom-voice')}
+              onClick={() => setActiveTab('custom-voice')}
+              data-testid="engine-card-custom-voice"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <span className="h-2 w-2 rounded-full bg-indigo-500" />
+                <Mic className="h-4 w-4 text-indigo-600" />
+                <span className="text-sm font-medium text-slate-800">Custom Voice</span>
               </div>
+              <p className="text-xs text-slate-500">
+                {cveConnections.length} active · {allAvailableNumbersForCve.length} available · {cveAgents.length} agents
+              </p>
             </div>
           )}
         </div>
-      </div>
 
-      {/* Tabbed Content */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as EngineTab)} className="w-full">
-        <TabsList className={`grid w-full mb-4 ${
-          enabledEngineCount === 1 ? 'grid-cols-1' : 
-          enabledEngineCount === 2 ? 'grid-cols-2' : 
-          enabledEngineCount === 3 ? 'grid-cols-3' : 
-          'grid-cols-4'
-        }`}>
-          <TabsTrigger value="twilio-elevenlabs" className="flex items-center gap-2" data-testid="tab-twilio-elevenlabs">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as EngineTab)} className="w-full pt-1">
+        <TabsList className={`grid w-full mb-2 h-11 rounded-xl bg-slate-100 p-1 ${tabCount === 4 ? "grid-cols-4" : "grid-cols-3"}`}>
+          <TabsTrigger value="twilio-elevenlabs" className="flex items-center gap-2 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm" data-testid="tab-twilio-elevenlabs">
             <SiTwilio className="h-3.5 w-3.5 text-red-500" />
             <ElevenLabsIcon className="h-3.5 w-3.5 text-violet-600" />
-            <span className="hidden sm:inline">Twilio + ElevenLabs</span>
+            <span className="hidden sm:inline text-slate-700">Twilio + ElevenLabs</span>
+          </TabsTrigger>
+          <TabsTrigger value="plivo-openai" className="flex items-center gap-2 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm" data-testid="tab-plivo-openai">
+              <Phone className="h-3.5 w-3.5 text-emerald-600" />
+              <SiOpenai className="h-3.5 w-3.5 text-emerald-600" />
+              <span className="hidden sm:inline text-slate-700">Plivo + OpenAI</span>
+          </TabsTrigger>
+          <TabsTrigger value="twilio-openai" className="flex items-center gap-2 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm" data-testid="tab-twilio-openai">
+              <SiTwilio className="h-3.5 w-3.5 text-red-500" />
+              <SiOpenai className="h-3.5 w-3.5 text-emerald-600" />
+            <span className="hidden sm:inline text-slate-700">Twilio + OpenAI</span>
           </TabsTrigger>
           {isCustomVoiceEngineEnabled && (
-            <TabsTrigger value="custom-voice" className="flex items-center gap-2" data-testid="tab-custom-voice">
+            <TabsTrigger value="custom-voice" className="flex items-center gap-2 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm" data-testid="tab-custom-voice">
               <Mic className="h-3.5 w-3.5 text-indigo-600" />
-              <span className="hidden sm:inline">Custom Voice</span>
-            </TabsTrigger>
-          )}
-          {plivoEnabled && (
-            <TabsTrigger value="plivo-openai" className="flex items-center gap-2" data-testid="tab-plivo-openai">
-              <Phone className="h-3.5 w-3.5 text-green-600" />
-              <SiOpenai className="h-3.5 w-3.5 text-emerald-600" />
-              <span className="hidden sm:inline">Plivo + OpenAI</span>
-            </TabsTrigger>
-          )}
-          {twilioOpenaiEnabled && (
-            <TabsTrigger value="twilio-openai" className="flex items-center gap-2" data-testid="tab-twilio-openai">
-              <SiTwilio className="h-3.5 w-3.5 text-red-500" />
-              <SiOpenai className="h-3.5 w-3.5 text-brand" />
-              <span className="hidden sm:inline">Twilio + OpenAI</span>
+              <span className="hidden sm:inline text-slate-700">Custom Voice</span>
             </TabsTrigger>
           )}
         </TabsList>
 
         {/* Twilio + ElevenLabs Content */}
         <TabsContent value="twilio-elevenlabs">
-          <Card>
-            <CardContent className="pt-6">
               {connectionsLoading ? (
-                <div className="space-y-4">
+                <div className="space-y-3 p-6">
                   {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-20 bg-muted animate-pulse rounded-lg" />
+                    <div key={i} className="h-20 bg-slate-100 animate-pulse rounded-xl" />
                   ))}
                 </div>
               ) : connections.length === 0 ? (
-                <div className="text-center py-12" data-testid="empty-state">
-                  <LinkIcon className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">{t("incomingConnections.empty.title")}</h3>
-                  <p className="text-sm text-muted-foreground mb-6">
-                    {t("incomingConnections.empty.description")}
+                <div className="text-center py-20 px-6" data-testid="empty-state">
+                  <LinkIcon className="mx-auto h-12 w-12 text-slate-800 mb-4" />
+                  <h3 className="text-lg font-semibold text-slate-900 mb-2">{t("incomingConnections.empty.title", { defaultValue: "No connections" })}</h3>
+                  <p className="text-sm text-slate-500 mb-6 max-w-md mx-auto">
+                    {t("incomingConnections.empty.description", { defaultValue: "Create your first connection to start receiving calls on your phone numbers" })}
                   </p>
-                  <Button 
+                  <button
+                    type="button"
                     onClick={() => setCreateDialogOpen(true)}
-                    disabled={availablePhoneNumbers.length === 0 || agents.length === 0}
-                    className="bg-violet-600 hover:bg-violet-700"
+                    className="h-10 px-5 rounded-full bg-[#6D5EF6] hover:bg-[#5B4CE6] text-white text-sm font-medium inline-flex items-center gap-1.5 disabled:opacity-50"
                     data-testid="button-create-first-connection"
                   >
-                    <Plus className="w-4 h-4 mr-2" />
-                    {t("incomingConnections.empty.createFirst")}
-                  </Button>
+                    <Plus className="w-4 h-4" />
+                    {t("incomingConnections.empty.createFirst", { defaultValue: "Create Your First Connection" })}
+                  </button>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-3 p-5">
                   {connections.map((connection) => (
                     <div
                       key={connection.id}
-                      className="flex items-center justify-between p-4 border rounded-lg hover-elevate bg-card"
+                      className="flex items-center justify-between p-4 border border-slate-200 rounded-xl bg-white"
                       data-testid={`connection-card-${connection.id}`}
                     >
                       <div className="flex items-center gap-4">
-                        <Badge variant="secondary" className="font-mono text-xs bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
+                        <span className="font-mono text-xs bg-slate-100 text-slate-700 rounded-full px-2.5 py-1">
                           {connection.phoneNumber.phoneNumber}
-                        </Badge>
-                        <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                        </span>
+                        <ArrowRight className="h-4 w-4 text-slate-400" />
                         <div>
                           <div className="flex items-center gap-2">
                             <ElevenLabsIcon className="h-4 w-4 text-violet-600" />
-                            <span className="font-medium">{connection.agent.name}</span>
+                            <span className="font-medium text-slate-900">{connection.agent.name}</span>
                           </div>
-                          <div className="text-xs text-muted-foreground mt-0.5">
+                          <div className="text-xs text-slate-500 mt-0.5">
                             {connection.phoneNumber.friendlyName && `${connection.phoneNumber.friendlyName} • `}
                             Language: {connection.agent.language || 'en'}
                           </div>
                         </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
+                      <button
+                        type="button"
+                        className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50"
                         onClick={() => setDeleteConnection(connection)}
                         data-testid={`button-delete-${connection.id}`}
                       >
-                        <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
-                      </Button>
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
         </TabsContent>
 
         {/* Custom Voice Content */}
         {isCustomVoiceEngineEnabled && (
         <TabsContent value="custom-voice">
-          <Card>
-            <CardContent className="pt-6">
               {connectionsLoading ? (
                 <div className="space-y-4">
                   {[1, 2, 3].map((i) => (
@@ -789,20 +737,21 @@ export default function IncomingConnectionsPage() {
                   ))}
                 </div>
               ) : cveConnections.length === 0 ? (
-                <div className="text-center py-12" data-testid="cve-empty-state">
-                  <LinkIcon className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No Custom Voice Connections Yet</h3>
-                  <p className="text-sm text-muted-foreground mb-6">
-                    Connect any phone number to a Custom Voice Engine agent.
+                <div className="text-center py-20 px-6" data-testid="cve-empty-state">
+                  <LinkIcon className="mx-auto h-12 w-12 text-slate-800 mb-4" />
+                  <h3 className="text-lg font-semibold text-slate-900 mb-2">No connections</h3>
+                  <p className="text-sm text-slate-500 mb-6 max-w-md mx-auto">
+                    Create your first connection to start receiving calls on your phone numbers
                   </p>
-                  <Button 
+                  <button
+                    type="button"
                     onClick={() => setCveCreateDialogOpen(true)}
                     disabled={allAvailableNumbersForCve.length === 0 || cveAgents.length === 0}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                    className="h-10 px-5 rounded-full bg-[#6D5EF6] hover:bg-[#5B4CE6] text-white text-sm font-medium inline-flex items-center gap-1.5 disabled:opacity-50"
                   >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Create First Connection
-                  </Button>
+                    <Plus className="w-4 h-4" />
+                    Create Your First Connection
+                  </button>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -838,45 +787,32 @@ export default function IncomingConnectionsPage() {
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
         </TabsContent>)}
 
         {/* Plivo + OpenAI Content */}
-        {plivoEnabled && (
         <TabsContent value="plivo-openai">
-          <Card>
-            <CardContent className="pt-6">
               {plivoConnectionsLoading ? (
                 <div className="space-y-4">
                   {[1, 2, 3].map((i) => (
                     <div key={i} className="h-20 bg-muted animate-pulse rounded-lg" />
                   ))}
                 </div>
-              ) : plivoConnections.length === 0 && plivoAvailablePhoneNumbers.length === 0 ? (
-                <div className="text-center py-12" data-testid="plivo-empty-state">
-                  <Bot className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No Plivo Phone Numbers</h3>
-                  <p className="text-sm text-muted-foreground mb-6">
-                    Purchase Plivo phone numbers first to set up incoming connections with OpenAI agents.
-                  </p>
-                </div>
               ) : plivoConnections.length === 0 ? (
-                <div className="text-center py-12" data-testid="plivo-no-connections">
-                  <LinkIcon className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No Connections Yet</h3>
-                  <p className="text-sm text-muted-foreground mb-6">
-                    Connect your Plivo phone numbers to OpenAI-powered agents.
+                <div className="text-center py-20 px-6" data-testid="plivo-no-connections">
+                  <LinkIcon className="mx-auto h-12 w-12 text-slate-800 mb-4" />
+                  <h3 className="text-lg font-semibold text-slate-900 mb-2">No connections</h3>
+                  <p className="text-sm text-slate-500 mb-6 max-w-md mx-auto">
+                    Create your first connection to start receiving calls on your phone numbers
                   </p>
-                  <Button 
+                  <button
+                    type="button"
                     onClick={() => setPlivoCreateDialogOpen(true)}
-                    disabled={plivoAvailablePhoneNumbers.length === 0 || plivoAvailableAgents.length === 0}
-                    className="bg-emerald-600 hover:bg-emerald-700"
+                    className="h-10 px-5 rounded-full bg-[#6D5EF6] hover:bg-[#5B4CE6] text-white text-sm font-medium inline-flex items-center gap-1.5 disabled:opacity-50"
                     data-testid="button-create-first-plivo-connection"
                   >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Create First Connection
-                  </Button>
+                    <Plus className="w-4 h-4" />
+                    Create Your First Connection
+                  </button>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -914,45 +850,32 @@ export default function IncomingConnectionsPage() {
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>)}
+        </TabsContent>
 
         {/* Twilio + OpenAI Content */}
-        {twilioOpenaiEnabled && (
         <TabsContent value="twilio-openai">
-          <Card>
-            <CardContent className="pt-6">
               {twilioOpenaiConnectionsLoading ? (
                 <div className="space-y-4">
                   {[1, 2, 3].map((i) => (
                     <div key={i} className="h-20 bg-muted animate-pulse rounded-lg" />
                   ))}
                 </div>
-              ) : twilioOpenaiConnections.length === 0 && twilioOpenaiAvailablePhoneNumbers.length === 0 ? (
-                <div className="text-center py-12" data-testid="twilio-openai-empty-state">
-                  <Bot className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No Twilio Phone Numbers</h3>
-                  <p className="text-sm text-muted-foreground mb-6">
-                    Purchase Twilio phone numbers first to set up incoming connections with OpenAI agents.
-                  </p>
-                </div>
               ) : twilioOpenaiConnections.length === 0 ? (
-                <div className="text-center py-12" data-testid="twilio-openai-no-connections">
-                  <LinkIcon className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No Connections Yet</h3>
-                  <p className="text-sm text-muted-foreground mb-6">
-                    Connect your Twilio phone numbers to OpenAI-powered agents.
+                <div className="text-center py-20 px-6" data-testid="twilio-openai-no-connections">
+                  <LinkIcon className="mx-auto h-12 w-12 text-slate-800 mb-4" />
+                  <h3 className="text-lg font-semibold text-slate-900 mb-2">No connections</h3>
+                  <p className="text-sm text-slate-500 mb-6 max-w-md mx-auto">
+                    Create your first connection to start receiving calls on your phone numbers
                   </p>
-                  <Button 
+                  <button
+                    type="button"
                     onClick={() => setTwilioOpenaiCreateDialogOpen(true)}
-                    disabled={twilioOpenaiAvailablePhoneNumbers.length === 0 || twilioOpenaiAvailableAgents.length === 0}
-                    className="bg-brand text-brand-foreground"
+                    className="h-10 px-5 rounded-full bg-[#6D5EF6] hover:bg-[#5B4CE6] text-white text-sm font-medium inline-flex items-center gap-1.5 disabled:opacity-50"
                     data-testid="button-create-first-twilio-openai-connection"
                   >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Create First Connection
-                  </Button>
+                    <Plus className="w-4 h-4" />
+                    Create Your First Connection
+                  </button>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -990,10 +913,9 @@ export default function IncomingConnectionsPage() {
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>)}
+        </TabsContent>
       </Tabs>
+      </div>
 
       {/* Twilio + ElevenLabs Create Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
