@@ -24,7 +24,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const pluginsDir = path.resolve(__dirname, '../plugins');
-const clientSrcDir = path.resolve(__dirname, '../client/src');
+const clientSrcDir = path.resolve(__dirname, '../frontend/src');
 
 async function getPluginsWithFrontend() {
   const plugins = [];
@@ -48,15 +48,14 @@ async function getPluginsWithFrontend() {
       const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
       
       if (manifest.ui?.frontendBundle) {
-        const frontendEntryPath = path.join(pluginPath, 'frontend', 'index.tsx');
-        const frontendEntryPathJs = path.join(pluginPath, 'frontend', 'index.ts');
+        const frontendCandidates = [
+          path.join(pluginPath, 'frontend', 'index.jsx'),
+          path.join(pluginPath, 'frontend', 'index.js'),
+          path.join(pluginPath, 'frontend', 'index.tsx'),
+          path.join(pluginPath, 'frontend', 'index.ts'),
+        ];
         
-        let entryFile = null;
-        if (fs.existsSync(frontendEntryPath)) {
-          entryFile = frontendEntryPath;
-        } else if (fs.existsSync(frontendEntryPathJs)) {
-          entryFile = frontendEntryPathJs;
-        }
+        const entryFile = frontendCandidates.find((candidate) => fs.existsSync(candidate));
         
         if (entryFile) {
           plugins.push({
@@ -68,7 +67,7 @@ async function getPluginsWithFrontend() {
             outputPath: path.join(pluginPath, manifest.ui.frontendBundle),
           });
         } else {
-          console.warn(`[${manifest.name}] No frontend entry found at frontend/index.tsx or frontend/index.ts`);
+          console.warn(`[${manifest.name}] No frontend entry found at frontend/index.jsx or frontend/index.js`);
         }
       }
     } catch (err) {
@@ -111,11 +110,17 @@ async function buildPlugin(plugin, watch = false) {
     // Externalize React, ReactDOM, and TanStack Query - they're provided by host app
     external: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime', '@tanstack/react-query'],
     alias: {
-      '@/components': path.join(clientSrcDir, 'components'),
-      '@/hooks': path.join(clientSrcDir, 'hooks'),
-      '@/lib': path.join(clientSrcDir, 'lib'),
-      '@/contexts': path.join(clientSrcDir, 'contexts'),
-      '@shared': path.resolve(__dirname, '../shared'),
+      '@/components': path.join(clientSrcDir, 'shared', 'components'),
+      '@/shared/components': path.join(clientSrcDir, 'shared', 'components'),
+      '@/hooks': path.join(clientSrcDir, 'shared', 'hooks'),
+      '@/shared/hooks': path.join(clientSrcDir, 'shared', 'hooks'),
+      '@/lib': path.join(clientSrcDir, 'shared', 'lib'),
+      '@/shared/lib': path.join(clientSrcDir, 'shared', 'lib'),
+      '@/contexts': path.join(clientSrcDir, 'shared', 'contexts'),
+      '@/shared/contexts': path.join(clientSrcDir, 'shared', 'contexts'),
+      '@shared/schema': path.resolve(__dirname, '../backend/src/config/schema.js'),
+      '@shared/whatsapp-schema': path.resolve(__dirname, '../backend/src/config/whatsapp-schema.js'),
+      '@shared': path.resolve(__dirname, '../packages/shared'),
     },
     define: {
       'process.env.NODE_ENV': watch ? '"development"' : '"production"',

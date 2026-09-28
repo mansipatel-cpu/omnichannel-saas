@@ -1,0 +1,7 @@
+{
+  "name": "@omnichannel/shared",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared roles, error codes, and constants for backend and frontend"
+}

@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "checkJs": false,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "target": "ES2022",
+    "paths": {
+      "@shared/schema": ["./src/config/schema.js"],
+      "@shared/whatsapp-schema": ["./src/config/whatsapp-schema.js"],
+      "@shared/*": ["../packages/shared/*"],
+      "@diploy/core": ["../packages/diploy-core/index.js"]
+    }
+  },
+  "include": ["**/*", "../packages/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

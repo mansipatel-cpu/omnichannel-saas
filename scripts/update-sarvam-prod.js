@@ -2,9 +2,10 @@
 // Run this on your production server: node update-sarvam-prod.js
 import pg from 'pg';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-// Load .env if present
-dotenv.config();
+dotenv.config({ path: path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'backend', '.env') });
 
 const connectionString = process.env.DATABASE_URL;
 

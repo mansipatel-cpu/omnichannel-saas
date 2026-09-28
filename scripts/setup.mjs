@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Local setup: ensure .env exists and generate SESSION_SECRET / JWT_SECRET.
+ * Local setup: ensure backend/.env and frontend/.env exist,
+ * and generate SESSION_SECRET / JWT_SECRET in the backend env.
  * Usage: npm run setup
  */
 import crypto from "node:crypto";
@@ -9,8 +10,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-const envPath = path.join(root, ".env");
-const examplePath = path.join(root, ".env.example");
+const backendEnvPath = path.join(root, "backend", ".env");
+const backendExamplePath = path.join(root, "backend", ".env.example");
+const frontendEnvPath = path.join(root, "frontend", ".env");
+const frontendExamplePath = path.join(root, "frontend", ".env.example");
+const legacyRootEnvPath = path.join(root, ".env");
 
 const PLACEHOLDER = "WILL_BE_AUTO_GENERATED_BY_SETUP";
 const SECRET_KEYS = ["SESSION_SECRET", "JWT_SECRET"];
@@ -30,16 +34,29 @@ function isUnset(value) {
   );
 }
 
-if (!fs.existsSync(envPath)) {
-  if (!fs.existsSync(examplePath)) {
-    console.error("Missing .env and .env.example. Cannot continue.");
+if (!fs.existsSync(backendEnvPath)) {
+  if (fs.existsSync(legacyRootEnvPath)) {
+    fs.copyFileSync(legacyRootEnvPath, backendEnvPath);
+    console.log("Created backend/.env from existing root .env");
+  } else if (fs.existsSync(backendExamplePath)) {
+    fs.copyFileSync(backendExamplePath, backendEnvPath);
+    console.log("Created backend/.env from backend/.env.example");
+  } else {
+    console.error("Missing backend/.env and backend/.env.example. Cannot continue.");
     process.exit(1);
   }
-  fs.copyFileSync(examplePath, envPath);
-  console.log("Created .env from .env.example");
 }
 
-let env = fs.readFileSync(envPath, "utf8");
+if (!fs.existsSync(frontendEnvPath)) {
+  if (!fs.existsSync(frontendExamplePath)) {
+    console.error("Missing frontend/.env.example. Cannot continue.");
+    process.exit(1);
+  }
+  fs.copyFileSync(frontendExamplePath, frontendEnvPath);
+  console.log("Created frontend/.env from frontend/.env.example");
+}
+
+let env = fs.readFileSync(backendEnvPath, "utf8");
 const generated = [];
 
 for (const key of SECRET_KEYS) {
@@ -60,7 +77,7 @@ for (const key of SECRET_KEYS) {
   generated.push(key);
 }
 
-fs.writeFileSync(envPath, env, "utf8");
+fs.writeFileSync(backendEnvPath, env, "utf8");
 
 if (generated.length > 0) {
   console.log(`Generated: ${generated.join(", ")}`);
@@ -69,7 +86,8 @@ if (generated.length > 0) {
 }
 
 console.log("\nNext:");
-console.log("  1. Edit .env with your database URL and API keys");
-console.log("  2. npm run db:push");
-console.log("  3. npm run db:seed   (optional)");
-console.log("  4. npm run dev");
+console.log("  1. Edit backend/.env with your database URL and API keys");
+console.log("  2. Edit frontend/.env if the UI needs a public origin");
+console.log("  3. npm run db:push");
+console.log("  4. npm run db:seed   (optional)");
+console.log("  5. npm run dev");

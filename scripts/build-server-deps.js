@@ -1,129 +1,47 @@
 #!/usr/bin/env node
 
 /**
- * Build Server Dependencies for Plugins
- * 
- * Compiles shared server dependencies (db.ts, services, etc.) to standalone JavaScript files
- * that plugins can import in production.
- * 
- * In development, plugins import from ../../../server/db.ts via tsx.
- * In production, plugins need ../../../server/db.js which this script creates.
- * 
- * Usage: node scripts/build-server-deps.js
+ * Verify shared server files exist as JavaScript modules for plugin imports.
+ * The app is JavaScript-only, so no TypeScript compile step is required.
  */
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 
-import { execSync } from 'child_process';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const projectRoot = path.resolve(__dirname, '..');
-
-console.log('╔════════════════════════════════════════════════════════════╗');
-console.log('║   Building Server Dependencies for Plugin Production Use   ║');
-console.log('╚════════════════════════════════════════════════════════════╝');
-console.log('');
-
-const filesToCompile = [
-  'shared/schema.ts',
-  'backend/db.ts',
-  'backend/storage.ts',
-  'backend/storage/types.ts',
-  'backend/storage/index.ts',
-  'backend/storage/analytics-helpers.ts',
-  'backend/services/contact-upload-service.ts',
-  'backend/utils/batch-utils.ts',
-  'backend/services/google-calendar/google-calendar.service.ts',
-  'backend/services/google-sheets/google-sheets.service.ts',
-  'backend/services/rag-knowledge.ts',
-  'backend/utils/logger.ts',
-  'backend/services/webhook-delivery.ts',
-  'backend/utils/url-validator.ts',
-  'backend/utils/domain.ts',
-  'backend/services/appointment-elevenlabs-tool.ts',
-  'backend/services/play-audio-elevenlabs-tool.ts',
-  'backend/services/rag-elevenlabs-tool.ts',
-  'backend/services/form-elevenlabs-tool.ts',
+const requiredFiles = [
+  "backend/src/config/schema.js",
+  "backend/src/config/database.js",
+  "backend/src/storage.js",
+  "backend/src/storage/index.js",
+  "backend/src/storage/analytics-helpers.js",
+  "backend/src/services/contact-upload-service.js",
+  "backend/src/utils/batch-utils.js",
+  "backend/src/services/google-calendar/google-calendar.service.js",
+  "backend/src/services/google-sheets/google-sheets.service.js",
+  "backend/src/services/rag-knowledge.js",
+  "backend/src/utils/logger.js",
+  "backend/src/services/webhook-delivery.js",
+  "backend/src/utils/url-validator.js",
+  "backend/src/utils/domain.js",
+  "backend/src/services/appointment-elevenlabs-tool.js",
+  "backend/src/services/play-audio-elevenlabs-tool.js",
+  "backend/src/services/rag-elevenlabs-tool.js",
+  "backend/src/services/form-elevenlabs-tool.js",
 ];
 
-function fixImportPaths(filePath, content) {
-  const dir = path.dirname(filePath);
-  
-  content = content.replace(
-    /from\s+["']@shared\/([^"']+)["']/g,
-    (match, modulePath) => {
-      const sharedDir = path.join(projectRoot, 'shared');
-      const relativePath = path.relative(path.join(projectRoot, dir), sharedDir);
-      const normalizedPath = relativePath.replace(/\\/g, '/');
-      const prefix = normalizedPath.startsWith('.') ? normalizedPath : './' + normalizedPath;
-      return `from "${prefix}/${modulePath}.js"`;
-    }
-  );
-  
-  content = content.replace(
-    /from\s+["'](\.\.?\/[^"']+)["']/g,
-    (match, importPath) => {
-      if (importPath.endsWith('.js') || importPath.endsWith('.json')) {
-        return match;
-      }
-      return `from "${importPath}.js"`;
-    }
-  );
-  
-  return content;
-}
-
-async function compileFile(relativePath) {
+let missing = 0;
+for (const relativePath of requiredFiles) {
   const fullPath = path.join(projectRoot, relativePath);
-  const outputPath = fullPath.replace(/\.ts$/, '.js');
-  
-  if (!fs.existsSync(fullPath)) {
-    console.log(`⚠️  Skipping ${relativePath}: file not found`);
-    return false;
-  }
-  
-  console.log(`📦 Building ${relativePath}...`);
-  
-  try {
-    execSync(`npx esbuild "${fullPath}" --outfile="${outputPath}" --format=esm --platform=node --target=node18`, {
-      cwd: projectRoot,
-      stdio: 'pipe'
-    });
-    
-    let content = fs.readFileSync(outputPath, 'utf-8');
-    content = fixImportPaths(relativePath, content);
-    fs.writeFileSync(outputPath, content, 'utf-8');
-    
-    console.log(`   ✅ ${path.basename(outputPath)}`);
-    return true;
-  } catch (error) {
-    console.error(`   ❌ Failed: ${error.message}`);
-    return false;
+  if (fs.existsSync(fullPath)) {
+    console.log(`✅ ${relativePath}`);
+  } else {
+    console.error(`❌ Missing ${relativePath}`);
+    missing += 1;
   }
 }
 
-async function main() {
-  let successCount = 0;
-  let failCount = 0;
-  
-  for (const file of filesToCompile) {
-    if (await compileFile(file)) successCount++;
-    else failCount++;
-  }
-  
-  console.log('');
-  console.log('════════════════════════════════════════════════════════════');
-  console.log(`✅ Built ${successCount} dependencies`);
-  if (failCount > 0) {
-    console.log(`❌ ${failCount} failed`);
-    process.exit(1);
-  }
-  console.log('');
-}
-
-main().catch(err => {
-  console.error('Build failed:', err);
+if (missing > 0) {
   process.exit(1);
-});
+}

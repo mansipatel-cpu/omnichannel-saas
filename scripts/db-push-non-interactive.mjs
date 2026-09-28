@@ -40,7 +40,7 @@ if (process.env.NODE_ENV === "production"
   process.exit(2);
 }
 
-const child = spawn("node", ["-r", "./scripts/mock-tty.cjs", "./node_modules/drizzle-kit/bin.cjs", "push", "--force", ...process.argv.slice(2)], {
+const child = spawn("node", ["-r", "./scripts/mock-tty.cjs", "./node_modules/drizzle-kit/bin.cjs", "push", "--force", "--config", "backend/drizzle.config.js", ...process.argv.slice(2)], {
   stdio: ["pipe", "pipe", "inherit"],
   env: { ...process.env, FORCE_COLOR: "0" },
   shell: process.platform === "win32",

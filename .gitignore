@@ -26,10 +26,11 @@ Thumbs.db
 *-secret
 .appointment-webhook-secret
 .rag-webhook-secret
+.form-webhook-secret
 
 # Allow example env files
 !.env.example
-!*.env.example
+!**/.env.example
 
 # ============================
 # Build & Cache
@@ -43,17 +44,29 @@ coverage/
 # ============================
 # Runtime Directories
 # ============================
-data/*
-kyc/*
-logs/*
-export/*
-exports/*
+storage/*
+!storage/.gitkeep
+!storage/uploads/
+!storage/uploads/.gitkeep
+!storage/exports/
+!storage/exports/.gitkeep
+!storage/kyc/
+!storage/kyc/.gitkeep
+!storage/logs/
+!storage/logs/.gitkeep
+!storage/data/
+!storage/data/.gitkeep
+!storage/data/invoices/
+!storage/data/invoices/.gitkeep
+!storage/data/refund-notes/
+!storage/data/refund-notes/.gitkeep
 
-# Keep folders
-!data/.gitkeep
-!kyc/.gitkeep
-!logs/.gitkeep
-!export/.gitkeep
-!exports/.gitkeep
+# Ignore if old root runtime dirs reappear
+/data/
+/kyc/
+/logs/
+/export/
+/exports/
+/uploads/
 
 AGENTS.md

@@ -4,7 +4,16 @@ dist
 tmp
 scratch
 docs
+storage
 *.zip
 *.sql
 err.json
 err2.json
+.env
+.env.*
+*.pem
+*.key
+*-secret
+.appointment-webhook-secret
+.rag-webhook-secret
+.form-webhook-secret

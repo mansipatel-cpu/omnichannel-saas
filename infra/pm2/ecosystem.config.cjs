@@ -13,13 +13,13 @@
  *   1. npm install
  *   2. node scripts/build-plugin-backend.js   (compile plugins)
  *   3. npm run build                          (build frontend + server)
- *   4. pm2 start ecosystem.config.cjs         (start with PM2)
+ *   4. pm2 start infra/pm2/ecosystem.config.cjs  (start with PM2)
  * 
  * If plugins have database migrations:
  *   psql $DATABASE_URL -f plugins/team-management/migrations/001_team_tables.sql
  * 
  * PM2 Commands:
- *   pm2 start ecosystem.config.cjs    - Start the application
+ *   pm2 start infra/pm2/ecosystem.config.cjs - Start the application
  *   pm2 restart agentlabs             - Restart the application
  *   pm2 stop agentlabs                - Stop the application
  *   pm2 logs agentlabs                - View logs
@@ -59,14 +59,14 @@ module.exports = {
     max_memory_restart: memoryLimitString,
     
     watch: false,
-    ignore_watch: ['node_modules', 'logs', '.git', 'dist'],
+    ignore_watch: ['node_modules', 'storage', 'logs', '.git', 'dist'],
     
     kill_timeout: 10000,
     wait_ready: true,
     listen_timeout: 10000,
     
-    error_file: 'logs/pm2-error.log',
-    out_file: 'logs/pm2-out.log',
+    error_file: 'storage/logs/pm2-error.log',
+    out_file: 'storage/logs/pm2-out.log',
     log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
     merge_logs: true,
     

@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "checkJs": false,
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "target": "ES2022",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@wa/*": ["./src/features/whatsapp/*"],
+      "@shared/schema": ["../backend/src/config/schema.js"],
+      "@shared/whatsapp-schema": ["../backend/src/config/whatsapp-schema.js"],
+      "@shared/*": ["../packages/shared/*"]
+    }
+  },
+  "include": ["src/**/*", "../packages/shared/**/*"],
+  "exclude": ["node_modules", "dist", "build"]
+}

@@ -171,11 +171,12 @@ sudo chown -R $USER:$USER .
 ### Step 4: Configure Environment
 
 ```bash
-# Copy example environment file
-cp .env.example .env
+# Copy example environment files
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
 
-# Edit with your values
-nano .env
+# Edit backend secrets and database URL
+nano backend/.env
 ```
 
 **Required settings:**
@@ -548,8 +549,9 @@ unzip AgentLabs-vX.Y.Z.zip -d agentlabs-new
 
 **Step 5: Copy your configuration and uploads to the new version**
 ```bash
-# Copy your .env file
-cp /var/www/agentlabs/.env /var/www/agentlabs-new/.env
+# Copy env files
+cp /var/www/agentlabs/backend/.env /var/www/agentlabs-new/backend/.env
+cp /var/www/agentlabs/frontend/.env /var/www/agentlabs-new/frontend/.env 2>/dev/null || true
 
 # Copy your uploads folder (if exists)
 cp -r /var/www/agentlabs/uploads /var/www/agentlabs-new/uploads 2>/dev/null || true
@@ -748,7 +750,7 @@ pg_dump -h localhost -U agentlabs -d agentlabs > ~/backups/database/backup-$(dat
 
 ```bash
 mkdir -p ~/backups/files
-cp /var/www/agentlabs/.env ~/backups/files/env-$(date +%Y%m%d)
+cp /var/www/agentlabs/backend/.env ~/backups/files/env-$(date +%Y%m%d)
 cp -r /var/www/agentlabs/uploads ~/backups/files/uploads-$(date +%Y%m%d)
 ```
 
@@ -771,7 +773,7 @@ mkdir -p $BACKUP_DIR
 pg_dump -h localhost -U agentlabs -d agentlabs > $BACKUP_DIR/database.sql
 
 # Backup files
-cp /var/www/agentlabs/.env $BACKUP_DIR/
+cp /var/www/agentlabs/backend/.env $BACKUP_DIR/
 cp -r /var/www/agentlabs/uploads $BACKUP_DIR/
 
 # Remove old backups (keep 30 days)
@@ -800,7 +802,7 @@ pm2 stop agentlabs
 psql -h localhost -U agentlabs -d agentlabs < ~/backups/database/backup-YYYYMMDD.sql
 
 # Restore files
-cp ~/backups/files/env-YYYYMMDD /var/www/agentlabs/.env
+cp ~/backups/files/env-YYYYMMDD /var/www/agentlabs/backend/.env
 cp -r ~/backups/files/uploads-YYYYMMDD/* /var/www/agentlabs/uploads/
 
 # Restart
@@ -941,7 +943,7 @@ npm run build
 lsof -i :5000
 # Kill the process
 kill -9 [PID]
-# Or change PORT in .env
+# Or change PORT in backend/.env
 ```
 
 **Error: "JavaScript heap out of memory"**
@@ -989,7 +991,7 @@ GRANT ALL ON SCHEMA public TO agentlabs;
 sudo -u postgres psql
 ALTER USER agentlabs WITH PASSWORD 'new_secure_password';
 \q
-# Update DATABASE_URL in .env with new password
+# Update DATABASE_URL in backend/.env with new password
 ```
 
 ### Can't Access Website

@@ -8,11 +8,10 @@
  * Usage:  node scripts/run-safe-migration.mjs
  *
  * Requirements:
- *   - DATABASE_URL environment variable must be set (or a .env file in the
- *     project root with DATABASE_URL=...)
+ *   - DATABASE_URL environment variable must be set (or backend/.env with DATABASE_URL=...)
  *   - The target database must already have the base schema applied
  *     (either via `npm run db:push` on a fresh install, or via the
- *     migrations/0000_damp_spectrum.sql file)
+ *     backend/migrations/0000_damp_spectrum.sql file)
  *
  * All migrations are idempotent (IF NOT EXISTS) — safe to re-run.
  */
@@ -25,7 +24,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(__dirname, '..');
 
 // Load .env if present (before importing pg so DATABASE_URL is populated)
-const envPath = resolve(rootDir, '.env');
+const envPath = resolve(rootDir, 'backend', '.env');
 if (existsSync(envPath)) {
   const lines = readFileSync(envPath, 'utf8').split('\n');
   for (const line of lines) {
@@ -42,7 +41,7 @@ if (existsSync(envPath)) {
 const dbUrl = process.env.DATABASE_URL;
 if (!dbUrl) {
   console.error('❌ DATABASE_URL environment variable is not set.');
-  console.error('   Set it in your environment or in a .env file at the project root.');
+  console.error('   Set it in your environment or in backend/.env.');
   process.exit(1);
 }
 
@@ -50,16 +49,16 @@ const { default: pg } = await import('pg');
 const { Pool } = pg;
 
 const MIGRATIONS = [
-  resolve(rootDir, 'migrations', '0001_add_missing_columns.sql'),
-  resolve(rootDir, 'migrations', '0002_add_google_sheets_credentials.sql'),
-  resolve(rootDir, 'migrations', '0003_campaign_contact_retry.sql'),
-  resolve(rootDir, 'migrations', '0004_add_missing_tables.sql'),
-  resolve(rootDir, 'migrations', '0005_add_missing_agent_messaging_columns.sql'),
-  resolve(rootDir, 'migrations', '0006_add_default_campaign_type.sql'),
-  resolve(rootDir, 'migrations', '0007_add_external_fonoster_phone_id.sql'),
-  resolve(rootDir, 'migrations', '008_add_ve_session_id_and_voice_engine_tables.sql'),
-  resolve(rootDir, 'migrations', '009_fix_ve_session_id_and_all_missing_columns.sql'),
-  resolve(rootDir, 'migrations', '0010_add_yookassa_columns.sql'),
+  resolve(rootDir, 'backend', 'migrations', '0001_add_missing_columns.sql'),
+  resolve(rootDir, 'backend', 'migrations', '0002_add_google_sheets_credentials.sql'),
+  resolve(rootDir, 'backend', 'migrations', '0003_campaign_contact_retry.sql'),
+  resolve(rootDir, 'backend', 'migrations', '0004_add_missing_tables.sql'),
+  resolve(rootDir, 'backend', 'migrations', '0005_add_missing_agent_messaging_columns.sql'),
+  resolve(rootDir, 'backend', 'migrations', '0006_add_default_campaign_type.sql'),
+  resolve(rootDir, 'backend', 'migrations', '0007_add_external_fonoster_phone_id.sql'),
+  resolve(rootDir, 'backend', 'migrations', '008_add_ve_session_id_and_voice_engine_tables.sql'),
+  resolve(rootDir, 'backend', 'migrations', '009_fix_ve_session_id_and_all_missing_columns.sql'),
+  resolve(rootDir, 'backend', 'migrations', '0010_add_yookassa_columns.sql'),
 ];
 
 /**

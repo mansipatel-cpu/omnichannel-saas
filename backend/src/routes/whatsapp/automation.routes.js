@@ -1,0 +1,70 @@
+/**
+ * ============================================================
+ * © 2025 Diploy — a brand of Bisht Technologies Private Limited
+ * Original Author: BTPL Engineering Team
+ * Website: https://diploy.in
+ * Contact: cs@diploy.in
+ *
+ * Distributed under the Envato / CodeCanyon License Agreement.
+ * Licensed to the purchaser for use as defined by the
+ * Envato Market (CodeCanyon) Regular or Extended License.
+ *
+ * You are NOT permitted to redistribute, resell, sublicense,
+ * or share this source code, in whole or in part.
+ * Respect the author's rights and Envato licensing terms.
+ * ============================================================
+ */
+import { z } from "zod";
+import { insertAutomationSchema, insertAutomationNodeSchema } from "@shared/whatsapp-schema";
+import { requireAuth } from "../../middleware/whatsappAuth";
+import { extractChannelId } from "../../middleware/whatsappChannel";
+// import * as automationController from "../../controllers/whatsappAutomation.controller";
+import { getAutomations, getAutomation, createAutomation, updateAutomation, deleteAutomation, toggleAutomation, saveAutomationNodes, saveAutomationEdges, startAutomationExecution, logAutomationNodeExecution, getExecutionStatus, getAutomationExecutions, triggerNewConversation, triggerMessageReceived, seedAutomationTemplates } from "../../controllers/whatsappAutomation.controller";
+import { cleanupExpiredExecutions, getAllPendingExecutions } from "../../controllers/whatsappWebhooks.controller";
+import { handleDigitalOceanUpload, upload } from "../../middleware/whatsappUpload";
+import { requireSubscription } from "../../middleware/whatsappRequireSubscription";
+// Schema for automation + nodes (used for builder save)
+const automationWithNodesSchema = z.object({
+    automation: insertAutomationSchema,
+    nodes: z.array(insertAutomationNodeSchema),
+});
+export function registerAutomationRoutes(app) {
+    //
+    // ─── AUTOMATION CRUD ──────────────────────────────────────────────
+    //
+    // Get all automations
+    app.get("/api/whatsapp/automations", requireAuth, extractChannelId, getAutomations);
+    // Get single automation with nodes
+    app.get("/api/whatsapp/automations/:id", requireAuth, extractChannelId, getAutomation);
+    // Create automation
+    app.post("/api/whatsapp/automations", requireAuth, extractChannelId, requireSubscription("automation"), upload.any(), handleDigitalOceanUpload, createAutomation);
+    // Update automation
+    app.put("/api/whatsapp/automations/:id", requireAuth, extractChannelId, upload.any(), handleDigitalOceanUpload, updateAutomation);
+    // Delete automation
+    app.delete("/api/whatsapp/automations/:id", requireAuth, extractChannelId, deleteAutomation);
+    // Toggle status active/inactive
+    app.post("/api/whatsapp/automations/:id/toggle", requireAuth, extractChannelId, toggleAutomation);
+    //
+    // ─── NODES (visual builder) ──────────────────────────────────────
+    //
+    // Save automation nodes (bulk replace from builder)
+    app.post("/api/whatsapp/automations/:automationId/nodes", requireAuth, extractChannelId, saveAutomationNodes);
+    // Save automation edges (bulk replace from builder)
+    app.post("/api/whatsapp/automations/:automationId/edges", requireAuth, extractChannelId, saveAutomationEdges);
+    //
+    // ─── EXECUTION ───────────────────────────────────────────────────
+    //
+    // Start execution for a contact/conversation
+    app.post("/api/whatsapp/automations/:automationId/executions", requireAuth, extractChannelId, startAutomationExecution);
+    // Log node execution (worker will call this per node)
+    app.post("/api/whatsapp/automations/executions/:executionId/logs", requireAuth, extractChannelId, logAutomationNodeExecution);
+    // Alias kept for backward compatibility with older clients.
+    app.post("/api/whatsapp/automations/:automationId/execute", requireAuth, startAutomationExecution);
+    app.get("/api/whatsapp/automations/:id/executions", requireAuth, getAutomationExecutions);
+    app.get("/api/whatsapp/automations/executions/:executionId/status", requireAuth, getExecutionStatus);
+    app.post("/api/whatsapp/automations/triggers/new-conversation", requireAuth, triggerNewConversation);
+    app.post("/api/whatsapp/automations/triggers/message-received", requireAuth, triggerMessageReceived);
+    app.get('/api/whatsapp/automations/pending-executions', requireAuth, getAllPendingExecutions);
+    app.post('/api/whatsapp/automations/cleanup-expired', requireAuth, cleanupExpiredExecutions);
+    app.post('/api/whatsapp/automations/seed-templates', requireAuth, seedAutomationTemplates);
+}

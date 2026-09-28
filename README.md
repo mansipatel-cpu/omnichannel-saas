@@ -2,22 +2,57 @@
 
 This project combines **AgentLabs** (AI voice calling) and **WhatsWay** (WhatsApp marketing) under one login.
 
-Backend and client are separate top-level folders:
+This is a JavaScript-only npm workspace. Layout:
 
 ```
 omnichannel-saas/
-  backend/                 # Express API (all server code)
-    index.ts               # app bootstrap
-    routes.ts              # voice + platform routes
-    whatsapp/              # WhatsApp / WhatsWay API module
-  client/                  # React UI (Vite)
-    src/                   # Voice product UI (AgentLabs)
-    src/whatsapp/          # WhatsApp product UI (WhatsWay)
-  shared/                  # Drizzle schemas used by both
-    schema.ts              # voice / platform tables
-    whatsapp-schema.ts     # WhatsApp tables (wa_* names)
-  packages/diploy-core/    # shared helpers
+├── backend/                 # Express API
+│   ├── index.js, app.js, package.json
+│   ├── .env.example
+│   ├── docker-compose.yml   # local Postgres
+│   ├── drizzle.config.js
+│   ├── migrations/
+│   ├── tests/
+│   └── src/                 # routes, controllers, services, integrations
+├── frontend/                # React (Vite) UI
+│   ├── package.json, vite.config.js, index.html
+│   ├── public/
+│   └── src/features + src/shared
+├── packages/
+│   ├── diploy-core/         # @diploy/core
+│   └── shared/              # roles, error codes, constants (@shared/*)
+├── infra/
+│   ├── docker/              # Dockerfile, .dockerignore
+│   └── pm2/                 # ecosystem.config.cjs
+├── scripts/
+├── docs/                    # INSTALLATION.md, architecture notes
+├── storage/                 # runtime only (gitignored)
+└── dist/                    # build output (gitignored)
 ```
+
+Build the app image from the repo root:
+
+`docker build -f infra/docker/Dockerfile .`
+
+See [docs/architecture.md](docs/architecture.md) for request flow.
+
+Request flow:
+
+`HTTP → Route → Controller → Service → Repository → Database`
+
+External providers:
+
+`Service → Integration → External API`
+
+Runtime directories (not source code; created at startup and gitignored):
+
+| Folder | Purpose |
+|--------|---------|
+| `storage/data/` | Generated invoices and refund notes |
+| `storage/uploads/` | User-uploaded files such as profile photos |
+| `storage/logs/` | Application and PM2 logs |
+| `storage/kyc/` | KYC document storage |
+| `storage/exports/` | Generated export files |
 
 - Voice UI: `/app/agents`, `/app/campaigns`, `/app/calls`, ...
 - WhatsApp UI: `/app/whatsapp/inbox`, `/app/whatsapp/campaigns`, ...
@@ -26,10 +61,15 @@ omnichannel-saas/
 
 ```bash
 npm install
-cp .env.example .env
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+npm run setup
+npm run db:up
 npm run db:push
 npm run dev
 ```
+
+Install once at the repo root. npm workspaces then install `frontend/` and `backend/` from their own `package.json` files.
 
 ---
 
@@ -47,8 +87,7 @@ npm run dev
 1. [Product Overview](#product-overview)
 2. [Key Features](#key-features)
 3. [AI Engine Options](#ai-engine-options)
-4. [Payment Gateways](#payment-gateways)
-5. [Multi-Language Support](#multi-language-support)
+4. [Multi-Language Support](#multi-language-support)
 6. [System Requirements](#system-requirements)
 7. [Quick Start Guide](#quick-start-guide)
 8. [Environment Variables](#environment-variables)
@@ -213,31 +252,6 @@ AgentLabs supports three AI engine configurations to match your needs:
 
 ---
 
-## Payment Gateways
-
-AgentLabs supports 5 payment gateways for global coverage:
-
-| Gateway | Regions | Currencies | Features |
-|---------|---------|------------|----------|
-| **Stripe** | Global | 135+ currencies | Cards, wallets, subscriptions |
-| **Razorpay** | India | INR | UPI, cards, netbanking |
-| **PayPal** | Global | 25+ currencies | PayPal balance, cards |
-| **Paystack** | Africa | NGN, GHS, ZAR, KES | Cards, bank transfers, mobile money |
-| **MercadoPago** | Latin America | BRL, ARS, MXN, CLP | Cards, cash payments, Pix |
-
-### Payment Features
-
-- One-time credit purchases
-- Recurring subscription plans
-- Plan upgrades and downgrades
-- Automatic renewals
-- Invoice generation (PDF)
-- Refund processing with PDF receipts
-- Multi-currency support
-- Secure webhook handling with signature verification
-
----
-
 ## Multi-Language Support
 
 AgentLabs supports 11 languages with full interface translation:
@@ -280,7 +294,6 @@ The interface automatically adjusts for right-to-left (RTL) languages.
 | **At least one AI Engine** | ElevenLabs or OpenAI | Yes |
 | **At least one Telephony** | Twilio or Plivo | Yes |
 | **SMTP Server** | Email notifications | Yes |
-| **Payment Gateway** | One or more for billing | Optional |
 
 ### Supported Hosting Platforms
 
@@ -307,8 +320,9 @@ npm install
 
 ### 3. Configure Environment
 ```bash
-cp .env.example .env
-nano .env  # Edit with your values
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+nano backend/.env  # Edit with your values
 ```
 
 ### 4. Initialize Database
@@ -333,11 +347,13 @@ Open your browser and navigate to your application URL. The setup wizard will:
 - Seed initial data (plans, templates, settings)
 - Configure company information
 
-For detailed installation instructions, see [INSTALLATION.md](INSTALLATION.md).
+For detailed installation instructions, see [docs/INSTALLATION.md](docs/INSTALLATION.md).
 
 ---
 
 ## Environment Variables
+
+Backend secrets and database settings live in `backend/.env`. Vite public variables live in `frontend/.env` (`VITE_*` only).
 
 ### Required Variables
 
@@ -387,29 +403,6 @@ SMTP_PASS=your-app-password
 SMTP_FROM_EMAIL=noreply@yourdomain.com
 ```
 
-### Payment Gateway Variables (Optional)
-
-```bash
-# Stripe (Global)
-STRIPE_SECRET_KEY=sk_live_xxxxxxxxxxxxxxxxxxxxx
-VITE_STRIPE_PUBLIC_KEY=pk_live_xxxxxxxxxxxxxxxxxxxxx
-
-# Razorpay (India)
-RAZORPAY_KEY_ID=rzp_live_xxxxxxxxxxxxx
-RAZORPAY_KEY_SECRET=your_razorpay_secret
-
-# PayPal (Global)
-PAYPAL_CLIENT_ID=your_paypal_client_id
-PAYPAL_CLIENT_SECRET=your_paypal_client_secret
-
-# Paystack (Africa)
-PAYSTACK_SECRET_KEY=sk_live_xxxxxxxxxxxxx
-PAYSTACK_PUBLIC_KEY=pk_live_xxxxxxxxxxxxx
-
-# MercadoPago (Latin America)
-MERCADOPAGO_ACCESS_TOKEN=your_access_token
-```
-
 ---
 
 ## Configuration Guide
@@ -446,41 +439,7 @@ MERCADOPAGO_ACCESS_TOKEN=your_access_token
 4. Add to environment variables
 5. Purchase phone numbers through Admin Panel
 
-### 3. Payment Gateway Setup
-
-#### Stripe Configuration
-1. Create account at [stripe.com](https://stripe.com)
-2. Navigate to Developers > API Keys
-3. Copy publishable and secret keys
-4. Configure webhook endpoint: `https://yourdomain.com/api/webhooks/stripe`
-5. Add webhook signing secret to Admin Panel
-
-#### Razorpay Configuration
-1. Create account at [razorpay.com](https://razorpay.com)
-2. Navigate to Settings > API Keys
-3. Generate Key ID and Secret
-4. Configure webhook: `https://yourdomain.com/api/webhooks/razorpay`
-5. Add webhook secret to Admin Panel
-
-#### PayPal Configuration
-1. Create account at [developer.paypal.com](https://developer.paypal.com)
-2. Create an app in the Developer Dashboard
-3. Copy Client ID and Secret
-4. Configure webhook: `https://yourdomain.com/api/webhooks/paypal`
-
-#### Paystack Configuration
-1. Create account at [paystack.com](https://paystack.com)
-2. Navigate to Settings > API Keys
-3. Copy public and secret keys
-4. Configure webhook: `https://yourdomain.com/api/webhooks/paystack`
-
-#### MercadoPago Configuration
-1. Create account at [mercadopago.com](https://mercadopago.com)
-2. Navigate to Credentials
-3. Copy Access Token
-4. Configure webhook: `https://yourdomain.com/api/webhooks/mercadopago`
-
-### 4. Email (SMTP) Setup
+### 3. Email (SMTP) Setup
 
 #### Gmail Setup
 1. Enable 2-Step Verification in Google Account
@@ -523,20 +482,12 @@ SMTP_PASS=your-16-char-app-password
 - **OpenAI Keys** - Manage OpenAI API keys with tier-based rate limits
 - **Twilio Credentials** - Configure Account SID and Auth Token
 - **Plivo Credentials** - Configure Auth ID and Auth Token
-- **Payment Gateway Keys** - Configure all 5 gateways with webhook secrets
 
 ### LLM Model Configuration
 - Add/edit available LLM models
 - Configure model display names
 - Set model availability per plan tier
 - Manage voice options
-
-### Payment & Billing Management
-- View all transactions across gateways
-- Process refunds with notes and PDF generation
-- Track subscription renewals
-- Invoice generation and history
-- Multi-currency transaction tracking
 
 ### Campaign Analytics
 - View all campaigns across users
@@ -715,7 +666,7 @@ This product is licensed under the CodeCanyon/Envato Regular or Extended License
 - License includes 6 months of support from purchase date
 
 ### Support Channels
-- **Documentation**: This README and INSTALLATION.md
+- **Documentation**: This README, [docs/INSTALLATION.md](docs/INSTALLATION.md), and [docs/architecture.md](docs/architecture.md)
 - **CodeCanyon Comments**: Leave questions on the item page
 - **Email Support**: Contact via CodeCanyon author profile
 

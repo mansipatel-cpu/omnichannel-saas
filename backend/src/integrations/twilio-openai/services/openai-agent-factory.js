@@ -1,0 +1,1460 @@
+'use strict';
+import { OPENAI_VOICES, MODEL_TIER_CONFIG } from '../types';
+import { RAGKnowledgeService } from '../../../services/rag-knowledge';
+import { db } from '../../../config/database';
+import { appointments, appointmentSettings, formSubmissions, agents, forms, formFields } from '@shared/schema';
+import { eq, and } from 'drizzle-orm';
+import { nanoid } from 'nanoid';
+import { webhookDeliveryService } from '../../../services/webhook-delivery';
+import { validateWebhookUrl } from '../../../utils/url-validator';
+export class OpenAIAgentFactory {
+    /**
+     * Get available voices
+     */
+    static getAvailableVoices() {
+        return OPENAI_VOICES;
+    }
+    /**
+     * Get available models for a tier
+     */
+    static getAvailableModels(tier) {
+        return MODEL_TIER_CONFIG[tier].models;
+    }
+    /**
+     * Validate and normalize voice selection
+     */
+    static validateVoice(voice) {
+        const validVoice = OPENAI_VOICES.find(v => v.id === voice);
+        if (!validVoice) {
+            console.warn(`[Agent Factory] Invalid voice "${voice}", falling back to "alloy"`);
+            return 'alloy';
+        }
+        return voice;
+    }
+    /**
+     * Validate and normalize model selection based on tier
+     */
+    static validateModel(model, tier = 'free') {
+        const allowedModels = this.getAvailableModels(tier);
+        if (!allowedModels.includes(model)) {
+            const safeFallback = MODEL_TIER_CONFIG[tier].safeFallback;
+            console.warn(`[Agent Factory] Model "${model}" not allowed or unrecognized for tier "${tier}". Using explicitly defined safe fallback: "${safeFallback}"`);
+            return safeFallback;
+        }
+        return model;
+    }
+    /**
+     * Create an agent configuration for OpenAI Realtime
+     */
+    static createAgentConfig(params) {
+        const tier = params.userTier || 'free';
+        const voice = this.validateVoice(params.voice);
+        const model = this.validateModel(params.model, tier);
+        const language = params.language || 'en';
+        console.log(`[Agent Factory] Creating config: voice=${voice}, model=${model}, tier=${tier}, language=${language}`);
+        // Add language instructions to system prompt if not English
+        // Guard against duplication (e.g., when called after compileFlow which already added the header)
+        let systemPrompt = params.systemPrompt;
+        if (language && language !== 'en' && !params.systemPrompt.includes('CRITICAL LANGUAGE REQUIREMENT')) {
+            const languageName = this.getLanguageName(language);
+            systemPrompt = `CRITICAL LANGUAGE REQUIREMENT: You MUST speak ONLY in ${languageName}. From the very first word you say, speak in ${languageName}. Do NOT speak English. This is mandatory.\n\n${params.systemPrompt}`;
+        }
+        return {
+            voice,
+            model,
+            systemPrompt,
+            firstMessage: params.firstMessage,
+            temperature: params.temperature ?? 0.7,
+            tools: [],
+            toolContext: params.toolContext,
+        };
+    }
+    /**
+     * Add knowledge base lookup tool to agent
+     * Uses RAGKnowledgeService for vector similarity search
+     */
+    static addKnowledgeBaseTool(config, knowledgeBaseIds, userId) {
+        if (!knowledgeBaseIds || knowledgeBaseIds.length === 0) {
+            console.log(`[Agent Factory] No knowledge bases to add`);
+            return config;
+        }
+        console.log(`[Agent Factory] Adding KB tool for ${knowledgeBaseIds.length} knowledge bases`);
+        const kbTool = {
+            name: 'lookup_knowledge_base',
+            description: 'Search the knowledge base for relevant information to answer user questions. Use this when you need facts, policies, product details, or any information that might be stored.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    query: {
+                        type: 'string',
+                        description: 'The search query to find relevant information. Be specific and include key terms.',
+                    },
+                },
+                required: ['query'],
+            },
+            handler: async (params) => {
+                try {
+                    const query = params.query;
+                    console.log(`[KB Tool] Searching: "${query.substring(0, 50)}..."`);
+                    const results = await RAGKnowledgeService.searchKnowledge(query, knowledgeBaseIds, userId, 5 // max results
+                    );
+                    if (results.length === 0) {
+                        console.log(`[KB Tool] No results found`);
+                        return {
+                            found: false,
+                            message: 'No relevant information found in the knowledge base.'
+                        };
+                    }
+                    const formattedResponse = RAGKnowledgeService.formatResultsForAgent(results, 400);
+                    console.log(`[KB Tool] Found ${results.length} results`);
+                    return {
+                        found: true,
+                        information: formattedResponse
+                    };
+                }
+                catch (error) {
+                    console.error(`[KB Tool] Error:`, error.message);
+                    return {
+                        found: false,
+                        message: 'Unable to search knowledge base at this time.'
+                    };
+                }
+            },
+        };
+        return {
+            ...config,
+            knowledgeBaseIds,
+            tools: [...(config.tools || []), kbTool],
+        };
+    }
+    /**
+     * Add appointment booking tool to agent
+     * Creates appointments in database directly
+     */
+    static addAppointmentTool(config, userId, agentId, callId, callerPhone) {
+        // Skip if appointment tool already exists to prevent duplicates
+        if (config.tools?.some(t => t.name === 'book_appointment')) {
+            console.log(`[Agent Factory] Appointment tool already exists, skipping`);
+            return config;
+        }
+        console.log(`[Agent Factory] Adding appointment tool for agent ${agentId}`);
+        if (callerPhone) {
+            console.log(`[Agent Factory] Caller phone available: ${callerPhone}`);
+        }
+        const toolDescription = callerPhone
+            ? `Book an appointment for the caller. The caller's phone number is ${callerPhone} - do NOT ask for their phone number unless they want to use a different one. For contactPhone, use "${callerPhone}" unless they explicitly provide a different number. Collect their name, preferred date and time before calling this tool.`
+            : 'Book an appointment for the caller. Collect their name, phone number, preferred date and time before calling this tool.';
+        const appointmentTool = {
+            name: 'book_appointment',
+            description: toolDescription,
+            parameters: {
+                type: 'object',
+                properties: {
+                    contactName: {
+                        type: 'string',
+                        description: 'The name of the person booking the appointment'
+                    },
+                    contactPhone: {
+                        type: 'string',
+                        description: callerPhone
+                            ? `The caller's phone number. Default to "${callerPhone}" (the number they are calling from). Only use a different number if the caller explicitly provides one.`
+                            : 'Phone number exactly as spoken. Accept any format.'
+                    },
+                    contactEmail: {
+                        type: 'string',
+                        description: 'Optional email address'
+                    },
+                    appointmentDate: {
+                        type: 'string',
+                        description: 'Appointment date in YYYY-MM-DD format'
+                    },
+                    appointmentTime: {
+                        type: 'string',
+                        description: 'Appointment time in HH:MM format (24-hour)'
+                    },
+                    duration: {
+                        type: 'number',
+                        description: 'Duration in minutes (default 30)'
+                    },
+                    serviceName: {
+                        type: 'string',
+                        description: 'Name of the service being booked'
+                    },
+                    notes: {
+                        type: 'string',
+                        description: 'Additional notes or requirements'
+                    },
+                },
+                required: ['contactName', 'contactPhone', 'appointmentDate', 'appointmentTime'],
+            },
+            handler: async (params) => {
+                try {
+                    // Auto-fill caller phone if AI didn't provide one or sent a placeholder
+                    if (callerPhone && (!params.contactPhone || params.contactPhone === 'USE_CALLER_NUMBER' || params.contactPhone === 'same')) {
+                        params.contactPhone = callerPhone;
+                        console.log(`[Appointment Tool] Auto-filled caller phone: ${callerPhone}`);
+                    }
+                    console.log(`[Appointment Tool] Booking: ${JSON.stringify(params)}`);
+                    // Validate required parameters
+                    if (!params.contactName || !params.contactPhone || !params.appointmentDate || !params.appointmentTime) {
+                        return {
+                            success: false,
+                            message: 'Please provide name, phone, date and time for the appointment.'
+                        };
+                    }
+                    // Get agent's flowId if available
+                    const [agent] = await db
+                        .select({ flowId: agents.flowId, name: agents.name })
+                        .from(agents)
+                        .where(eq(agents.id, agentId))
+                        .limit(1);
+                    // Check user's appointment settings for overlap validation and working hours
+                    const [settings] = await db
+                        .select()
+                        .from(appointmentSettings)
+                        .where(eq(appointmentSettings.userId, userId));
+                    // Default working hours
+                    const defaultWorkingHours = {
+                        monday: { start: "09:00", end: "17:00", enabled: true },
+                        tuesday: { start: "09:00", end: "17:00", enabled: true },
+                        wednesday: { start: "09:00", end: "17:00", enabled: true },
+                        thursday: { start: "09:00", end: "17:00", enabled: true },
+                        friday: { start: "09:00", end: "17:00", enabled: true },
+                        saturday: { start: "09:00", end: "17:00", enabled: false },
+                        sunday: { start: "09:00", end: "17:00", enabled: false },
+                    };
+                    // Validate working hours
+                    const appointmentDate = params.appointmentDate;
+                    const appointmentTime = params.appointmentTime;
+                    const parsedDate = new Date(appointmentDate + 'T12:00:00');
+                    if (!isNaN(parsedDate.getTime())) {
+                        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+                        const dayOfWeek = parsedDate.getDay();
+                        const dayName = dayNames[dayOfWeek];
+                        const userWorkingHours = settings?.workingHours;
+                        const daySettings = userWorkingHours?.[dayName]
+                            ? { ...defaultWorkingHours[dayName], ...userWorkingHours[dayName] }
+                            : defaultWorkingHours[dayName];
+                        console.log(`[Appointment Tool] Working hours for ${dayName}:`, daySettings);
+                        if (!daySettings?.enabled) {
+                            const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+                            console.log(`[Appointment Tool] Rejected: ${dayName} is not available for appointments`);
+                            return {
+                                success: false,
+                                message: `We're not available on ${capitalizedDay}s. Please choose a different day.`
+                            };
+                        }
+                        // Check time is within working hours
+                        try {
+                            const parseTimeToMinutes = (timeStr) => {
+                                const parts = timeStr.split(':');
+                                return parseInt(parts[0], 10) * 60 + parseInt(parts[1] || '0', 10);
+                            };
+                            const requestedMinutes = parseTimeToMinutes(appointmentTime);
+                            const startMinutes = parseTimeToMinutes(daySettings.start || "09:00");
+                            const endMinutes = parseTimeToMinutes(daySettings.end || "17:00");
+                            const duration = params.duration || 30;
+                            const appointmentEndMinutes = requestedMinutes + duration;
+                            if (requestedMinutes < startMinutes || appointmentEndMinutes > endMinutes) {
+                                const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+                                console.log(`[Appointment Tool] Rejected: ${appointmentTime} is outside working hours`);
+                                return {
+                                    success: false,
+                                    message: `${appointmentTime} is outside our available hours on ${capitalizedDay}. We're available from ${daySettings.start} to ${daySettings.end}.`
+                                };
+                            }
+                        }
+                        catch (e) {
+                            console.log(`[Appointment Tool] Time validation error, allowing booking`);
+                        }
+                    }
+                    // Check for duplicate booking from same call (prevents double-booking during same conversation)
+                    if (callId) {
+                        const duplicateFromCall = await db
+                            .select()
+                            .from(appointments)
+                            .where(and(eq(appointments.callId, callId), eq(appointments.appointmentDate, params.appointmentDate), eq(appointments.status, 'scheduled')));
+                        if (duplicateFromCall.length > 0) {
+                            console.log(`[Appointment Tool] Duplicate booking attempt from same call ${callId}`);
+                            return {
+                                success: true,
+                                appointmentId: duplicateFromCall[0].id,
+                                message: `Your appointment is already confirmed for ${params.appointmentDate} at ${duplicateFromCall[0].appointmentTime}.`,
+                                alreadyBooked: true
+                            };
+                        }
+                    }
+                    // Check for duplicate booking by same contact phone on same date/time
+                    const duplicateByContact = await db
+                        .select()
+                        .from(appointments)
+                        .where(and(eq(appointments.userId, userId), eq(appointments.contactPhone, params.contactPhone), eq(appointments.appointmentDate, params.appointmentDate), eq(appointments.appointmentTime, params.appointmentTime), eq(appointments.status, 'scheduled')));
+                    if (duplicateByContact.length > 0) {
+                        console.log(`[Appointment Tool] Duplicate booking attempt by same contact`);
+                        return {
+                            success: true,
+                            appointmentId: duplicateByContact[0].id,
+                            message: `You already have an appointment at this time. Your appointment is confirmed for ${params.appointmentDate} at ${params.appointmentTime}.`,
+                            alreadyBooked: true
+                        };
+                    }
+                    // Check for overlapping appointments if not allowed
+                    if (settings && !settings.allowOverlapping) {
+                        const existing = await db
+                            .select()
+                            .from(appointments)
+                            .where(and(eq(appointments.userId, userId), eq(appointments.appointmentDate, params.appointmentDate), eq(appointments.appointmentTime, params.appointmentTime), eq(appointments.status, 'scheduled')));
+                        if (existing.length > 0) {
+                            console.log(`[Appointment Tool] Slot conflict at ${params.appointmentDate} ${params.appointmentTime}`);
+                            return {
+                                success: false,
+                                message: `That time slot is already booked. Please choose a different time.`
+                            };
+                        }
+                    }
+                    const appointmentId = nanoid();
+                    const [newAppointment] = await db
+                        .insert(appointments)
+                        .values({
+                        id: appointmentId,
+                        userId,
+                        callId: callId || null,
+                        flowId: agent?.flowId || null,
+                        contactName: params.contactName,
+                        contactPhone: params.contactPhone,
+                        contactEmail: params.contactEmail || null,
+                        appointmentDate: params.appointmentDate,
+                        appointmentTime: params.appointmentTime,
+                        duration: params.duration || 30,
+                        serviceName: params.serviceName || null,
+                        notes: params.notes || null,
+                        status: 'scheduled',
+                        metadata: { source: 'openai-agent', agentId, agentName: agent?.name },
+                    })
+                        .returning();
+                    console.log(`[Appointment Tool] Created appointment ${appointmentId}`);
+                    return {
+                        success: true,
+                        appointmentId,
+                        message: `Appointment booked for ${params.contactName} on ${params.appointmentDate} at ${params.appointmentTime}`
+                    };
+                }
+                catch (error) {
+                    console.error(`[Appointment Tool] Error:`, error.message, error.stack);
+                    return {
+                        success: false,
+                        message: 'Unable to book appointment at this time. Please try again.'
+                    };
+                }
+            },
+        };
+        return {
+            ...config,
+            tools: [...(config.tools || []), appointmentTool],
+        };
+    }
+    /**
+     * Add form submission tool to agent
+     * Submits collected data to form submission table
+     */
+    static addFormTool(config, formId, formName, formFields, userId, callId) {
+        // Skip if form tool already exists to prevent duplicates
+        // Form tool names can be "submit_form" or "submit_form_node_2" (with node ID suffix)
+        if (config.tools?.some(t => t.name.startsWith('submit_form'))) {
+            console.log(`[Agent Factory] Form tool already exists, skipping`);
+            return config;
+        }
+        console.log(`[Agent Factory] Adding form tool for form ${formId} (${formName})`);
+        // Build field descriptions for the tool
+        const fieldProperties = {
+            contactName: {
+                type: 'string',
+                description: 'Name of the person providing the information'
+            },
+            contactPhone: {
+                type: 'string',
+                description: 'Phone number exactly as spoken'
+            }
+        };
+        const requiredFields = ['contactName', 'contactPhone'];
+        for (const field of formFields) {
+            const fieldKey = `field_${field.id.replace(/-/g, '_')}`;
+            switch (field.fieldType) {
+                case 'number':
+                    fieldProperties[fieldKey] = {
+                        type: 'number',
+                        description: `Numeric answer to: "${field.question}"`
+                    };
+                    break;
+                case 'yes_no':
+                    fieldProperties[fieldKey] = {
+                        type: 'boolean',
+                        description: `Yes/No answer to: "${field.question}" (true = yes, false = no)`
+                    };
+                    break;
+                default:
+                    fieldProperties[fieldKey] = {
+                        type: 'string',
+                        description: `Answer to: "${field.question}"`
+                    };
+            }
+            if (field.isRequired) {
+                requiredFields.push(fieldKey);
+            }
+        }
+        const formTool = {
+            name: 'submit_form',
+            description: `Submit the collected information for "${formName}". Collect all required fields before calling this tool.`,
+            parameters: {
+                type: 'object',
+                properties: fieldProperties,
+                required: requiredFields,
+            },
+            handler: async (params) => {
+                try {
+                    console.log(`[Form Tool] Submitting to form ${formId}: ${JSON.stringify(params)}`);
+                    // Build responses array in the required format
+                    const responses = [];
+                    for (const field of formFields) {
+                        const fieldKey = `field_${field.id.replace(/-/g, '_')}`;
+                        const value = params[fieldKey];
+                        if (value !== undefined && value !== null) {
+                            responses.push({
+                                fieldId: field.id,
+                                question: field.question,
+                                answer: String(value),
+                            });
+                        }
+                    }
+                    const submissionId = nanoid();
+                    const [submission] = await db
+                        .insert(formSubmissions)
+                        .values({
+                        id: submissionId,
+                        formId,
+                        callId: callId || null,
+                        contactName: params.contactName || null,
+                        contactPhone: params.contactPhone || null,
+                        responses,
+                    })
+                        .returning();
+                    console.log(`[Form Tool] Created submission ${submissionId}`);
+                    // Trigger form.submitted webhook event
+                    try {
+                        await webhookDeliveryService.triggerEvent(userId, 'form.submitted', {
+                            submission: {
+                                id: submissionId,
+                                formId: formId,
+                                formName: formName,
+                                contactName: params.contactName || null,
+                                contactPhone: params.contactPhone || null,
+                                responses: responses,
+                                submittedAt: new Date().toISOString(),
+                            },
+                            call: {
+                                id: callId || null,
+                            },
+                        });
+                        console.log(`[Form Tool] Triggered form.submitted webhook event`);
+                    }
+                    catch (webhookError) {
+                        console.error(`[Form Tool] Failed to trigger webhook:`, webhookError.message);
+                    }
+                    return {
+                        success: true,
+                        submissionId,
+                        message: 'Your information has been saved successfully.'
+                    };
+                }
+                catch (error) {
+                    console.error(`[Form Tool] Error:`, error.message);
+                    return {
+                        success: false,
+                        message: 'Unable to save information at this time. Please try again.'
+                    };
+                }
+            },
+            // Store for serialization
+            _formId: formId,
+            _formName: formName,
+            _formFields: formFields,
+        };
+        return {
+            ...config,
+            tools: [...(config.tools || []), formTool],
+        };
+    }
+    /**
+     * Add call transfer tool to agent
+     */
+    static addTransferTool(config, transferNumber, transferMessage) {
+        // Skip if transfer tool already exists to prevent duplicates
+        if (config.tools?.some(t => t.name === 'transfer_call')) {
+            console.log(`[Agent Factory] Transfer tool already exists, skipping`);
+            return config;
+        }
+        console.log(`[Agent Factory] Adding transfer tool to ${transferNumber}`);
+        const transferTool = {
+            name: 'transfer_call',
+            description: 'Transfer the call to a human agent. IMPORTANT: Before calling this function, you MUST first say a brief transfer announcement like "Sure, let me transfer you to an agent now" or "One moment, I will connect you with a representative". After speaking this announcement, immediately call this function. You MUST call this function when: (1) the user explicitly asks to speak to a human, agent, or real person, (2) the user says "transfer", "connect me", or similar phrases, (3) you cannot help them with their request.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    reason: {
+                        type: 'string',
+                        description: 'Brief reason for the transfer'
+                    }
+                },
+                required: ['reason'],
+            },
+            handler: async (params) => {
+                console.log(`[Transfer Tool] Initiating transfer to ${transferNumber}, reason: ${params.reason || 'none'}`);
+                // The actual transfer is handled by the audio bridge
+                return {
+                    action: 'transfer',
+                    phoneNumber: transferNumber,
+                    reason: params.reason
+                };
+            },
+            _transferNumber: transferNumber, // Store for serialization
+        };
+        return {
+            ...config,
+            tools: [...(config.tools || []), transferTool],
+        };
+    }
+    /**
+     * Add end call tool to agent
+     */
+    static addEndCallTool(config) {
+        // Skip if end_call tool already exists to prevent duplicates
+        if (config.tools?.some(t => t.name === 'end_call')) {
+            console.log(`[Agent Factory] End call tool already exists, skipping`);
+            return config;
+        }
+        console.log(`[Agent Factory] Adding end call tool`);
+        const endCallTool = {
+            name: 'end_call',
+            description: 'IMMEDIATELY end the call. You MUST call this function when: (1) the user says "bye", "goodbye", "thank you bye", "have a good day", "that\'s all", "I\'m done", "hang up", or any farewell phrase, (2) the conversation has naturally concluded and all tasks are complete, (3) the user explicitly asks to end the call. DO NOT just say goodbye - you MUST actually call this function to disconnect the call.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    reason: {
+                        type: 'string',
+                        description: 'Brief reason for ending the call'
+                    }
+                },
+                required: [],
+            },
+            handler: async (params) => {
+                console.log(`[End Call Tool] Ending call, reason: ${params.reason || 'conversation complete'}`);
+                return {
+                    action: 'end_call',
+                    reason: params.reason || 'conversation complete'
+                };
+            },
+        };
+        return {
+            ...config,
+            tools: [...(config.tools || []), endCallTool],
+        };
+    }
+    static addMessagingEmailTool(config, userId, agentId, callId, templateName, templateNames = []) {
+        if (config.tools?.some(t => t.name === 'send_email')) {
+            console.log(`[Agent Factory] send_email tool already exists, skipping`);
+            return config;
+        }
+        let templateInstruction;
+        if (templateName) {
+            templateInstruction = `You MUST use the template named "${templateName}".`;
+        }
+        else if (templateNames.length > 0) {
+            templateInstruction = `Available email templates: ${templateNames.join(', ')}.`;
+        }
+        else {
+            templateInstruction = 'Use the template name configured by the user.';
+        }
+        console.log(`[Agent Factory] Adding send_email tool`);
+        const emailTool = {
+            name: 'send_email',
+            description: `Send an email to the caller. You MUST ask for their email address first before using this tool. ${templateInstruction} The system will automatically fill in agent_name and appointment details (appointment_date, appointment_time, service_name, duration, appointment_notes) from the current call. You should provide contact_name from the conversation. Any additional variables can be passed via dynamic_variables.`,
+            parameters: {
+                type: 'object',
+                properties: {
+                    recipient_email: {
+                        type: 'string',
+                        description: 'The email address to send the email to. You must ask the caller for this.'
+                    },
+                    template_name: {
+                        type: 'string',
+                        description: templateName
+                            ? `The email template to use. ALWAYS use "${templateName}".`
+                            : `The name of the email template to use. ${templateInstruction}`
+                    },
+                    contact_name: {
+                        type: 'string',
+                        description: 'The name of the caller/contact collected during the conversation.'
+                    },
+                    dynamic_variables: {
+                        type: 'object',
+                        description: 'Additional key-value pairs for template variable substitution beyond the auto-injected ones.'
+                    }
+                },
+                required: ['recipient_email', 'template_name'],
+            },
+            _messagingContext: { userId, agentId, callId, defaultTemplate: templateName || undefined },
+        };
+        return {
+            ...config,
+            tools: [...(config.tools || []), emailTool],
+        };
+    }
+    static addCollectCallerEmailTool(config, userId, agentId, callId) {
+        if (config.tools?.some(t => t.name === 'collect_caller_email')) {
+            return config;
+        }
+        console.log(`[Agent Factory] Adding collect_caller_email tool`);
+        const collectTool = {
+            name: 'collect_caller_email',
+            description: 'Ask the caller for their email address and store it for post-call follow-up email. Call this tool as soon as you have collected the caller\'s email address. Do not send an email immediately — the email will be sent automatically after the call ends.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    email_address: {
+                        type: 'string',
+                        description: 'The email address provided by the caller.'
+                    }
+                },
+                required: ['email_address'],
+            },
+            _messagingContext: { userId, agentId, callId },
+            handler: async () => ({ success: true }),
+        };
+        return {
+            ...config,
+            tools: [...(config.tools || []), collectTool],
+        };
+    }
+    static addMessagingWhatsAppTool(config, userId, agentId, callId, templateName, templateNames = [], variableDescriptions) {
+        if (config.tools?.some(t => t.name === 'send_whatsapp')) {
+            console.log(`[Agent Factory] send_whatsapp tool already exists, skipping`);
+            return config;
+        }
+        let templateInstruction;
+        if (templateName) {
+            templateInstruction = `You MUST use the template named "${templateName}".`;
+        }
+        else if (templateNames.length > 0) {
+            templateInstruction = `Available WhatsApp templates: ${templateNames.join(', ')}.`;
+        }
+        else {
+            templateInstruction = 'Use the template name configured by the user.';
+        }
+        let parsedVars = {};
+        try {
+            if (variableDescriptions)
+                parsedVars = JSON.parse(variableDescriptions);
+        }
+        catch { /* ignore */ }
+        const fixedVars = {};
+        const collectVars = {};
+        const fixedButtonVars = {};
+        for (const [idx, val] of Object.entries(parsedVars)) {
+            if (typeof val === 'string') {
+                collectVars[idx] = val;
+            }
+            else if (val && typeof val === 'object' && val.componentType === 'button') {
+                const btnIdx = idx.startsWith('btn_') ? parseInt(idx.replace('btn_', '')) : parseInt(idx);
+                if (!isNaN(btnIdx)) {
+                    fixedButtonVars[btnIdx] = val.value || '';
+                }
+            }
+            else if (val && typeof val === 'object' && val.mode === 'fixed') {
+                fixedVars[idx] = val.value || '';
+            }
+            else if (val && typeof val === 'object' && val.mode === 'collect') {
+                collectVars[idx] = val.value || '';
+            }
+        }
+        const hasCollectVars = Object.keys(collectVars).length > 0;
+        const hasFixedVars = Object.keys(fixedVars).length > 0;
+        const hasAnyVars = hasCollectVars || hasFixedVars;
+        let variableInstruction = '';
+        if (hasCollectVars) {
+            const varList = Object.entries(collectVars).map(([idx, desc]) => `{{${idx}}} = ${desc}`).join(', ');
+            variableInstruction += ` This template has variables you MUST collect from the caller: ${varList}. Collect these values from the conversation before sending.`;
+        }
+        if (hasFixedVars) {
+            const fixedList = Object.entries(fixedVars).map(([idx, val]) => `{{${idx}}}`).join(', ');
+            variableInstruction += ` The following variables are pre-filled automatically: ${fixedList}. Do NOT ask the caller for these values.`;
+        }
+        console.log(`[Agent Factory] Adding send_whatsapp tool (${hasCollectVars ? Object.keys(collectVars).length + ' collect' : '0 collect'}, ${hasFixedVars ? Object.keys(fixedVars).length + ' fixed' : '0 fixed'})`);
+        const properties = {
+            template_name: {
+                type: 'string',
+                description: templateName
+                    ? `The WhatsApp template to send. ALWAYS use "${templateName}".`
+                    : `The name of the WhatsApp template to send. ${templateInstruction}`
+            },
+            language: {
+                type: 'string',
+                description: 'The language code for the template (default: en_US)'
+            },
+            phone_number: {
+                type: 'string',
+                description: 'The phone number to send the WhatsApp message to. Use the caller phone number from the call if available.'
+            }
+        };
+        if (hasCollectVars) {
+            const varProperties = {};
+            const varRequired = [];
+            for (const [idx, desc] of Object.entries(collectVars)) {
+                const key = `var_${idx}`;
+                varProperties[key] = {
+                    type: 'string',
+                    description: `Value for template variable {{${idx}}}: ${desc}`
+                };
+                varRequired.push(key);
+            }
+            properties.variables = {
+                type: 'object',
+                description: 'Template variable values to collect from the caller. Each key corresponds to a placeholder in the template.',
+                properties: varProperties,
+                required: varRequired,
+            };
+        }
+        const whatsappTool = {
+            name: 'send_whatsapp',
+            description: `Send a WhatsApp message to the caller using an approved template. The caller's phone number is automatically available from the call. ${templateInstruction}${variableInstruction}`,
+            parameters: {
+                type: 'object',
+                properties,
+                required: hasCollectVars ? ['template_name', 'variables'] : ['template_name'],
+            },
+            _messagingContext: { userId, agentId, callId, defaultTemplate: templateName || undefined, fixedVariables: hasFixedVars ? fixedVars : undefined, fixedButtonVariables: Object.keys(fixedButtonVars).length > 0 ? fixedButtonVars : undefined },
+        };
+        return {
+            ...config,
+            tools: [...(config.tools || []), whatsappTool],
+        };
+    }
+    /**
+     * Enable language detection by enhancing the system prompt
+     * OpenAI models can naturally detect and respond in multiple languages
+     */
+    static enableLanguageDetection(config) {
+        console.log(`[Agent Factory] Enabling language detection`);
+        const languageInstruction = `
+
+LANGUAGE DETECTION: You have automatic language detection enabled. Listen carefully to the language the caller is speaking and ALWAYS respond in the SAME language they use. If they switch languages, you should switch too. Support all major world languages naturally.`;
+        return {
+            ...config,
+            systemPrompt: config.systemPrompt + languageInstruction,
+        };
+    }
+    /**
+     * Recursively substitute {{variable}} placeholders in an object with values from params
+     */
+    static substituteVariables(template, params) {
+        if (typeof template === 'string') {
+            let result = template;
+            const variablePattern = /\{\{(\w+)\}\}/g;
+            let match;
+            while ((match = variablePattern.exec(template)) !== null) {
+                const varName = match[1];
+                const value = params[varName];
+                if (value !== undefined) {
+                    result = result.replace(match[0], String(value));
+                }
+            }
+            return result;
+        }
+        if (Array.isArray(template)) {
+            return template.map(item => this.substituteVariables(item, params));
+        }
+        if (template !== null && typeof template === 'object') {
+            const result = {};
+            for (const [key, value] of Object.entries(template)) {
+                result[key] = this.substituteVariables(value, params);
+            }
+            return result;
+        }
+        return template;
+    }
+    /**
+     * Add webhook tool to agent for custom integrations
+     */
+    static addWebhookTool(config, webhookUrl, toolName, description, parameters, webhookMethod = 'POST', payloadTemplate) {
+        console.log(`[Agent Factory] Adding webhook tool: ${toolName} (${webhookMethod})`);
+        if (payloadTemplate) {
+            console.log(`[Agent Factory] Webhook payload template:`, JSON.stringify(payloadTemplate));
+        }
+        // Ensure contact_name and contact_phone are always in the parameters so OpenAI collects them
+        const enhancedParameters = {
+            type: 'object',
+            properties: {
+                contact_name: {
+                    type: 'string',
+                    description: 'Name of the contact (person on the call)'
+                },
+                contact_phone: {
+                    type: 'string',
+                    description: 'Phone number of the contact'
+                },
+                ...(parameters.properties || {})
+            },
+            required: ['contact_name', 'contact_phone', ...(parameters.required || [])]
+        };
+        const webhookTool = {
+            name: toolName,
+            description,
+            parameters: enhancedParameters,
+            handler: async (params) => {
+                try {
+                    let payload;
+                    // Only use payloadTemplate if it has actual content, otherwise use params directly
+                    if (payloadTemplate && Object.keys(payloadTemplate).length > 0) {
+                        payload = OpenAIAgentFactory.substituteVariables(payloadTemplate, params);
+                        console.log(`[Webhook Tool] Substituted payload:`, JSON.stringify(payload));
+                    }
+                    else {
+                        // Use params directly - this contains the collected conversation data from OpenAI
+                        payload = params;
+                        console.log(`[Webhook Tool] Using params as payload:`, JSON.stringify(params));
+                    }
+                    console.log(`[Webhook Tool] ${webhookMethod} ${webhookUrl} with:`, JSON.stringify(payload));
+                    const urlCheck = await validateWebhookUrl(webhookUrl);
+                    if (!urlCheck.valid) {
+                        throw new Error(`Webhook URL blocked: ${urlCheck.error}`);
+                    }
+                    const fetchOptions = {
+                        method: webhookMethod,
+                        headers: { 'Content-Type': 'application/json' },
+                    };
+                    if (['POST', 'PUT', 'PATCH'].includes(webhookMethod.toUpperCase())) {
+                        fetchOptions.body = JSON.stringify(payload);
+                    }
+                    const response = await fetch(webhookUrl, fetchOptions);
+                    if (!response.ok) {
+                        throw new Error(`Webhook returned ${response.status}`);
+                    }
+                    const data = await response.json();
+                    console.log(`[Webhook Tool] Response:`, data);
+                    return data;
+                }
+                catch (error) {
+                    console.error(`[Webhook Tool] Error:`, error.message);
+                    return { success: false, error: error.message };
+                }
+            },
+            _webhookUrl: webhookUrl,
+            _webhookMethod: webhookMethod,
+            _payloadTemplate: payloadTemplate,
+        };
+        return {
+            ...config,
+            tools: [...(config.tools || []), webhookTool],
+        };
+    }
+    /**
+     * Add API call tool to agent for external HTTP requests
+     */
+    static addApiCallTool(config, nodeId, apiConfig) {
+        const toolName = `api_call_${nodeId.replace(/-/g, '_').substring(0, 8)}`;
+        console.log(`[Agent Factory] Adding API call tool: ${toolName} -> ${apiConfig.url}`);
+        const apiTool = {
+            name: toolName,
+            description: apiConfig.description || `Make an API request to ${apiConfig.url}`,
+            parameters: {
+                type: 'object',
+                properties: {
+                    queryParams: {
+                        type: 'object',
+                        description: 'Optional query parameters to include in the request',
+                    },
+                    bodyData: {
+                        type: 'object',
+                        description: 'Optional body data for POST/PUT requests',
+                    },
+                },
+                required: [],
+            },
+            handler: async (params) => {
+                try {
+                    const method = apiConfig.method || 'GET';
+                    let url = apiConfig.url;
+                    // Add query params if provided
+                    if (params.queryParams && typeof params.queryParams === 'object') {
+                        const queryString = new URLSearchParams(params.queryParams).toString();
+                        url = `${url}${url.includes('?') ? '&' : '?'}${queryString}`;
+                    }
+                    console.log(`[API Call Tool] ${method} ${url}`);
+                    const headers = {
+                        'Content-Type': 'application/json',
+                        ...(apiConfig.headers || {}),
+                    };
+                    const fetchOptions = {
+                        method,
+                        headers,
+                    };
+                    // Add body for POST/PUT/PATCH
+                    if (['POST', 'PUT', 'PATCH'].includes(method.toUpperCase())) {
+                        let body;
+                        if (apiConfig.bodyTemplate) {
+                            // Use template, substituting variables
+                            body = apiConfig.bodyTemplate;
+                            if (params.bodyData && typeof params.bodyData === 'object') {
+                                for (const [key, value] of Object.entries(params.bodyData)) {
+                                    body = body.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), String(value));
+                                }
+                            }
+                            body = JSON.parse(body);
+                        }
+                        else {
+                            body = params.bodyData || {};
+                        }
+                        fetchOptions.body = JSON.stringify(body);
+                    }
+                    const apiUrlCheck = await validateWebhookUrl(url);
+                    if (!apiUrlCheck.valid) {
+                        throw new Error(`API URL blocked: ${apiUrlCheck.error}`);
+                    }
+                    const response = await fetch(url, fetchOptions);
+                    if (!response.ok) {
+                        throw new Error(`API returned ${response.status}: ${response.statusText}`);
+                    }
+                    const contentType = response.headers.get('content-type');
+                    let data;
+                    if (contentType?.includes('application/json')) {
+                        data = await response.json();
+                    }
+                    else {
+                        data = await response.text();
+                    }
+                    console.log(`[API Call Tool] Response received`);
+                    // Apply response mapping if configured
+                    if (apiConfig.responseMapping && typeof data === 'object') {
+                        const mapped = {};
+                        for (const [outputKey, jsonPath] of Object.entries(apiConfig.responseMapping)) {
+                            mapped[outputKey] = this.getNestedValue(data, jsonPath);
+                        }
+                        return { success: true, data: mapped };
+                    }
+                    return { success: true, data };
+                }
+                catch (error) {
+                    console.error(`[API Call Tool] Error:`, error.message);
+                    return { success: false, error: error.message };
+                }
+            },
+            // Store config for serialization
+            _webhookUrl: apiConfig.url,
+            _webhookMethod: apiConfig.method || 'GET',
+            _webhookHeaders: apiConfig.headers,
+            _bodyTemplate: apiConfig.bodyTemplate,
+            _responseMapping: apiConfig.responseMapping,
+        };
+        return {
+            ...config,
+            tools: [...(config.tools || []), apiTool],
+        };
+    }
+    /**
+     * Helper to get nested value from object using dot notation
+     */
+    static getNestedValue(obj, path) {
+        return path.split('.').reduce((current, key) => current?.[key], obj);
+    }
+    /**
+     * Add custom tool from flow node
+     */
+    static addCustomTool(config, toolConfig) {
+        console.log(`[Agent Factory] Adding custom tool: ${toolConfig.name}`);
+        const customTool = {
+            name: toolConfig.name,
+            description: toolConfig.description,
+            parameters: toolConfig.parameters,
+            handler: async (params) => {
+                console.log(`[Custom Tool ${toolConfig.name}] Params:`, params);
+                switch (toolConfig.action) {
+                    case 'log':
+                        console.log(`[Custom Tool ${toolConfig.name}] Logged:`, params);
+                        return { success: true, message: 'Data logged successfully' };
+                    case 'store':
+                        // Store in metadata/context for later use
+                        return { success: true, stored: params };
+                    case 'webhook':
+                        if (toolConfig.webhookUrl) {
+                            try {
+                                const whUrlCheck = await validateWebhookUrl(toolConfig.webhookUrl);
+                                if (!whUrlCheck.valid) {
+                                    return { success: false, error: `Webhook URL blocked: ${whUrlCheck.error}` };
+                                }
+                                const response = await fetch(toolConfig.webhookUrl, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(params),
+                                });
+                                if (!response.ok) {
+                                    throw new Error(`Webhook returned ${response.status}`);
+                                }
+                                return await response.json();
+                            }
+                            catch (error) {
+                                return { success: false, error: error.message };
+                            }
+                        }
+                        return { success: false, error: 'No webhook URL configured' };
+                    default:
+                        return { success: true, data: params };
+                }
+            },
+        };
+        return {
+            ...config,
+            tools: [...(config.tools || []), customTool],
+        };
+    }
+    /**
+     * Get the actual node type from node.data.type or node.data.config.type
+     * Flow builder uses type: "custom" at top level, real type is in data
+     */
+    static getNodeType(node) {
+        const data = node.data || {};
+        return data.type || data.config?.type || node.type || 'unknown';
+    }
+    /**
+     * Get node content (message, question, etc.) from the correct location
+     */
+    static getNodeContent(node, field) {
+        const data = node.data || {};
+        const config = data.config || {};
+        return config[field] || data[field] || '';
+    }
+    /**
+     * Get node data (any type) from the correct location
+     */
+    static getNodeData(node, field, defaultValue) {
+        const data = node.data || {};
+        const config = data.config || {};
+        const value = config[field] ?? data[field];
+        return value !== undefined ? value : defaultValue;
+    }
+    /**
+     * Compile a Flow Builder flow into agent configuration
+     * Converts visual flow nodes into system prompt instructions and tools
+     */
+    static async compileFlow(flowConfig, params) {
+        console.log(`[Agent Factory] Compiling flow with ${flowConfig.nodes.length} nodes, language: ${params.language || 'en'}`);
+        const { nodes, edges, variables } = flowConfig;
+        // Build system prompt from flow structure with language
+        let systemPrompt = this.buildFlowSystemPrompt(nodes, edges, variables, params.language || 'en');
+        // Find first message from start node
+        let firstMessage;
+        const startNode = nodes.find(n => this.getNodeType(n) === 'start' || this.getNodeType(n) === 'message');
+        if (startNode) {
+            const msg = this.getNodeContent(startNode, 'message');
+            if (msg) {
+                firstMessage = msg;
+            }
+        }
+        let config = {
+            voice: params.voice,
+            model: params.model,
+            systemPrompt,
+            firstMessage,
+            temperature: params.temperature ?? 0.7,
+            vadSettings: params.vadSettings,
+            tools: [],
+            flowConfig,
+            toolContext: {
+                userId: params.userId,
+                agentId: params.agentId,
+                callId: params.callId,
+            },
+        };
+        // Add tools based on flow nodes
+        for (const node of nodes) {
+            const nodeType = this.getNodeType(node);
+            switch (nodeType) {
+                case 'transfer': {
+                    const phoneNumber = this.getNodeContent(node, 'phoneNumber');
+                    if (phoneNumber) {
+                        config = this.addTransferTool(config, phoneNumber, this.getNodeContent(node, 'message'));
+                    }
+                    break;
+                }
+                case 'end_call':
+                    config = this.addEndCallTool(config);
+                    break;
+                case 'webhook': {
+                    const url = this.getNodeContent(node, 'url');
+                    const toolName = this.getNodeContent(node, 'toolName');
+                    if (url && toolName) {
+                        const webhookPayload = this.getNodeData(node, 'payload');
+                        config = this.addWebhookTool(config, url, toolName, this.getNodeContent(node, 'description') || 'Custom webhook action', this.getNodeData(node, 'parameters') || { type: 'object', properties: {} }, this.getNodeContent(node, 'method') || 'POST', webhookPayload);
+                    }
+                    break;
+                }
+                case 'api_call': {
+                    const apiUrl = this.getNodeContent(node, 'url');
+                    if (apiUrl) {
+                        config = this.addApiCallTool(config, node.id, {
+                            url: apiUrl,
+                            method: this.getNodeContent(node, 'method') || 'GET',
+                            headers: this.getNodeData(node, 'headers') || {},
+                            bodyTemplate: this.getNodeData(node, 'bodyTemplate'),
+                            responseMapping: this.getNodeData(node, 'responseMapping'),
+                            description: this.getNodeContent(node, 'description') || undefined,
+                        });
+                    }
+                    break;
+                }
+                case 'tool': {
+                    const customToolName = this.getNodeContent(node, 'toolName');
+                    if (customToolName) {
+                        config = this.addCustomTool(config, {
+                            name: customToolName,
+                            description: this.getNodeContent(node, 'description') || 'Custom action',
+                            parameters: this.getNodeData(node, 'parameters') || { type: 'object', properties: {} },
+                            action: this.getNodeData(node, 'action') || 'log',
+                            webhookUrl: this.getNodeContent(node, 'webhookUrl') || undefined,
+                        });
+                    }
+                    break;
+                }
+                case 'appointment':
+                    // Add appointment booking tool when flow has appointment nodes
+                    if (!config.tools?.some(t => t.name === 'book_appointment')) {
+                        config = this.addAppointmentTool(config, params.userId, params.agentId, params.callId);
+                    }
+                    break;
+                case 'form': {
+                    // Add form submission tool when flow has form nodes
+                    const formId = this.getNodeContent(node, 'formId');
+                    if (formId) {
+                        // Fetch form and its fields from database (fields stored in separate formFields table)
+                        const [form] = await db.select().from(forms).where(eq(forms.id, formId)).limit(1);
+                        if (form) {
+                            // Fetch form fields from the formFields table
+                            const formFieldRows = await db
+                                .select()
+                                .from(formFields)
+                                .where(eq(formFields.formId, formId))
+                                .orderBy(formFields.order);
+                            if (formFieldRows.length > 0) {
+                                const formFieldsData = formFieldRows.map(f => ({
+                                    id: f.id,
+                                    question: f.question,
+                                    fieldType: f.fieldType,
+                                    isRequired: f.isRequired,
+                                }));
+                                config = this.addFormTool(config, formId, form.name || 'Form', formFieldsData, params.userId, params.callId);
+                                console.log(`[Agent Factory] Added form tool for form ${formId} with ${formFieldsData.length} fields`);
+                            }
+                            else {
+                                console.warn(`[Agent Factory] Form ${formId} has no fields, skipping form tool`);
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        // Always ensure end_call tool is available for flow agents
+        const hasEndCallTool = config.tools?.some(t => t.name === 'end_call');
+        if (!hasEndCallTool) {
+            config = this.addEndCallTool(config);
+        }
+        return config;
+    }
+    /**
+     * Get human-readable language name from code
+     */
+    static getLanguageName(code) {
+        const languageNames = {
+            'en': 'English',
+            'es': 'Spanish',
+            'fr': 'French',
+            'de': 'German',
+            'it': 'Italian',
+            'pt': 'Portuguese',
+            'nl': 'Dutch',
+            'pl': 'Polish',
+            'ru': 'Russian',
+            'ja': 'Japanese',
+            'ko': 'Korean',
+            'zh': 'Chinese',
+            'ar': 'Arabic',
+            'hi': 'Hindi',
+            'tr': 'Turkish',
+            'vi': 'Vietnamese',
+            'th': 'Thai',
+            'id': 'Indonesian',
+            'ms': 'Malay',
+            'fil': 'Filipino',
+            'bn': 'Bengali',
+            'ta': 'Tamil',
+            'te': 'Telugu',
+            'mr': 'Marathi',
+            'gu': 'Gujarati',
+            'kn': 'Kannada',
+            'ml': 'Malayalam',
+            'pa': 'Punjabi',
+            'ur': 'Urdu',
+            'fa': 'Persian',
+            'he': 'Hebrew',
+            'uk': 'Ukrainian',
+            'cs': 'Czech',
+            'ro': 'Romanian',
+            'hu': 'Hungarian',
+            'el': 'Greek',
+            'sv': 'Swedish',
+            'da': 'Danish',
+            'fi': 'Finnish',
+            'no': 'Norwegian',
+        };
+        return languageNames[code] || code.toUpperCase();
+    }
+    /**
+     * Build system prompt from flow nodes
+     */
+    static buildFlowSystemPrompt(nodes, edges, variables, language = 'en') {
+        const languageName = this.getLanguageName(language);
+        const parts = [
+            `CRITICAL LANGUAGE REQUIREMENT: You MUST speak ONLY in ${languageName}. From the very first word you say, speak in ${languageName}. Do NOT speak English unless ${languageName} is English. This is mandatory.`,
+            '',
+            'You are an AI assistant following a structured conversation flow.',
+            'Guide the conversation through the following steps:',
+            ''
+        ];
+        // Build adjacency map with edge conditions
+        const adjacencyMap = new Map();
+        for (const edge of edges) {
+            const targets = adjacencyMap.get(edge.source) || [];
+            targets.push({ targetId: edge.target, condition: edge.condition });
+            adjacencyMap.set(edge.source, targets);
+        }
+        // Build node lookup
+        const nodeMap = new Map();
+        for (const node of nodes) {
+            nodeMap.set(node.id, node);
+        }
+        // Find start node
+        const startNode = nodes.find(n => this.getNodeType(n) === 'start' || !edges.some(e => e.target === n.id));
+        if (!startNode) {
+            parts.push('Follow the conversation naturally based on user responses.');
+            return parts.join('\n');
+        }
+        // Traverse flow to build instructions with branching
+        const visited = new Set();
+        const queue = [{ node: startNode, depth: 0 }];
+        let stepNumber = 1;
+        while (queue.length > 0) {
+            const { node, depth } = queue.shift();
+            if (visited.has(node.id))
+                continue;
+            visited.add(node.id);
+            const instruction = this.nodeToInstruction(node, stepNumber, edges, nodeMap);
+            if (instruction) {
+                const indent = '  '.repeat(depth);
+                parts.push(`${indent}${stepNumber}. ${instruction}`);
+                stepNumber++;
+            }
+            // Handle branching for condition nodes
+            const nextEdges = adjacencyMap.get(node.id) || [];
+            const currentNodeType = this.getNodeType(node);
+            if (currentNodeType === 'condition' && nextEdges.length > 1) {
+                // Add branching instructions
+                parts.push('');
+                parts.push(`   BRANCHING based on: ${this.getNodeContent(node, 'condition') || 'user response'}`);
+                for (const nextEdge of nextEdges) {
+                    const targetNode = nodeMap.get(nextEdge.targetId);
+                    if (targetNode && !visited.has(targetNode.id)) {
+                        const conditionLabel = nextEdge.condition || 'default';
+                        const targetDescription = this.getNodeContent(targetNode, 'message') || this.getNodeContent(targetNode, 'question') || this.getNodeType(targetNode);
+                        parts.push(`   - If ${conditionLabel}: proceed to step for "${targetDescription}"`);
+                        queue.push({ node: targetNode, depth: depth + 1 });
+                    }
+                }
+                parts.push('');
+            }
+            else {
+                // Linear flow
+                for (const nextEdge of nextEdges) {
+                    const targetNode = nodeMap.get(nextEdge.targetId);
+                    if (targetNode && !visited.has(targetNode.id)) {
+                        queue.push({ node: targetNode, depth });
+                    }
+                }
+            }
+        }
+        // Add variable context if any
+        if (Object.keys(variables).length > 0) {
+            parts.push('');
+            parts.push('Available context variables (use these in your responses):');
+            for (const [key, value] of Object.entries(variables)) {
+                parts.push(`- {{${key}}}: ${value}`);
+            }
+        }
+        // Add flow behavior instructions
+        parts.push('');
+        parts.push('IMPORTANT INSTRUCTIONS:');
+        parts.push('- Guide the conversation naturally through the flow steps.');
+        parts.push('- Wait for user responses before proceeding to the next step.');
+        parts.push('- If the user asks something off-topic, answer briefly then guide them back.');
+        parts.push('- Use the available tools when the flow requires an action.');
+        parts.push('- Be helpful, patient, and maintain a professional tone.');
+        return parts.join('\n');
+    }
+    /**
+     * Convert a flow node to an instruction string
+     */
+    static nodeToInstruction(node, step, edges, nodeMap) {
+        const nodeType = this.getNodeType(node);
+        switch (nodeType) {
+            case 'message': {
+                const message = this.getNodeContent(node, 'message');
+                if (!message) {
+                    return null;
+                }
+                return `Say: "${message}"`;
+            }
+            case 'question': {
+                const question = this.getNodeContent(node, 'question') || 'What would you like to do?';
+                const options = this.getNodeData(node, 'options');
+                if (options && options.length > 0) {
+                    return `Ask: "${question}" (Expected answers: ${options.join(', ')})`;
+                }
+                return `Ask the user: "${question}" and wait for their response.`;
+            }
+            case 'condition': {
+                const condition = this.getNodeContent(node, 'condition') || 'based on user response';
+                const conditionType = this.getNodeContent(node, 'conditionType') || 'llm';
+                if (conditionType === 'exact') {
+                    return `Check if the user's response matches: "${condition}"`;
+                }
+                return `Evaluate: ${condition}. Then proceed based on the result.`;
+            }
+            case 'transfer': {
+                const transferMsg = this.getNodeContent(node, 'message') || 'Let me connect you with a human agent.';
+                return `If transfer is needed, say "${transferMsg}" then use the transfer_call tool.`;
+            }
+            case 'appointment': {
+                const serviceName = this.getNodeContent(node, 'serviceName') || 'an appointment';
+                return `Collect appointment details for ${serviceName}: ask for name, phone, date, and time. Then use the book_appointment tool. After booking successfully, provide a brief confirmation message (e.g., "Your appointment is confirmed. Thank you and goodbye!") and IMMEDIATELY use the end_call tool to disconnect the call.`;
+            }
+            case 'form': {
+                const formName = this.getNodeContent(node, 'formName') || 'the form';
+                const fields = this.getNodeData(node, 'fields');
+                if (fields && fields.length > 0) {
+                    const questions = fields.map(f => f.question).join('; ');
+                    return `Collect information for ${formName} by asking: ${questions}. Then use submit_form tool.`;
+                }
+                return `Collect the required form information for ${formName}, then use submit_form tool.`;
+            }
+            case 'api_call': {
+                const desc = this.getNodeContent(node, 'description') || 'external data';
+                const toolName = `api_call_${node.id.replace(/-/g, '_').substring(0, 8)}`;
+                return `Use the ${toolName} tool to fetch ${desc}. Use the response in your conversation.`;
+            }
+            case 'tool': {
+                const customToolName = this.getNodeContent(node, 'toolName') || 'custom_tool';
+                const toolDesc = this.getNodeContent(node, 'description') || 'perform an action';
+                return `When appropriate, use the ${customToolName} tool to ${toolDesc}.`;
+            }
+            case 'delay': {
+                const delaySeconds = this.getNodeData(node, 'seconds') || this.getNodeData(node, 'duration') || 2;
+                const delayMessage = this.getNodeContent(node, 'message');
+                if (delayMessage) {
+                    return `WAIT ${delaySeconds} seconds. During this pause, say: "${delayMessage}"`;
+                }
+                return `WAIT ${delaySeconds} seconds before continuing to the next step. You may say "One moment please..." during the pause.`;
+            }
+            case 'webhook': {
+                const webhookToolName = this.getNodeContent(node, 'toolName') || 'webhook';
+                return `When appropriate, use the ${webhookToolName} tool to send data externally.`;
+            }
+            case 'end_call': {
+                const endMessage = this.getNodeContent(node, 'message') || 'Thank you for calling. Goodbye!';
+                return `End the conversation by saying: "${endMessage}" Then use the end_call tool.`;
+            }
+            case 'start': {
+                const startMessage = this.getNodeContent(node, 'message');
+                if (startMessage) {
+                    return `Greet the user with: "${startMessage}"`;
+                }
+                return null;
+            }
+            default:
+                return null;
+        }
+    }
+    /**
+     * Create a complete agent from database agent record
+     */
+    static async createFromAgentRecord(agent, userTier, callId, flowConfig) {
+        console.log(`[Agent Factory] Creating agent from record: ${agent.id}, type: ${agent.type}, language: ${agent.language || 'en'}`);
+        const voice = this.validateVoice(agent.openaiVoice || 'alloy');
+        const model = this.validateModel(agent.openaiModel || 'gpt-realtime-1.5', userTier);
+        let config;
+        // Handle flow-based agents
+        if (agent.type === 'flow' && flowConfig) {
+            config = await this.compileFlow(flowConfig, {
+                voice,
+                model,
+                userId: agent.userId,
+                agentId: agent.id,
+                callId,
+                temperature: agent.temperature ?? 0.7,
+                language: agent.language || 'en',
+            });
+        }
+        else {
+            // Natural or incoming agents
+            config = this.createAgentConfig({
+                voice,
+                model,
+                systemPrompt: agent.systemPrompt || 'You are a helpful AI assistant.',
+                firstMessage: agent.firstMessage || undefined,
+                temperature: agent.temperature || 0.7,
+                userTier,
+                toolContext: {
+                    userId: agent.userId,
+                    agentId: agent.id,
+                    callId,
+                },
+            });
+        }
+        // Add knowledge base tool if configured
+        if (agent.knowledgeBaseIds && agent.knowledgeBaseIds.length > 0) {
+            config = this.addKnowledgeBaseTool(config, agent.knowledgeBaseIds, agent.userId);
+        }
+        // Add transfer tool if enabled
+        if (agent.transferEnabled && agent.transferPhoneNumber) {
+            config = this.addTransferTool(config, agent.transferPhoneNumber, agent.transferMessage || undefined);
+        }
+        // Add end call tool if enabled
+        if (agent.endConversationEnabled) {
+            config = this.addEndCallTool(config);
+        }
+        // Enable language detection if enabled
+        if (agent.detectLanguageEnabled) {
+            config = this.enableLanguageDetection(config);
+        }
+        // Add collect caller email tool if email messaging is enabled (for post-call follow-up)
+        if (agent.messagingEmailEnabled) {
+            config = this.addCollectCallerEmailTool(config, agent.userId, agent.id, callId);
+        }
+        // Add messaging email tool if enabled
+        if (agent.messagingEmailEnabled) {
+            config = this.addMessagingEmailTool(config, agent.userId, agent.id, callId, agent.messagingEmailTemplate);
+        }
+        // Add messaging WhatsApp tool if enabled
+        if (agent.messagingWhatsappEnabled) {
+            config = this.addMessagingWhatsAppTool(config, agent.userId, agent.id, callId, agent.messagingWhatsappTemplate, [], undefined);
+        }
+        console.log(`[Agent Factory] Created config with ${config.tools?.length || 0} tools`);
+        return config;
+    }
+}
