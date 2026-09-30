@@ -23,6 +23,7 @@ import { apiRequest, queryClient } from "@/shared/lib/queryClient";
 import { useToast } from "@/shared/hooks/use-toast";
 import { useAppHeader } from "@/shared/components/AppPageHeader";
 import { useDemoMode } from "@/shared/components/DemoModeBanner";
+import { useCreateCampaign } from "@/shared/hooks/use-channel-guard";
 import { usePagination } from "@/shared/components/ui/data-pagination";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
@@ -138,6 +139,7 @@ export default function Campaigns() {
     const [campaignToDelete, setCampaignToDelete] = useState(null);
     const [campaignToPurge, setCampaignToPurge] = useState(null);
     const [showPhoneNumberAlert, setShowPhoneNumberAlert] = useState(false);
+    const { startCreateCampaign, isChecking: checkingCreate } = useCreateCampaign();
     const [isVideoOpen, setIsVideoOpen] = useState(false);
     const tableSearch = searchQuery || search;
     const { data: user, isLoading: userLoading } = useQuery({
@@ -498,7 +500,7 @@ export default function Campaigns() {
           <span>&gt;</span>
           <span className="text-slate-600">Campaigns</span>
           </div>
-              <Button onClick={() => setLocation(tab === "calling" ? "/campaigns/new?channel=calling" : "/campaigns/new")} className="h-10 bg-[#007BFF] hover:bg-[#0069d9] text-white border-transparent" data-testid="button-create-campaign">
+              <Button onClick={() => startCreateCampaign(tab === "calling" ? "calling" : "whatsapp")} disabled={checkingCreate} className="h-10 bg-[#007BFF] hover:bg-[#0069d9] text-white border-transparent" data-testid="button-create-campaign">
               <Plus className="h-4 w-4 mr-2"/>
           Create Campaign
             </Button>

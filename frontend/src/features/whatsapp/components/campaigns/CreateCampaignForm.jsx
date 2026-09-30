@@ -150,7 +150,7 @@ export function CreateCampaignForm({ onSubmit, selectedTemplate, setSelectedTemp
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-center gap-3">
-            <TemplatePickerDialog channelId={channelId} onSelectTemplate={handleSelectTemplate} submitLabel="Use Template" categoryFilter="MARKETING" trigger={<Button type="button" variant="outline" className="h-10 gap-2 bg-white border-slate-200 text-slate-800">
+            <TemplatePickerDialog channelId={channelId} onSelectTemplate={handleSelectTemplate} submitLabel="Use Template" categoryFilter="MARKETING" missingChannelMessage="Create a WhatsApp channel before starting a campaign." trigger={<Button type="button" variant="outline" className="h-10 gap-2 bg-white border-slate-200 text-slate-800">
                   <FileText className="h-4 w-4"/>
                   {selectedTemplate ? "Change Template" : "Select Template"}
                 </Button>}/>
@@ -227,12 +227,13 @@ export function CreateCampaignForm({ onSubmit, selectedTemplate, setSelectedTemp
       {children}
 
       <div className="flex flex-col items-end gap-1.5 pt-1">
-        {!selectedTemplate && (<p className="text-xs text-slate-500">Select a template to enable Start Campaign</p>)}
+        {!channelId && (<p className="text-xs text-red-500">Create a WhatsApp channel before starting a campaign.</p>)}
+        {!selectedTemplate && channelId && (<p className="text-xs text-slate-500">Select a template to enable Start Campaign</p>)}
         <div className="flex justify-end gap-3">
           <Button type="button" variant="outline" onClick={onCancel} className="h-10 min-w-[100px] bg-white border-slate-200">
             Cancel
           </Button>
-          <Button type="submit" disabled={user?.username === "demouser" ? true : isCreating || !selectedTemplate} className="h-10 min-w-[140px] bg-[#007BFF] hover:bg-[#0069d9] text-white">
+          <Button type="submit" disabled={user?.username === "demouser" ? true : isCreating || (!selectedTemplate && !!channelId)} className="h-10 min-w-[140px] bg-[#007BFF] hover:bg-[#0069d9] text-white">
             {isCreating ? "Starting..." : "Start Campaign"}
           </Button>
         </div>

@@ -51,7 +51,7 @@ const MessageComposer = ({ selectedConversation, messageText, onTyping, onSendMe
 
               <input ref={fileInputRef} type="file" hidden onChange={onFileChange} accept="image/*,video/*,audio/*,.pdf,.doc,.docx"/>
 
-                <TemplatePickerDialog channelId={activeChannelId} onSelectTemplate={onSelectTemplate}/>
+                <TemplatePickerDialog channelId={activeChannelId} onSelectTemplate={onSelectTemplate} missingChannelMessage="Create a WhatsApp channel before sending a template."/>
             </>)}
 
 

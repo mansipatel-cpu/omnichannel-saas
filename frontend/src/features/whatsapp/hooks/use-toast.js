@@ -116,6 +116,9 @@ function toast({ ...props }) {
             },
         },
     });
+    if (typeof window !== "undefined" && typeof window.__AGENTLABS_TOAST__ === "function") {
+        window.__AGENTLABS_TOAST__(props);
+    }
     return {
         id: id,
         dismiss,

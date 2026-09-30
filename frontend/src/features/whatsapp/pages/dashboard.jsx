@@ -27,6 +27,7 @@ import { useState } from "react";
 import { LogOut, LogIn, Edit, PlusCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useLocation } from "wouter";
+import { useCreateTemplate } from "@/shared/hooks/use-channel-guard";
 import { useAuth } from "@wa/contexts/auth-context";
 import { apiRequest } from "@wa/lib/queryClient";
 import AdminStats from "@wa/components/AdminStats";
@@ -34,6 +35,7 @@ export default function Dashboard() {
     const { t } = useTranslation();
     const { user } = useAuth();
     const [, setLocation] = useLocation();
+    const { startCreateTemplate } = useCreateTemplate();
     const { data: activeChannel } = useQuery({
         queryKey: ["/api/whatsapp/channels/active"],
         queryFn: async () => {
@@ -449,7 +451,7 @@ export default function Dashboard() {
                     </div>
                   </Button>
 
-                  <Button variant="outline" className="p-4 h-auto text-left flex flex-col items-start space-y-2 hover:bg-green-50" onClick={() => setLocation("~/templates/new")}>
+                  <Button variant="outline" className="p-4 h-auto text-left flex flex-col items-start space-y-2 hover:bg-green-50" onClick={() => startCreateTemplate("whatsapp")}>
                     <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center">
                       <FileText className="w-4 h-4 text-white"/>
                     </div>

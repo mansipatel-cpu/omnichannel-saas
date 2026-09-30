@@ -56,7 +56,7 @@ export function TemplateMessageDialog({ showMessageDialog, setShowMessageDialog,
             <p className="text-sm text-gray-600 text-center">
               Select a template to send to this contact
             </p>
-            <TemplatePickerDialog channelId={activeChannel?.id} onSelectTemplate={handleSelectTemplate} submitLabel="Send Template" trigger={<Button variant="outline" className="gap-2" disabled={!activeChannel || user?.username === "demouser"}>
+            <TemplatePickerDialog channelId={activeChannel?.id} onSelectTemplate={handleSelectTemplate} submitLabel="Send Template" missingChannelMessage="Create a WhatsApp channel before sending a template." trigger={<Button variant="outline" className="gap-2" disabled={!activeChannel || user?.username === "demouser"}>
                   <FileText className="h-4 w-4"/>
                   Choose & Send Template
                 </Button>}/>

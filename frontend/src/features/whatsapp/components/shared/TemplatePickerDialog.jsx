@@ -77,12 +77,19 @@ export function getTemplateButtons(template) {
     }
     return buttons;
 }
-export function TemplatePickerDialog({ channelId, onSelectTemplate, trigger, submitLabel = "Send Template", categoryFilter, }) {
+export function TemplatePickerDialog({ channelId, onSelectTemplate, trigger, submitLabel = "Send Template", categoryFilter, missingChannelMessage = "Create a WhatsApp channel before using templates.", }) {
     const [open, setOpen] = useState(false);
     const [selectedTemplate, setSelectedTemplate] = useState(null);
     const [variables, setVariables] = useState([]);
     const [buttonParams, setButtonParams] = useState({});
     const { toast } = useToast();
+    const notifyMissingChannel = () => {
+        toast({
+            title: "No WhatsApp channel",
+            description: missingChannelMessage,
+            variant: "destructive",
+        });
+    };
     const [requiresHeaderImage, setRequiresHeaderImage] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [headerType, setHeaderType] = useState(null);
@@ -180,7 +187,7 @@ export function TemplatePickerDialog({ channelId, onSelectTemplate, trigger, sub
     };
     const uploadHeaderImage = async (file) => {
         if (!channelId) {
-            toast({ title: "Error", description: "No active channel found", variant: "destructive" });
+            notifyMissingChannel();
             return;
         }
         setIsUploading(true);
@@ -258,16 +265,21 @@ export function TemplatePickerDialog({ channelId, onSelectTemplate, trigger, sub
       <FileText className="h-4 w-4"/>
     </Button>);
     return (<Dialog open={open} onOpenChange={(v) => {
+            if (v && !channelId) {
+                notifyMissingChannel();
+                return;
+            }
             setOpen(v);
             if (!v) {
                 setTemplateSearchQuery("");
                 setTemplateCategoryFilter(categoryFilter || "ALL");
+                resetState();
             }
         }}>
       <DialogTrigger asChild>
         {trigger || defaultTrigger}
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[85vh]">
+      <DialogContent className="max-w-2xl max-h-[85vh] bg-white">
         <DialogHeader>
           <DialogTitle>
             {selectedTemplate ? "Configure Template" : "Select Template"}
@@ -280,7 +292,7 @@ export function TemplatePickerDialog({ channelId, onSelectTemplate, trigger, sub
         {!selectedTemplate && (<div className="space-y-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"/>
-              <Input placeholder="Search templates..." value={templateSearchQuery} onChange={(e) => setTemplateSearchQuery(e.target.value)} className="pl-9"/>
+              <Input placeholder="Search templates..." value={templateSearchQuery} onChange={(e) => setTemplateSearchQuery(e.target.value)} className="pl-9 bg-white border-slate-200 focus-visible:ring-blue-500"/>
             </div>
             <div className="flex gap-1.5 flex-wrap">
               {[
@@ -288,7 +300,9 @@ export function TemplatePickerDialog({ channelId, onSelectTemplate, trigger, sub
                 { key: "MARKETING", label: "Marketing", icon: Megaphone },
                 { key: "UTILITY", label: "Utility", icon: Wrench },
                 { key: "AUTHENTICATION", label: "Auth", icon: ShieldCheck },
-            ].map((cat) => (<Button key={cat.key} variant={templateCategoryFilter === cat.key ? "default" : "outline"} size="sm" className={cn("h-7 text-xs px-2.5", templateCategoryFilter === cat.key && "bg-green-600 hover:bg-green-700 text-white")} onClick={() => setTemplateCategoryFilter(cat.key)}>
+            ].map((cat) => (<Button key={cat.key} variant={templateCategoryFilter === cat.key ? "default" : "outline"} size="sm" className={cn("h-7 text-xs px-2.5", templateCategoryFilter === cat.key
+                    ? "bg-blue-600 hover:bg-blue-700 text-white border-blue-600"
+                    : "bg-white text-blue-600 border-blue-200 hover:bg-blue-50 hover:text-blue-700")} onClick={() => setTemplateCategoryFilter(cat.key)}>
                   {cat.icon && <cat.icon className="w-3 h-3 mr-1"/>}
                   {cat.label}
                 </Button>))}
@@ -307,6 +321,10 @@ export function TemplatePickerDialog({ channelId, onSelectTemplate, trigger, sub
             });
             return isLoading ? (<div className="flex items-center justify-center py-8">
                   <Loading />
+                </div>) : !channelId ? (<div className="text-center py-8 text-gray-500">
+                  <FileText className="mx-auto h-10 w-10 text-gray-300 mb-3"/>
+                  <p className="font-medium">No WhatsApp channel</p>
+                  <p className="text-sm mt-1">{missingChannelMessage}</p>
                 </div>) : filtered.length === 0 ? (<div className="text-center py-8 text-gray-500">
                   <FileText className="mx-auto h-10 w-10 text-gray-300 mb-3"/>
                   <p className="font-medium">No templates found</p>
@@ -322,7 +340,7 @@ export function TemplatePickerDialog({ channelId, onSelectTemplate, trigger, sub
                     const MediaIcon = getTemplateMediaIcon(template.mediaType);
                     const buttons = getTemplateButtons(template);
                     const langLabel = getTemplateLanguageLabel(template.language);
-                    return (<div key={template.id} onClick={() => handleTemplateSelect(template)} className="border rounded-lg p-3.5 cursor-pointer hover:shadow-md hover:border-green-300 transition-all bg-white group">
+                    return (<div key={template.id} onClick={() => handleTemplateSelect(template)} className="border border-slate-200 rounded-lg p-3.5 cursor-pointer hover:shadow-md hover:border-blue-300 transition-all bg-white group">
                         <div className="flex items-start justify-between mb-2">
                           <h4 className="font-semibold text-sm text-gray-900 truncate flex-1 mr-2">
                             {template.name}

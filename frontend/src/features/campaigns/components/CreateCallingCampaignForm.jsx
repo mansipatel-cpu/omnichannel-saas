@@ -13,6 +13,7 @@ import { Checkbox } from "@/shared/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/shared/components/ui/select";
 import { InfoTooltip } from "@/shared/components/ui/info-tooltip";
 import { Settings2, Bot, Clock, FilePlus2, Upload, Download, Info, } from "lucide-react";
+const NO_PHONE_MESSAGE = "Add a phone number before starting a campaign.";
 const fieldClass = "h-11 bg-[#EEF4FF] border-transparent rounded-lg text-slate-800 placeholder:text-slate-400 focus-visible:ring-[#007BFF]";
 const textareaClass = "bg-[#EEF4FF] border-transparent rounded-lg text-slate-800 placeholder:text-slate-400 focus-visible:ring-[#007BFF] min-h-[96px]";
 const selectTriggerClass = "h-11 bg-[#EEF4FF] border-transparent rounded-lg text-slate-800 focus:ring-[#007BFF]";
@@ -151,6 +152,32 @@ export function CreateCallingCampaignForm() {
     const update = (key, value) => {
         setFormData((prev) => ({ ...prev, [key]: value }));
     };
+    const availablePhoneCount = isElevenLabsSipAgent
+        ? sipPhoneNumbers.filter((phone) => phone.engine === "elevenlabs-sip").length
+        : isPlivoAgent
+            ? plivoPhoneNumbers.length
+            : isCustomVoiceAgent
+                ? userSipPhoneNumbers.length
+                : phoneNumbers.length;
+    const hasSelectedPhone = isElevenLabsSipAgent
+        ? Boolean(formData.sipPhoneNumberId)
+        : isPlivoAgent
+            ? Boolean(formData.plivoPhoneNumberId)
+            : isCustomVoiceAgent
+                ? Boolean(formData.sipPhoneNumberId)
+                : Boolean(formData.phoneNumberId);
+    const notifyMissingPhone = () => {
+        toast({
+            title: "No phone number",
+            description: NO_PHONE_MESSAGE,
+            variant: "destructive",
+        });
+    };
+    const handlePhoneSelectOpen = (open) => {
+        if (open && formData.agentId && availablePhoneCount === 0) {
+            notifyMissingPhone();
+        }
+    };
     const createMutation = useMutation({
         mutationFn: async () => {
             setShowErrors(true);
@@ -162,18 +189,18 @@ export function CreateCallingCampaignForm() {
                 if (!isSipPluginEnabled)
                     throw new Error("SIP Plugin is disabled");
                 if (!formData.sipPhoneNumberId)
-                    throw new Error("Please select a phone number");
+                    throw new Error(availablePhoneCount === 0 ? NO_PHONE_MESSAGE : "Please select a phone number");
             }
             else if (isPlivoAgent) {
                 if (!formData.plivoPhoneNumberId)
-                    throw new Error("Please select a phone number");
+                    throw new Error(availablePhoneCount === 0 ? NO_PHONE_MESSAGE : "Please select a phone number");
             }
             else if (!isCustomVoiceAgent) {
                 if (!formData.phoneNumberId)
-                    throw new Error("Please select a phone number");
+                    throw new Error(availablePhoneCount === 0 ? NO_PHONE_MESSAGE : "Please select a phone number");
             }
             else if (!formData.sipPhoneNumberId) {
-                throw new Error("Please select a phone number");
+                throw new Error(availablePhoneCount === 0 ? NO_PHONE_MESSAGE : "Please select a phone number");
             }
             if (formData.scheduleEnabled && formData.scheduleDays.length === 0) {
                 throw new Error("Select at least one day for scheduling");

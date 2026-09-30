@@ -16,11 +16,12 @@
  */
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import { useTranslation } from "react-i18next";
 import { AuthStorage } from "@/shared/lib/auth-storage";
 import { useDemoMode } from "@/shared/components/DemoModeBanner";
 import { useAppHeader } from "@/shared/components/AppPageHeader";
+import { useCreateCampaign, useCreateTemplate } from "@/shared/hooks/use-channel-guard";
 import { Button } from "@/shared/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "@/shared/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/shared/components/ui/dialog";
@@ -89,6 +90,8 @@ export default function Dashboard() {
     const { t } = useTranslation();
     const { isDemoMode } = useDemoMode();
     const [, setLocation] = useLocation();
+    const { startCreateCampaign } = useCreateCampaign();
+    const { startCreateTemplate } = useCreateTemplate();
     const [campaignChoiceOpen, setCampaignChoiceOpen] = useState(false);
     const [isVideoOpen, setIsVideoOpen] = useState(false);
     const { search, setActions } = useAppHeader();
@@ -245,12 +248,12 @@ export default function Dashboard() {
           <p className="font-semibold text-[15px] text-slate-900">Add Contact</p>
           <p className="text-xs text-slate-500 mt-1">Add the new contact list.</p>
         </button>
-        <Link href="~/templates/new" className="rounded-2xl bg-white border border-slate-200 p-5 text-left min-h-[132px] hover:border-[#007BFF]/40 transition-colors shadow-sm">
+        <button onClick={() => startCreateTemplate("whatsapp")} className="rounded-2xl bg-white border border-slate-200 p-5 text-left min-h-[132px] hover:border-[#007BFF]/40 transition-colors shadow-sm">
           <FilePlus className="h-7 w-7 text-[#007BFF] mb-5"/>
           <p className="font-semibold text-[15px] text-slate-900">Create Template</p>
           <p className="text-xs text-slate-500 mt-1">Build a reusable message template.</p>
-        </Link>
-        <button onClick={() => setLocation("/campaigns/new?channel=calling")} className="rounded-2xl bg-white border border-slate-200 p-5 text-left min-h-[132px] hover:border-[#007BFF]/40 transition-colors shadow-sm">
+        </button>
+        <button onClick={() => startCreateCampaign("calling")} className="rounded-2xl bg-white border border-slate-200 p-5 text-left min-h-[132px] hover:border-[#007BFF]/40 transition-colors shadow-sm">
           <PhoneCall className="h-7 w-7 text-[#007BFF] mb-5"/>
           <p className="font-semibold text-[15px] text-slate-900">Create Calling Campaign</p>
           <p className="text-xs text-slate-500 mt-1">Set up an automated voice calling campaign.</p>
@@ -447,14 +450,14 @@ export default function Dashboard() {
           <div className="grid gap-3 pt-2">
             <button className="rounded-xl border border-slate-200 p-4 text-left hover:border-[#007BFF] hover:bg-sky-50/60 transition-colors" onClick={() => {
             setCampaignChoiceOpen(false);
-            setLocation("/campaigns/new");
+            startCreateCampaign("whatsapp");
         }}>
               <p className="font-semibold text-slate-900">WhatsApp campaign</p>
               <p className="text-sm text-slate-500 mt-1">Send messages to your audience on WhatsApp.</p>
             </button>
             <button className="rounded-xl border border-slate-200 p-4 text-left hover:border-[#007BFF] hover:bg-sky-50/60 transition-colors" onClick={() => {
             setCampaignChoiceOpen(false);
-            setLocation("/campaigns/new?channel=calling");
+            startCreateCampaign("calling");
         }}>
               <p className="font-semibold text-slate-900">Calling campaign</p>
               <p className="text-sm text-slate-500 mt-1">Set up an automated voice calling campaign.</p>

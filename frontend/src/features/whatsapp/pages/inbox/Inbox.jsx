@@ -748,6 +748,14 @@ export default function Inbox() {
     const handleSelectTemplate = (template, variables, mediaId, headerType, buttonParameters, expirationTimeMs, carouselCardMediaIds) => {
         if (!selectedConversation)
             return;
+        if (!activeChannel?.id) {
+            toast({
+                title: "No WhatsApp channel",
+                description: "Create a WhatsApp channel before sending a template.",
+                variant: "destructive",
+            });
+            return;
+        }
         sendTemplateMutation.mutate({
             conversationId: selectedConversation.id,
             templateName: template.name,
@@ -953,7 +961,7 @@ export default function Inbox() {
             <span className="text-slate-600">Team Inbox</span>
           </div>
           <div className="flex-1 flex items-center justify-center overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-sm">
-            <EmptyState icon={MessageCircle} title="No Active Channel" description="Please select a channel from the channel switcher to view conversations."/>
+            <EmptyState icon={MessageCircle} title="No Active Channel" description="Create a WhatsApp channel before using Team Inbox."/>
           </div>
         </div>
       </div>);

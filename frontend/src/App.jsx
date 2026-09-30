@@ -81,7 +81,6 @@ import FeaturesPage from "@/features/landing/pages/FeaturesPage";
 import PricingPage from "@/features/landing/pages/PricingPage";
 import UseCasesPage from "@/features/landing/pages/UseCasesPage";
 import IntegrationsPage from "@/features/flows/pages/IntegrationsPage";
-import { CookieConsentBanner } from "@/shared/components/CookieConsentBanner";
 import { AnalyticsScripts } from "@/shared/components/AnalyticsScripts";
 import { SessionTimeoutDialog } from "@/shared/components/SessionTimeoutDialog";
 import { useActivityTimeout } from "@/shared/hooks/useActivityTimeout";
@@ -584,7 +583,6 @@ export default function App() {
                       <Router />
                     </SessionTimeoutWrapper>
                     <Toaster />
-                    <CookieConsentBanner />
                   </TooltipProvider>
                 </DynamicLanguagesProvider>
               </PluginBootstrapper>

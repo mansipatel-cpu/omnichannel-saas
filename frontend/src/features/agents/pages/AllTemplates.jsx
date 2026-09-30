@@ -21,6 +21,7 @@ import { format, startOfMonth } from "date-fns";
 import { AuthStorage } from "@/shared/lib/auth-storage";
 import { apiRequest, apiRequestFormData, queryClient } from "@/shared/lib/queryClient";
 import { useToast } from "@/shared/hooks/use-toast";
+import { useCreateTemplate } from "@/shared/hooks/use-channel-guard";
 import { useAppHeader } from "@/shared/components/AppPageHeader";
 import { usePagination } from "@/shared/components/ui/data-pagination";
 import { Button } from "@/shared/components/ui/button";
@@ -177,6 +178,7 @@ function buildTemplateFormData(data, channelId) {
 }
 export default function AllTemplates() {
     const { toast } = useToast();
+    const { startCreateTemplate, isChecking: checkingCreate } = useCreateTemplate();
     const { setPageMeta, search } = useAppHeader();
     const [tab, setTab] = useState("whatsapp");
     const [searchQuery, setSearchQuery] = useState("");
@@ -418,7 +420,6 @@ export default function AllTemplates() {
             toast({ title: "Failed to save template", description: error.message || "Please try again", variant: "destructive" });
         },
     });
-    const createHref = tab === "whatsapp" ? "~/templates/new" : "~/templates/agentlab/new";
     const filterTriggerClass = "h-10 w-[148px] shrink-0 bg-white border-slate-200";
     return (<div className="space-y-5 pb-8">
       <div className="flex items-center justify-between gap-3">
@@ -432,11 +433,9 @@ export default function AllTemplates() {
               <RefreshCw className={`h-4 w-4 mr-2 ${syncMutation.isPending ? "animate-spin" : ""}`}/>
               Sync Meta API
             </Button>)}
-          <Button asChild className="h-10 bg-[#007BFF] hover:bg-[#0069d9] text-white border-transparent" data-testid="button-add-template">
-            <Link href={createHref}>
-              <Plus className="h-4 w-4 mr-2"/>
-              Add Template
-            </Link>
+          <Button onClick={() => startCreateTemplate(tab === "whatsapp" ? "whatsapp" : "agentlab")} disabled={checkingCreate} className="h-10 bg-[#007BFF] hover:bg-[#0069d9] text-white border-transparent" data-testid="button-add-template">
+            <Plus className="h-4 w-4 mr-2"/>
+            Add Template
           </Button>
         </div>
       </div>
