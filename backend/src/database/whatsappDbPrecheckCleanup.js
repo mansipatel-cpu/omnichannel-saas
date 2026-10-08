@@ -44,12 +44,12 @@ export const precheckCleanupSteps = [
         IF EXISTS (SELECT 1 FROM information_schema.tables
                     WHERE table_schema='public' AND table_name='conversations')
            AND EXISTS (SELECT 1 FROM information_schema.tables
-                    WHERE table_schema='public' AND table_name='contacts') THEN
+                    WHERE table_schema='public' AND table_name='wa_contacts') THEN
           UPDATE conversations
             SET contact_id = NULL
             WHERE contact_id = ''
                OR (contact_id IS NOT NULL
-                   AND contact_id NOT IN (SELECT id FROM contacts));
+                   AND contact_id NOT IN (SELECT id FROM wa_contacts));
         END IF;
 
         IF EXISTS (SELECT 1 FROM information_schema.tables
@@ -73,10 +73,20 @@ export const precheckCleanupSteps = [
         END IF;
 
         IF EXISTS (SELECT 1 FROM information_schema.tables
-                    WHERE table_schema='public' AND table_name='contacts')
+                    WHERE table_schema='public' AND table_name='whatsapp_contact_channels')
            AND EXISTS (SELECT 1 FROM information_schema.tables
                     WHERE table_schema='public' AND table_name='users') THEN
-          UPDATE contacts
+          UPDATE whatsapp_contact_channels
+            SET created_by = NULL
+            WHERE created_by = ''
+               OR (created_by IS NOT NULL
+                   AND created_by NOT IN (SELECT id FROM users));
+        ELSIF EXISTS (SELECT 1 FROM information_schema.tables
+                    WHERE table_schema='public' AND table_name='wa_contacts'
+                      AND table_type='BASE TABLE')
+           AND EXISTS (SELECT 1 FROM information_schema.tables
+                    WHERE table_schema='public' AND table_name='users') THEN
+          UPDATE wa_contacts
             SET created_by = NULL
             WHERE created_by = ''
                OR (created_by IS NOT NULL

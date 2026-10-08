@@ -83,7 +83,7 @@ async function lookupSipCallData(callId, userId) {
              ct.email as contact_email
       FROM sip_calls sc
       LEFT JOIN agents a ON sc.agent_id = a.id
-      LEFT JOIN contacts ct ON sc.contact_id = ct.id
+      LEFT JOIN campaign_contacts ct ON sc.contact_id = ct.id
       WHERE sc.id = ${callId} AND sc.user_id = ${userId}
       LIMIT 1
     `);
@@ -120,7 +120,7 @@ async function lookupRegularCallData(callId, userId) {
              ct.email as contact_email
       FROM calls c
       LEFT JOIN agents a ON c.agent_id = a.id
-      LEFT JOIN contacts ct ON c.contact_id = ct.id
+      LEFT JOIN campaign_contacts ct ON c.contact_id = ct.id
       WHERE c.id = ${callId} AND c.user_id = ${userId}
       LIMIT 1
     `);

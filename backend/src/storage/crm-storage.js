@@ -8,6 +8,7 @@
 import { db } from '../config/database';
 import { leads, leadStages, leadNotes, leadActivities, campaigns, incomingConnections, AI_LEAD_CATEGORIES, crmCategoryPreferences } from '@shared/schema';
 import { eq, and, desc, asc, sql, ilike, or, inArray, notInArray, gte, lte, count, isNotNull } from 'drizzle-orm';
+import { ensureSharedContact } from '../services/contact-identity.service';
 // Default stages with colors (created per user on first access)
 export const DEFAULT_STAGES = [
     { name: 'New Lead', color: '#9CA3AF', order: 0, stage: 'new' },
@@ -376,16 +377,36 @@ export class CRMStorage {
         });
     }
     static async createLead(data) {
+        const contactId = data.contactId || await CRMStorage.sharedContactIdForLead(data);
         const [lead] = await db
             .insert(leads)
-            .values(data)
+            .values({ ...data, contactId })
             .returning();
         return lead;
     }
+    static async sharedContactIdForLead(data) {
+        try {
+            return await ensureSharedContact(data.userId, {
+                phone: data.phone,
+                firstName: data.firstName,
+                lastName: data.lastName,
+                email: data.email,
+                source: "lead",
+            });
+        }
+        catch (error) {
+            console.error('[CRM] Failed to link lead to shared contact:', error.message);
+            return null;
+        }
+    }
     static async updateLead(id, userId, data) {
+        const changes = { ...data };
+        if (changes.phone !== undefined && changes.contactId === undefined) {
+            changes.contactId = await CRMStorage.sharedContactIdForLead({ ...changes, userId });
+        }
         const [lead] = await db
             .update(leads)
-            .set({ ...data, updatedAt: new Date() })
+            .set({ ...changes, updatedAt: new Date() })
             .where(and(eq(leads.id, id), eq(leads.userId, userId)))
             .returning();
         return lead || null;

@@ -16,6 +16,7 @@
  */
 import { UserRepository } from "../repositories/user.repository";
 import { ContactRepository } from "../repositories/contact.repository";
+import { createWhatsAppContact, findWhatsAppContactByPhone, normalizePhone, updateWhatsAppContact } from "../services/contact-identity.service";
 import { CampaignRepository } from "../repositories/campaign.repository";
 import { ChannelRepository } from "../repositories/channel.repository";
 import { TemplateRepository } from "../repositories/template.repository";
@@ -428,13 +429,7 @@ export class DatabaseStorage {
         return true;
     }
     async findContactByPhone(channelId, phone) {
-        const normalizedPhone = phone.replace(/\D/g, "");
-        const [contact] = await db
-            .select()
-            .from(contacts)
-            .where(and(eq(contacts.channelId, channelId), sql `regexp_replace(${contacts.phone}, '[^0-9]', '', 'g') = ${normalizedPhone}`))
-            .limit(1);
-        return contact;
+        return findWhatsAppContactByPhone(channelId, phone);
     }
     // async findOrCreateContact(data: {
     //   channelId: string;
@@ -521,50 +516,38 @@ export class DatabaseStorage {
     // }
     async findOrCreateContact(data) {
         const { channelId, storeId, email, name, createdBy, externalId, source = "shopify" } = data;
-        const phone = data.phone.replace(/\D/g, "");
+        const phone = normalizePhone(data.phone);
         const [existing] = await db
             .select()
             .from(contacts)
             .where(and(eq(contacts.channelId, channelId), sql `(
-          regexp_replace(${contacts.phone}, '[^0-9]', '', 'g') = ${phone}
+          ${contacts.phone} = ${phone}
           OR (${email}::text IS NOT NULL AND lower(${contacts.email}) = lower(${email}))
         )`))
             .limit(1);
         if (existing) {
-            const [updated] = await db
-                .update(contacts)
-                .set({
+            return updateWhatsAppContact(existing.id, {
                 name: name || existing.name,
                 email: email || existing.email,
-                phone,
+                phone: phone || existing.phone,
                 storeId: storeId || existing.storeId,
                 createdBy: createdBy || existing.createdBy,
                 externalId: externalId || existing.externalId,
                 lastContact: new Date(),
-                updatedAt: new Date(),
-            })
-                .where(eq(contacts.id, existing.id))
-                .returning();
-            return updated;
+            });
         }
-        const [contact] = await db
-            .insert(contacts)
-            .values({
+        return createWhatsAppContact({
             channelId,
             storeId,
-            name: name || phone,
-            phone,
+            name,
+            phone: data.phone,
             email,
             source,
             status: "active",
             createdBy,
             externalId,
             lastContact: new Date(),
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        })
-            .returning();
-        return contact;
+        });
     }
     async getAbandonedCartReminders(cartId) {
         return await db

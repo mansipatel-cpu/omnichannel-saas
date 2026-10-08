@@ -204,7 +204,7 @@ async function disablePhoneNumber(phoneNumber, user, monthlyCredits) {
                 .where(eq(phoneNumbers.id, phoneNumber.id));
             // Pause all campaigns using this phone number
             await tx.execute(sql `
-        UPDATE campaigns 
+        UPDATE calling_campaigns 
         SET status = 'paused'
         WHERE phone_number_id = ${phoneNumber.id} AND status = 'active'
       `);

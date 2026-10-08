@@ -52,6 +52,7 @@ import { createTemplateRoutes } from "./routes/template-routes";
 import { createUserSipGatewaysRoutes } from "./routes/user-sip-gateways.routes";
 import { createSubscriptionRoutes } from "./routes/subscription-routes";
 import crmRoutes from "./routes/crm-routes";
+import unifiedRoutes from "./routes/unified-routes";
 import { widgetRoutes, publicWidgetRoutes } from "./modules/widget/index";
 import multer from "multer";
 // Team Management Middleware - allows team members to access user data with their parent's userId
@@ -1285,6 +1286,7 @@ When using a tool:
     // CRM routes - Lead Management (isolated module)
     // Use hybrid auth to allow both users and team members
     app.use("/api/crm", routeContext.authenticateHybrid, crmRoutes);
+    app.use("/api/unified", routeContext.authenticateHybrid, unifiedRoutes);
     // Public Platform Languages route - for i18n dynamic loading (no auth required)
     // Must be registered BEFORE publicWidgetRoutes to ensure specific path matches first
     app.use("/api/public/platform-languages", platformLanguagesPublicRouter);

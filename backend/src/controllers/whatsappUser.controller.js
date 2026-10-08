@@ -348,7 +348,7 @@ export const createUser = async (req, res) => {
                     userId: user.id,
                     otpCode,
                     expiresAt,
-                    isUsed: false,
+                    verified: false,
                 });
                 await sendOTPEmailVerify(email, otpCode, firstName || user.firstName);
                 return res.status(200).json({
@@ -400,7 +400,7 @@ export const createUser = async (req, res) => {
             userId: user.id,
             otpCode,
             expiresAt,
-            isUsed: false,
+            verified: false,
         });
         await sendOTPEmailVerify(email, otpCode, firstName);
         return res.status(201).json({
@@ -449,7 +449,7 @@ export const verifyEmailOTP = async (req, res) => {
         }
         const otp = otpRecord[0];
         // Check OTP validity
-        if (otp.isUsed) {
+        if (otp.verified) {
             return res.status(400).json({ success: false, message: "OTP already used." });
         }
         if (otp.otpCode !== otpCode) {
@@ -461,7 +461,7 @@ export const verifyEmailOTP = async (req, res) => {
         // Mark OTP as used
         await db
             .update(otpVerifications)
-            .set({ isUsed: true })
+            .set({ verified: true })
             .where(eq(otpVerifications.id, otp.id));
         // Mark user email verified and activate account
         const [activated] = await db

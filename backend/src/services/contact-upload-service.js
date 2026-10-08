@@ -18,6 +18,7 @@
 import Papa from "papaparse";
 import { storage } from "../storage";
 import { batchInsertContacts, CONTACT_INSERT_RETAIN_RESULTS_THRESHOLD } from "../utils/batch-utils";
+import { ensureSharedContacts, normalizePhone } from "./contact-identity.service";
 export class PlanLimitExceededError extends Error {
     upgradeRequired;
     currentContacts;
@@ -209,6 +210,7 @@ export class ContactUploadService {
             customFields: contact.customFields,
             status: contact.status,
         }));
+        await this.attachSharedContacts(campaignId, insertContacts);
         const retainResults = insertContacts.length <= CONTACT_INSERT_RETAIN_RESULTS_THRESHOLD;
         const batchResult = await batchInsertContacts(insertContacts, '📋 [Contact Upload]', {
             retainResults,
@@ -226,6 +228,32 @@ export class ContactUploadService {
             skippedInvalid,
             resultsTruncated: !retainResults,
         };
+    }
+    /**
+     * Sets `contactId` on each row to the campaign owner's shared contact for that phone.
+     * Uploads still succeed if linking fails.
+     */
+    async attachSharedContacts(campaignId, rows) {
+        if (!rows.length)
+            return;
+        try {
+            const campaign = await storage.getCampaign(campaignId);
+            if (!campaign?.userId)
+                return;
+            const ids = await ensureSharedContacts(campaign.userId, rows.map((row) => ({
+                phone: row.phone,
+                firstName: row.firstName === "Unknown" ? null : row.firstName,
+                lastName: row.lastName,
+                email: row.email,
+                source: "calling_campaign",
+            })));
+            for (const row of rows) {
+                row.contactId = ids.get(normalizePhone(row.phone)) || null;
+            }
+        }
+        catch (error) {
+            console.error("[Contact Upload] Failed to link shared contacts:", error.message);
+        }
     }
     /**
      * Reads file content from a multer file upload.

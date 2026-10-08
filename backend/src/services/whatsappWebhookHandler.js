@@ -18,6 +18,7 @@ import { whatsappDb as db } from "../config/database";
 import { webhookConfigs, messages, conversations, contacts, messageQueue, templates, channels, users, aiSettings, sites } from "@shared/whatsapp-schema";
 import { eq, and } from "drizzle-orm";
 import crypto from "crypto";
+import { createWhatsAppContact, normalizePhone, updateWhatsAppContact } from "./contact-identity.service";
 import { triggerThrottledNotification, NOTIFICATION_EVENTS } from "./whatsappNotification.service";
 import OpenAI from "openai";
 import { searchTrainingData } from "./whatsappTraining.service";
@@ -96,11 +97,12 @@ export class WebhookHandler {
             }
             // 2. Find or create contact scoped to this channel
             let contact;
+            const senderPhone = normalizePhone(message.from) || message.from;
             if (channelId) {
                 const existingContact = await db
                     .select()
                     .from(contacts)
-                    .where(and(eq(contacts.channelId, channelId), eq(contacts.phone, message.from)))
+                    .where(and(eq(contacts.channelId, channelId), eq(contacts.phone, senderPhone)))
                     .limit(1);
                 contact = existingContact;
             }
@@ -108,26 +110,19 @@ export class WebhookHandler {
                 const existingContact = await db
                     .select()
                     .from(contacts)
-                    .where(eq(contacts.phone, message.from))
+                    .where(eq(contacts.phone, senderPhone))
                     .limit(1);
                 contact = existingContact;
             }
             if (contact.length === 0) {
-                const displayName = profileName || message.from;
-                const insertData = {
-                    name: displayName,
+                const newContact = await createWhatsAppContact({
+                    name: profileName || message.from,
                     phone: message.from,
                     lastContact: new Date(),
                     source: "whatsapp",
-                };
-                if (channelId)
-                    insertData.channelId = channelId;
-                if (channel.length > 0 && channel[0].createdBy)
-                    insertData.createdBy = channel[0].createdBy;
-                const [newContact] = await db
-                    .insert(contacts)
-                    .values(insertData)
-                    .returning();
+                    channelId,
+                    createdBy: channel.length > 0 && channel[0].createdBy ? channel[0].createdBy : undefined,
+                });
                 contact = [newContact];
             }
             else {
@@ -135,12 +130,9 @@ export class WebhookHandler {
                 if (profileName && (contact[0].name === contact[0].phone || contact[0].name === message.from)) {
                     updateData.name = profileName;
                 }
-                await db
-                    .update(contacts)
-                    .set(updateData)
-                    .where(eq(contacts.id, contact[0].id));
-                if (updateData.name) {
-                    contact[0].name = updateData.name;
+                const updated = await updateWhatsAppContact(contact[0].id, updateData);
+                if (updated) {
+                    contact[0] = updated;
                 }
             }
             // 3. Find or create conversation scoped to this channel
@@ -824,13 +816,13 @@ ${unansweredCount >= maxAttempts - 1 ? `- The user has had ${unansweredCount} un
     // Update campaign statistics
     static async updateCampaignStats(campaignId, status) {
         const incrementField = {
-            delivered: "deliveredCount",
-            read: "readCount",
-            failed: "failedCount",
+            delivered: "delivered_count",
+            read: "read_count",
+            failed: "failed_count",
         }[status];
         if (incrementField) {
-            await db.execute(sql `UPDATE campaigns 
-            SET ${sql.identifier(incrementField)} = ${sql.identifier(incrementField)} + 1 
+            await db.execute(sql `UPDATE wa_campaigns 
+            SET ${sql.identifier(incrementField)} = coalesce(${sql.identifier(incrementField)}, 0) + 1 
             WHERE id = ${campaignId}`);
         }
     }

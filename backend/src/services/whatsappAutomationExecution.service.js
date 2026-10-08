@@ -17,8 +17,15 @@
 // automation-execution.service.ts - Enhanced with Conditions Support
 import { whatsappDb as db } from "../config/database";
 import { sql } from "drizzle-orm";
-import { automations, automationNodes, automationExecutions, automationExecutionLogs, contacts, templates, channels, groups, abandonedCarts } from "@shared/whatsapp-schema";
+import { automations, automationNodes, automationExecutions, automationExecutionLogs, contacts, templates, channels, abandonedCarts } from "@shared/whatsapp-schema";
 import { eq, and, inArray } from "drizzle-orm";
+import { addContactsToGroup, findGroup, resolveOwnerId, sharedIdsForWhatsAppContacts, updateWhatsAppContact } from "./contact-identity.service";
+async function findContactById(id) {
+    if (!id)
+        return undefined;
+    const [row] = await db.select().from(contacts).where(eq(contacts.id, id)).limit(1);
+    return row;
+}
 // ---------------------------------------------------------------------------
 // Tunables
 // ---------------------------------------------------------------------------
@@ -604,9 +611,7 @@ export class AutomationExecutionService {
             throw new Error('contactId is required for automation execution');
         }
         console.log(`Sending message to conversation ${context.conversationId}: "${message}"`);
-        const getContact = await db.query.contacts.findFirst({
-            where: eq(contacts.id, context.contactId),
-        });
+        const getContact = await findContactById(context.contactId);
         if (!getContact?.phone) {
             throw new Error('Contact phone number not found');
         }
@@ -954,9 +959,7 @@ export class AutomationExecutionService {
         console.log(`Asking question to conversation ${context.conversationId}: "${question}"`);
         console.log('Question buttons:', buttons);
         // Get contact information
-        const getContact = await db.query.contacts.findFirst({
-            where: eq(contacts?.id, context.contactId),
-        });
+        const getContact = await findContactById(context.contactId);
         if (!getContact?.phone) {
             throw new Error('Contact phone number not found');
         }
@@ -1562,9 +1565,7 @@ export class AutomationExecutionService {
         if (!context.contactId)
             throw new Error("No contactId in context");
         // 🧩 Fetch contact
-        const contact = await db.query.contacts.findFirst({
-            where: eq(contacts.id, context.contactId),
-        });
+        const contact = await findContactById(context.contactId);
         if (!contact?.phone)
             throw new Error("Contact phone not found");
         if (!contact.channelId)
@@ -1987,23 +1988,18 @@ export class AutomationExecutionService {
         if (!context.contactId)
             throw new Error('No contact ID in context');
         console.log(`👥 Adding contact ${context.contactId} to group ${groupId}`);
-        const contact = await db.query.contacts.findFirst({
-            where: eq(contacts.id, context.contactId),
-        });
+        const contact = await findContactById(context.contactId);
         if (!contact)
             throw new Error('Contact not found');
-        const group = await db.query.groups.findFirst({
-            where: eq(groups.id, groupId),
-        });
-        const groupName = group?.name || groupId;
-        const existingGroups = contact.groups || [];
-        if (!existingGroups.includes(groupName)) {
-            existingGroups.push(groupName);
-            await db.update(contacts)
-                .set({ groups: existingGroups })
-                .where(eq(contacts.id, context.contactId));
-        }
-        return { action: 'added_to_group', groupId, groupName, contactId: context.contactId };
+        const ownerId = await resolveOwnerId({ channelId: contact.channelId, tenantId: contact.tenantId, createdBy: contact.createdBy });
+        const group = ownerId
+            ? (await findGroup({ ownerId, id: groupId })) || (await findGroup({ ownerId, name: groupId }))
+            : null;
+        if (!group)
+            throw new Error(`Group ${groupId} not found`);
+        const sharedIds = await sharedIdsForWhatsAppContacts([contact.id]);
+        await addContactsToGroup(group.id, [...sharedIds.values()]);
+        return { action: 'added_to_group', groupId: group.id, groupName: group.name, contactId: context.contactId };
     }
     async executeUpdateContact(node, context) {
         const field = node.data?.contactField;
@@ -2026,7 +2022,7 @@ export class AutomationExecutionService {
             updateData.tags = tagList;
         }
         if (Object.keys(updateData).length > 0) {
-            await db.update(contacts).set(updateData).where(eq(contacts.id, context.contactId));
+            await updateWhatsAppContact(context.contactId, updateData);
         }
         return { action: 'contact_updated', field, value, contactId: context.contactId };
     }
@@ -2294,7 +2290,7 @@ export class AutomationExecutionService {
             throw new Error('No webhook URL provided');
         console.log(`🌐 Executing webhook: ${method} ${url}`);
         const contact = context.contactId
-            ? await db.query.contacts.findFirst({ where: eq(contacts.id, context.contactId) })
+            ? await findContactById(context.contactId)
             : null;
         const conversation = context.conversationId
             ? await storage.getConversation(context.conversationId)

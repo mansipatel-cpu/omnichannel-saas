@@ -34,7 +34,7 @@ describeIfDb("prod-v37-precheck-and-cleanup.sql — real DB integration", () => 
             name varchar,
             created_at timestamp DEFAULT now()
           );
-          CREATE TABLE contacts (
+          CREATE TABLE wa_contacts (
             id varchar PRIMARY KEY,
             channel_id varchar,
             phone varchar,
@@ -87,7 +87,7 @@ describeIfDb("prod-v37-precheck-and-cleanup.sql — real DB integration", () => 
             // Truncate so the test can run multiple times in the same session.
             await c.query(`
           TRUNCATE conversations, automation_edges, templates,
-                   contacts, users, channels RESTART IDENTITY CASCADE;
+                   wa_contacts, users, channels RESTART IDENTITY CASCADE;
         `);
             // Channels (section [2/5] requires at least one).
             await c.query(`INSERT INTO channels (id, name) VALUES ('ch1','Primary Channel')`);
@@ -118,12 +118,12 @@ describeIfDb("prod-v37-precheck-and-cleanup.sql — real DB integration", () => 
              ARRAY[]::text[], 'active', 'no-such-user', 'no-such-channel');
         `);
             // Contacts (need at least one valid for conversation FK).
-            await c.query(`INSERT INTO contacts (id, channel_id, phone, name)
+            await c.query(`INSERT INTO wa_contacts (id, channel_id, phone, name)
              VALUES ('co-1','ch1','+1','x')`);
-            // Dirty contacts.created_by
-            await c.query(`INSERT INTO contacts (id, channel_id, phone, name, created_by)
+            // Dirty wa_contacts.created_by
+            await c.query(`INSERT INTO wa_contacts (id, channel_id, phone, name, created_by)
              VALUES ('co-2','ch1','+2','y','')`);
-            await c.query(`INSERT INTO contacts (id, channel_id, phone, name, created_by)
+            await c.query(`INSERT INTO wa_contacts (id, channel_id, phone, name, created_by)
              VALUES ('co-3','ch1','+3','z','no-such-user')`);
             // Conversations — the v3.7 manual upgrade bug
             await c.query(`INSERT INTO conversations (id, channel_id, contact_id, assigned_to)
@@ -219,7 +219,7 @@ describeIfDb("prod-v37-precheck-and-cleanup.sql — real DB integration", () => 
             expect(usersById["u-orphan"].created_by).toBeNull();
             expect(usersById["u-orphan"].channel_id).toBeNull();
             // Contacts.created_by cleaned.
-            const contactsBad = await c.query(`SELECT COUNT(*) AS count FROM contacts
+            const contactsBad = await c.query(`SELECT COUNT(*) AS count FROM wa_contacts
              WHERE created_by IS NOT NULL
                AND created_by NOT IN (SELECT id FROM users)`);
             expect(Number(contactsBad.rows[0].count)).toBe(0);
@@ -245,7 +245,7 @@ describeIfDb("prod-v37-precheck-and-cleanup.sql — real DB integration", () => 
                WHERE channel_id IS NOT NULL
                  AND channel_id NOT IN (SELECT id FROM channels))
               AS bad_users_channel,
-            (SELECT COUNT(*) FROM contacts
+            (SELECT COUNT(*) FROM wa_contacts
                WHERE created_by IS NOT NULL
                  AND created_by NOT IN (SELECT id FROM users))
               AS bad_contacts_created_by,
@@ -259,7 +259,7 @@ describeIfDb("prod-v37-precheck-and-cleanup.sql — real DB integration", () => 
               AS bad_conv_channel,
             (SELECT COUNT(*) FROM conversations
                WHERE contact_id IS NOT NULL
-                 AND contact_id NOT IN (SELECT id FROM contacts))
+                 AND contact_id NOT IN (SELECT id FROM wa_contacts))
               AS bad_conv_contact;
         `);
             const row = sanity.rows[0];

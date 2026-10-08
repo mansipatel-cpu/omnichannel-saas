@@ -15,13 +15,13 @@
  * ============================================================
  */
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, boolean, jsonb, index, unique, uniqueIndex, numeric, pgEnum, serial, uuid, } from "drizzle-orm/pg-core";
+import { pgTable, pgView, text, varchar, timestamp, integer, boolean, jsonb, index, unique, uniqueIndex, numeric, pgEnum, serial, uuid, } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { ROLE_VALUES, USER_STATUS_VALUES, CAMPAIGN_STATUS_VALUES, MESSAGE_STATUS_VALUES, } from "@shared/whatsapp-roles";
 export { Role, ROLE_VALUES, UserStatus, CampaignStatus, MessageStatus } from "@shared/whatsapp-roles";
-import { users as platformUsers } from "./schema";
+import { users as platformUsers, sharedContacts, otpVerifications as platformOtpVerifications } from "./schema";
 export const users = platformUsers;
 export const shopifyStores = pgTable("shopify_stores", {
     id: varchar("id")
@@ -106,8 +106,8 @@ export const abandonedCarts = pgTable("abandoned_carts", {
     storeId: varchar("store_id")
         .notNull()
         .references(() => shopifyStores.id),
-    channelId: varchar("channel_id").notNull(),
-    contactId: varchar("contact_id").references(() => contacts.id, {
+    channelId: varchar("channel_id").notNull().references(() => channels.id, { onDelete: "cascade" }),
+    contactId: varchar("contact_id").references(() => whatsappContactChannels.id, {
         onDelete: "set null",
     }),
     checkoutToken: text("checkout_token")
@@ -234,28 +234,26 @@ export const userActivityLogs = pgTable("user_activity_logs", {
 //     ),
 //   })
 // );
-export const contacts = pgTable("wa_contacts", {
+// A shared contact's presence on one WhatsApp channel. Name, phone, email, tags
+// and source live only in `contacts` (sharedContacts); write through
+// services/contact-identity.service.js.
+export const whatsappContactChannels = pgTable("whatsapp_contact_channels", {
     id: varchar("id")
         .primaryKey()
         .default(sql `gen_random_uuid()`),
+    userId: varchar("user_id")
+        .notNull()
+        .references(() => users.id, { onDelete: "restrict" }),
+    contactId: varchar("contact_id")
+        .notNull()
+        .references(() => sharedContacts.id, { onDelete: "restrict" }),
     channelId: varchar("channel_id")
         .notNull()
         .references(() => channels.id, {
         onDelete: "cascade",
     }),
-    tenantId: varchar("tenant_id"),
-    name: text("name").notNull(),
-    phone: text("phone").notNull(),
-    email: text("email"),
-    groups: jsonb("groups")
-        .$type()
-        .default([]),
-    tags: jsonb("tags").default([]),
+    // active, blocked, unsubscribed
     status: text("status").default("active"),
-    // manual, import, api, chatbot, shopify
-    source: varchar("source", {
-        length: 100,
-    }),
     // Shopify / WooCommerce / Magento Store
     storeId: varchar("store_id").references(() => shopifyStores.id, {
         onDelete: "set null",
@@ -269,23 +267,45 @@ export const contacts = pgTable("wa_contacts", {
     }),
     createdAt: timestamp("created_at", {
         withTimezone: true,
-    }).defaultNow(),
+    }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", {
         withTimezone: true,
-    }).defaultNow(),
+    }).notNull().defaultNow(),
     createdBy: varchar("created_by").references(() => users.id, {
         onDelete: "set null",
     }),
 }, (table) => ({
-    contactChannelIdx: index("wa_contacts_channel_idx").on(table.channelId),
-    contactPhoneIdx: index("wa_contacts_phone_idx").on(table.phone),
-    contactStatusIdx: index("wa_contacts_status_idx").on(table.status),
-    contactTenantIdx: index("wa_contacts_tenant_idx").on(table.tenantId),
-    contactStoreIdx: index("wa_contacts_store_idx").on(table.storeId),
-    contactExternalIdIdx: index("wa_contacts_external_id_idx").on(table.externalId),
-    contactChannelPhoneUnique: unique("contacts_channel_phone_unique").on(table.channelId, table.phone),
-    contactStoreExternalUnique: unique("contacts_store_external_unique").on(table.storeId, table.externalId),
+    channelIdx: index("whatsapp_contact_channels_channel_idx").on(table.channelId),
+    statusIdx: index("whatsapp_contact_channels_status_idx").on(table.status),
+    storeIdx: index("whatsapp_contact_channels_store_idx").on(table.storeId),
+    externalIdIdx: index("whatsapp_contact_channels_external_id_idx").on(table.externalId),
+    contactIdIdx: index("whatsapp_contact_channels_contact_id_idx").on(table.contactId),
+    userIdIdx: index("whatsapp_contact_channels_user_id_idx").on(table.userId),
+    channelCreatedIdx: index("whatsapp_contact_channels_channel_created_idx").on(table.channelId, table.createdAt),
+    channelContactUnique: unique("whatsapp_contact_channels_channel_contact_unique").on(table.channelId, table.contactId),
+    storeExternalUnique: unique("whatsapp_contact_channels_store_external_unique").on(table.storeId, table.externalId),
 }));
+// Read-only view (migration 0016) with the old wa_contacts columns, for readers.
+export const contacts = pgView("wa_contacts", {
+    id: varchar("id"),
+    channelId: varchar("channel_id"),
+    tenantId: varchar("tenant_id"),
+    name: text("name"),
+    phone: text("phone"),
+    email: text("email"),
+    groups: jsonb("groups").$type(),
+    tags: jsonb("tags"),
+    status: text("status"),
+    source: varchar("source", { length: 50 }),
+    storeId: varchar("store_id"),
+    externalId: varchar("external_id", { length: 255 }),
+    lastContact: timestamp("last_contact", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+    createdBy: varchar("created_by"),
+    contactId: varchar("contact_id"),
+    userId: varchar("user_id"),
+}).existing();
 export const ecommerceSettings = pgTable("ecommerce_settings", {
     id: uuid("id").defaultRandom().primaryKey(),
     provider: varchar("provider", {
@@ -391,15 +411,16 @@ export const campaigns = pgTable("wa_campaigns", {
     campaignStatusIdx: index("wa_campaigns_status_idx").on(table.status),
     campaignCreatedIdx: index("wa_campaigns_created_idx").on(table.createdAt),
 }));
-// Campaign Recipients table for tracking individual recipient status
-export const campaignRecipients = pgTable("campaign_recipients", {
+// WhatsApp delivery details per recipient. Every row has a base row in the unified
+// campaign_recipients table with the same id, kept in sync by triggers (migration 0012).
+export const campaignRecipients = pgTable("wa_campaign_recipients", {
     id: varchar("id")
         .primaryKey()
         .default(sql `gen_random_uuid()`),
     campaignId: varchar("campaign_id")
         .notNull()
         .references(() => campaigns.id, { onDelete: "cascade" }),
-    contactId: varchar("contact_id").references(() => contacts.id, {
+    contactId: varchar("contact_id").references(() => whatsappContactChannels.id, {
         onDelete: "cascade",
     }),
     phone: text("phone").notNull(),
@@ -441,7 +462,7 @@ export const channels = pgTable("channels", {
     connectionMethod: varchar("connection_method", { length: 20 }).default("embedded"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
-    createdBy: varchar("created_by").default(""),
+    createdBy: varchar("created_by").references(() => users.id, { onDelete: "set null" }),
 });
 export const templates = pgTable("templates", {
     id: varchar("id")
@@ -509,7 +530,7 @@ export const conversations = pgTable("conversations", {
     channelId: varchar("channel_id").references(() => channels.id, {
         onDelete: "cascade",
     }),
-    contactId: varchar("contact_id").references(() => contacts.id, {
+    contactId: varchar("contact_id").references(() => whatsappContactChannels.id, {
         onDelete: "cascade",
     }),
     assignedTo: varchar("assigned_to").references(() => users.id, {
@@ -520,7 +541,7 @@ export const conversations = pgTable("conversations", {
     status: text("status").default("open"), // open, closed, assigned, pending
     priority: text("priority").default("normal"), // low, normal, high, urgent
     type: text("type").default("whatsapp"), // whatsapp, chatbot, sms, email
-    chatbotId: varchar("chatbot_id"),
+    chatbotId: varchar("chatbot_id").references(() => chatbots.id, { onDelete: "set null" }),
     sessionId: text("session_id"),
     tags: jsonb("tags").default([]),
     unreadCount: integer("unread_count").default(0), // Track unread messages
@@ -603,7 +624,7 @@ export const sentNotifications = pgTable("sent_notifications", {
     notificationId: integer("notification_id")
         .references(() => notifications.id, { onDelete: "cascade" })
         .notNull(),
-    userId: varchar("user_id"),
+    userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }),
     isRead: boolean("is_read").default(false),
     readAt: timestamp("read_at", { withTimezone: true }),
     sentAt: timestamp("sent_at", { withTimezone: true }).defaultNow(),
@@ -622,7 +643,7 @@ export const notificationTemplates = pgTable("notification_templates", {
 });
 export const userNotificationPreferences = pgTable("user_notification_preferences", {
     id: serial("id").primaryKey(),
-    userId: varchar("user_id").notNull(),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     eventType: varchar("event_type").notNull(),
     inAppEnabled: boolean("in_app_enabled").default(true),
     emailEnabled: boolean("email_enabled").default(true),
@@ -674,7 +695,7 @@ export const knowledgeCategories = pgTable("knowledge_categories", {
     siteId: varchar("site_id")
         .notNull()
         .references(() => sites.id, { onDelete: "cascade" }),
-    parentId: varchar("parent_id"),
+    parentId: varchar("parent_id").references(() => knowledgeCategories.id, { onDelete: "set null" }),
     name: varchar("name", { length: 255 }).notNull(),
     icon: varchar("icon", { length: 50 }),
     description: text("description"),
@@ -690,7 +711,7 @@ export const knowledgeArticles = pgTable("knowledge_articles", {
     id: varchar("id")
         .primaryKey()
         .default(sql `gen_random_uuid()`),
-    categoryId: varchar("category_id").notNull(),
+    categoryId: varchar("category_id").notNull().references(() => knowledgeCategories.id, { onDelete: "cascade" }),
     title: varchar("title", { length: 500 }).notNull(),
     content: text("content").notNull(),
     order: integer("order").default(0),
@@ -952,7 +973,7 @@ export const automationExecutions = pgTable("automation_executions", {
     automationId: varchar("automation_id")
         .notNull()
         .references(() => automations.id, { onDelete: "cascade" }),
-    contactId: varchar("contact_id").references(() => contacts.id),
+    contactId: varchar("contact_id").references(() => whatsappContactChannels.id),
     conversationId: varchar("conversation_id").references(() => conversations.id),
     triggerData: jsonb("trigger_data").default({}),
     triggerMessageId: varchar("trigger_message_id", { length: 200 }),
@@ -991,7 +1012,7 @@ export const analytics = pgTable("analytics", {
     id: varchar("id")
         .primaryKey()
         .default(sql `gen_random_uuid()`),
-    channelId: varchar("channel_id"),
+    channelId: varchar("channel_id").references(() => channels.id, { onDelete: "cascade" }),
     date: timestamp("date", { withTimezone: true }).notNull(),
     messagesSent: integer("messages_sent").default(0),
     messagesDelivered: integer("messages_delivered").default(0),
@@ -1001,39 +1022,20 @@ export const analytics = pgTable("analytics", {
     activeCampaigns: integer("active_campaigns").default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
-// WhatsApp Channels table
-export const whatsappChannels = pgTable("whatsapp_channels", {
-    id: varchar("id")
-        .primaryKey()
-        .default(sql `gen_random_uuid()`),
-    name: text("name").notNull(),
-    phoneNumber: varchar("phone_number", { length: 20 }).notNull().unique(),
-    phoneNumberId: varchar("phone_number_id", { length: 50 }).notNull(),
-    wabaId: varchar("waba_id", { length: 50 }).notNull(),
-    accessToken: text("access_token").notNull(), // Should be encrypted in production
-    businessAccountId: varchar("business_account_id", { length: 50 }),
-    rateLimitTier: varchar("rate_limit_tier", { length: 20 }).default("standard"),
-    qualityRating: varchar("quality_rating", { length: 20 }).default("green"), // green, yellow, red
-    status: varchar("status", { length: 20 }).default("inactive"), // active, inactive, error
-    errorMessage: text("error_message"),
-    lastHealthCheck: timestamp("last_health_check", { withTimezone: true }),
-    messageLimit: integer("message_limit"),
-    messagesUsed: integer("messages_used"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
-});
+// The old whatsapp_channels table was merged into channels (migration 0015).
+export const whatsappChannels = channels;
 export const channelSignupLogs = pgTable("channel_signup_logs", {
     id: varchar("id")
         .primaryKey()
         .default(sql `gen_random_uuid()`),
-    userId: varchar("user_id").notNull(),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     status: varchar("status", { length: 20 }).notNull().default("incomplete"),
     step: varchar("step", { length: 50 }).notNull().default("token_exchange"),
     errorMessage: text("error_message"),
     errorDetails: jsonb("error_details"),
     phoneNumber: text("phone_number"),
     wabaId: text("waba_id"),
-    channelId: varchar("channel_id"),
+    channelId: varchar("channel_id").references(() => channels.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 // Webhook Configuration table
@@ -1173,7 +1175,7 @@ export const aiSettings = pgTable("ai_settings", {
         .array()
         .default(sql `ARRAY[]::text[]`), // trigger words or phrases
     // Link to a specific chatbot/site (knowledge base)
-    siteId: varchar("site_id"),
+    siteId: varchar("site_id").references(() => sites.id, { onDelete: "cascade" }),
     // Diagnostics: populated by webhook handler on every skip branch so
     // support can answer "why didn't the AI reply?" without DB access.
     lastSkipReason: text("last_skip_reason"),
@@ -1218,18 +1220,9 @@ export const smtpConfig = pgTable("smtp_config", {
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
-export const otpVerifications = pgTable("wa_otp_verifications", {
-    id: varchar("id")
-        .primaryKey()
-        .default(sql `gen_random_uuid()`), // UUID primary key
-    userId: varchar("user_id")
-        .notNull(),
-    otpCode: varchar("otp_code", { length: 6 }).notNull(), // 6-digit OTP
-    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-    isUsed: boolean("is_used").default(false),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
-});
+// The old wa_otp_verifications table was merged into otp_verifications (migration 0015);
+// WhatsApp rows are keyed by userId and use `verified` for "already used".
+export const otpVerifications = platformOtpVerifications;
 // Permissions type definition
 export const PERMISSIONS = {
     // Dashboard permissions
@@ -1332,9 +1325,24 @@ export const insertUserSchema = createInsertSchema(users, {
     createdAt: true,
     updatedAt: true,
 });
-export const insertContactSchema = createInsertSchema(contacts).omit({
-    id: true,
-    createdAt: true,
+// `contacts` is a view, so the insert shape (unchanged for API clients) is spelled out.
+const jsonValue = z.union([z.string(), z.number(), z.boolean(), z.null(), z.record(z.any()), z.array(z.any())]);
+export const insertContactSchema = z.object({
+    channelId: z.string(),
+    tenantId: z.string().nullable().optional(),
+    contactId: z.string().nullable().optional(),
+    name: z.string(),
+    phone: z.string(),
+    email: z.string().nullable().optional(),
+    groups: jsonValue.optional(),
+    tags: jsonValue.optional(),
+    status: z.string().nullable().optional(),
+    source: z.string().max(100).nullable().optional(),
+    storeId: z.string().nullable().optional(),
+    externalId: z.string().max(255).nullable().optional(),
+    lastContact: z.coerce.date().nullable().optional(),
+    updatedAt: z.coerce.date().nullable().optional(),
+    createdBy: z.string().nullable().optional(),
 });
 export const insertCampaignSchema = createInsertSchema(campaigns, {
     status: z.enum(CAMPAIGN_STATUS_VALUES).optional(),
@@ -1398,14 +1406,14 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
 });
 // Drizzle Relations for proper joins and queries
 export const channelsRelations = relations(channels, ({ many }) => ({
-    contacts: many(contacts),
+    contacts: many(whatsappContactChannels),
     campaigns: many(campaigns),
     templates: many(templates),
     conversations: many(conversations),
 }));
-export const contactsRelations = relations(contacts, ({ one, many }) => ({
+export const contactsRelations = relations(whatsappContactChannels, ({ one, many }) => ({
     channel: one(channels, {
-        fields: [contacts.channelId],
+        fields: [whatsappContactChannels.channelId],
         references: [channels.id],
     }),
     conversations: many(conversations),
@@ -1427,9 +1435,9 @@ export const campaignRecipientsRelations = relations(campaignRecipients, ({ one 
         fields: [campaignRecipients.campaignId],
         references: [campaigns.id],
     }),
-    contact: one(contacts, {
+    contact: one(whatsappContactChannels, {
         fields: [campaignRecipients.contactId],
-        references: [contacts.id],
+        references: [whatsappContactChannels.id],
     }),
 }));
 export const templatesRelations = relations(templates, ({ one, many }) => ({
@@ -1444,9 +1452,9 @@ export const conversationsRelations = relations(conversations, ({ one, many }) =
         fields: [conversations.channelId],
         references: [channels.id],
     }),
-    contact: one(contacts, {
+    contact: one(whatsappContactChannels, {
         fields: [conversations.contactId],
-        references: [contacts.id],
+        references: [whatsappContactChannels.id],
     }),
     messages: many(messages),
 }));
@@ -1504,7 +1512,7 @@ export const trainingSources = pgTable("training_sources", {
     id: varchar("id")
         .primaryKey()
         .default(sql `gen_random_uuid()`),
-    siteId: varchar("site_id").notNull(),
+    siteId: varchar("site_id").notNull().references(() => sites.id, { onDelete: "cascade" }),
     channelId: varchar("channel_id"),
     type: text("type").notNull(),
     name: text("name").notNull(),
@@ -1521,7 +1529,7 @@ export const trainingChunks = pgTable("training_chunks", {
         .primaryKey()
         .default(sql `gen_random_uuid()`),
     sourceId: varchar("source_id").notNull(),
-    siteId: varchar("site_id").notNull(),
+    siteId: varchar("site_id").notNull().references(() => sites.id, { onDelete: "cascade" }),
     content: text("content").notNull(),
     embedding: jsonb("embedding"),
     metadata: jsonb("metadata").default(sql `'{}'::jsonb`),
@@ -1531,7 +1539,7 @@ export const trainingQaPairs = pgTable("training_qa_pairs", {
     id: varchar("id")
         .primaryKey()
         .default(sql `gen_random_uuid()`),
-    siteId: varchar("site_id").notNull(),
+    siteId: varchar("site_id").notNull().references(() => sites.id, { onDelete: "cascade" }),
     channelId: varchar("channel_id"),
     question: text("question").notNull(),
     answer: text("answer").notNull(),
@@ -1560,9 +1568,9 @@ export const automationExecutionsRelations = relations(automationExecutions, ({ 
         fields: [automationExecutions.automationId],
         references: [automations.id],
     }),
-    contact: one(contacts, {
+    contact: one(whatsappContactChannels, {
         fields: [automationExecutions.contactId],
-        references: [contacts.id],
+        references: [whatsappContactChannels.id],
     }),
     conversation: one(conversations, {
         fields: [automationExecutions.conversationId],

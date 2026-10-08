@@ -17,6 +17,7 @@
 import { whatsappDb as db } from "../config/database";
 import { eq, desc, and, gte, sql, lt, inArray } from "drizzle-orm";
 import { contacts, users } from "@shared/whatsapp-schema";
+import { createWhatsAppContact, createWhatsAppContacts, deleteWhatsAppContacts, normalizePhone, updateWhatsAppContact } from "../services/contact-identity.service";
 // Helper functions to replace date-fns
 function startOfDay(date) {
     const d = new Date(date);
@@ -34,9 +35,6 @@ function subWeeks(date, weeks) {
     const d = new Date(date);
     d.setDate(d.getDate() - (weeks * 7));
     return d;
-}
-function normalizePhone(phone) {
-    return phone.replace(/\D/g, '');
 }
 export class ContactRepository {
     async getAll() {
@@ -129,10 +127,13 @@ export class ContactRepository {
             .orderBy(desc(contacts.createdAt));
     }
     async getContactByPhone(phone) {
+        const normalizedPhone = normalizePhone(phone);
+        if (!normalizedPhone)
+            return [];
         return await db
             .select()
             .from(contacts)
-            .where(eq(contacts.phone, phone))
+            .where(eq(contacts.phone, normalizedPhone))
             .orderBy(desc(contacts.createdAt));
     }
     async getContactStats(channelId) {
@@ -187,18 +188,23 @@ export class ContactRepository {
             .where(inArray(contacts.id, ids));
     }
     async getByPhone(phone) {
+        const normalizedPhone = normalizePhone(phone);
+        if (!normalizedPhone)
+            return undefined;
         const [contact] = await db
             .select()
             .from(contacts)
-            .where(eq(contacts.phone, phone));
+            .where(eq(contacts.phone, normalizedPhone));
         return contact || undefined;
     }
     async getByPhoneAndChannel(phone, channelId) {
         const normalizedPhone = normalizePhone(phone);
+        if (!normalizedPhone)
+            return undefined;
         const results = await db
             .select()
             .from(contacts)
-            .where(and(eq(contacts.channelId, channelId), sql `REPLACE(REPLACE(REPLACE(${contacts.phone}, '+', ''), ' ', ''), '-', '') = ${normalizedPhone}`));
+            .where(and(eq(contacts.channelId, channelId), eq(contacts.phone, normalizedPhone)));
         return results[0] || undefined;
     }
     // async create(insertContact: InsertContact): Promise<Contact> {
@@ -213,26 +219,13 @@ export class ContactRepository {
         if (!insertContact.channelId) {
             throw new Error("Cannot create contact without a channel. Please create a channel first.");
         }
-        const [contact] = await db
-            .insert(contacts)
-            .values(insertContact)
-            .returning();
-        return contact;
+        return createWhatsAppContact(insertContact);
     }
     async update(id, contact) {
-        const [updated] = await db
-            .update(contacts)
-            .set(contact)
-            .where(eq(contacts.id, id))
-            .returning();
-        return updated || undefined;
+        return updateWhatsAppContact(id, contact);
     }
     async delete(id) {
-        const result = await db
-            .delete(contacts)
-            .where(eq(contacts.id, id))
-            .returning();
-        return result.length > 0;
+        return (await deleteWhatsAppContacts([id])) > 0;
     }
     async search(query) {
         const searchPattern = `%${query}%`;
@@ -244,14 +237,23 @@ export class ContactRepository {
     async createBulk(insertContacts) {
         if (insertContacts.length === 0)
             return [];
-        return await db.insert(contacts).values(insertContacts).returning();
+        return createWhatsAppContacts(insertContacts, { skipExisting: true });
     }
+    /** Which of `phones` (any format) are already on the channel; returned as given. */
     async checkExistingPhones(phones, channelId) {
+        const byNormalized = new Map();
+        for (const phone of phones || []) {
+            const normalized = normalizePhone(phone);
+            if (normalized && !byNormalized.has(normalized))
+                byNormalized.set(normalized, phone);
+        }
+        if (!byNormalized.size)
+            return [];
         const existingContacts = await db
             .select({ phone: contacts.phone })
             .from(contacts)
-            .where(sql `${contacts.phone} = ANY(${phones}) AND ${contacts.channelId} = ${channelId}`);
-        return existingContacts.map((c) => c.phone);
+            .where(and(eq(contacts.channelId, channelId), inArray(contacts.phone, [...byNormalized.keys()])));
+        return existingContacts.map((c) => byNormalized.get(c.phone));
     }
     async getTotalCount() {
         const result = await db

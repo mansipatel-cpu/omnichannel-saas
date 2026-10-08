@@ -216,7 +216,7 @@ router.post("/forgot-password", async (req, res) => {
             userId,
             otpCode,
             expiresAt,
-            isUsed: false,
+            verified: false,
         });
         // Send OTP via email
         try {
@@ -256,7 +256,7 @@ router.post("/reset-password", async (req, res) => {
         const otpRecord = await db
             .select()
             .from(otpVerifications)
-            .where(eq(otpVerifications.userId, userId), eq(otpVerifications.isUsed, false))
+            .where(eq(otpVerifications.userId, userId))
             .limit(1);
         if (!otpRecord.length) {
             return res.status(400).json({ error: "Invalid or already used OTP" });
@@ -301,7 +301,7 @@ router.post("/verify-otp", async (req, res) => {
         const otpRecord = await db
             .select()
             .from(otpVerifications)
-            .where(and(eq(otpVerifications.userId, userId), eq(otpVerifications.otpCode, otpCode.toString()), eq(otpVerifications.isUsed, false)))
+            .where(and(eq(otpVerifications.userId, userId), eq(otpVerifications.otpCode, otpCode.toString()), eq(otpVerifications.verified, false)))
             .limit(1);
         // Do not log OTP records — they contain the OTP code itself.
         if (!otpRecord.length) {
@@ -310,7 +310,7 @@ router.post("/verify-otp", async (req, res) => {
         // OTP valid => mark as used
         await db
             .update(otpVerifications)
-            .set({ isUsed: true })
+            .set({ verified: true })
             .where(eq(otpVerifications.id, otpRecord[0].id));
         res.json({ success: true, message: "OTP verified successfully" });
     }

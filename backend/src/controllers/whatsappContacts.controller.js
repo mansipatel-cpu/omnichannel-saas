@@ -19,6 +19,7 @@ import { contacts, users, insertContactSchema } from "@shared/whatsapp-schema";
 import { AppError, asyncHandler } from "../middleware/whatsappError";
 import { whatsappDb as db, dbRead } from "../config/database";
 import { and, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { addContactsToGroup, createWhatsAppContacts, deleteWhatsAppContacts, ensureGroup, normalizePhone, resolveOwnerId, sharedIdsForWhatsAppContacts } from "../services/contact-identity.service";
 export const getContacts = asyncHandler(async (req, res) => {
     const { search, channelId } = req.query;
     const user = req.session?.user;
@@ -391,7 +392,11 @@ export const createContact = asyncHandler(async (req, res) => {
     const existingContacts = channelId
         ? await storage.getContactsByChannel(channelId)
         : await storage.getContacts();
-    const duplicate = existingContacts.find((c) => c.phone === validatedContact.phone);
+    const phone = normalizePhone(validatedContact.phone);
+    if (!phone) {
+        throw new AppError("Invalid phone number.", 400);
+    }
+    const duplicate = existingContacts.find((c) => c.phone === phone);
     if (duplicate) {
         throw new AppError(409, "This phone number is already exists.");
     }
@@ -410,7 +415,8 @@ export const updateContact = asyncHandler(async (req, res) => {
         throw new AppError(404, "Contact not found");
     }
     if (req.body.name && contact.phone && contact.channelId) {
-        const conversation = await storage.getConversationByPhoneAndChannel(contact.phone, contact.channelId);
+        const conversation = (await storage.getConversationByPhoneAndChannel(contact.phone, contact.channelId)) ||
+            (await storage.getConversationByPhoneAndChannel(contact.phone.replace(/^\+/, ""), contact.channelId));
         if (conversation) {
             await storage.updateConversation(conversation.id, {
                 contactName: req.body.name,
@@ -432,11 +438,8 @@ export const deleteBulkContacts = asyncHandler(async (req, res) => {
     if (!Array.isArray(ids) || ids.length === 0) {
         throw new AppError(400, "No contact IDs provided");
     }
-    const result = await db
-        .delete(contacts)
-        .where(inArray(contacts.id, ids));
-    // Optionally check how many rows were affected
-    if (result.rowCount === 0) {
+    const removed = await deleteWhatsAppContacts(ids);
+    if (removed === 0) {
         throw new AppError(404, "No contacts found to delete");
     }
     res.status(204).send();
@@ -466,6 +469,7 @@ export const importContacts = asyncHandler(async (req, res) => {
             .where(eq(contacts.channelId, channelId))
         : await db.select({ phone: contacts.phone }).from(contacts);
     const existingPhones = new Set(existingPhoneRows.map((r) => r.phone));
+    const phoneKey = (phone) => normalizePhone(phone) || phone;
     const importSessUser = req.session.user;
     const userId = importSessUser.id;
     const importTenantId = importSessUser.role === "team" && importSessUser.createdBy
@@ -476,7 +480,7 @@ export const importContacts = asyncHandler(async (req, res) => {
     const toInsert = [];
     // Validate every contact and split into duplicates / to-insert / errors.
     for (const contact of incomingContacts) {
-        if (existingPhones.has(contact.phone)) {
+        if (existingPhones.has(phoneKey(contact.phone))) {
             duplicates.push({ contact, reason: "Phone number already exists" });
             continue;
         }
@@ -487,11 +491,13 @@ export const importContacts = asyncHandler(async (req, res) => {
                 createdBy: userId,
                 tenantId: importTenantId,
             });
+            if (!normalizePhone(validated.phone))
+                throw new Error(`Invalid phone number: ${validated.phone}`);
             toInsert.push(validated);
             // Only mark phone as seen after successful validation so that a later
             // valid row with the same phone as a previously-failed row is not
             // incorrectly counted as a duplicate.
-            existingPhones.add(contact.phone);
+            existingPhones.add(phoneKey(contact.phone));
         }
         catch (error) {
             errors.push({
@@ -506,11 +512,7 @@ export const importContacts = asyncHandler(async (req, res) => {
     let created = 0;
     for (let i = 0; i < toInsert.length; i += BATCH_SIZE) {
         const batch = toInsert.slice(i, i + BATCH_SIZE);
-        const result = await db
-            .insert(contacts)
-            .values(batch)
-            .onConflictDoNothing()
-            .returning({ id: contacts.id });
+        const result = await createWhatsAppContacts(batch, { user: importSessUser, skipExisting: true });
         created += result.length;
     }
     // If a target groupName was provided, tag any duplicate (already-existing)
@@ -518,24 +520,22 @@ export const importContacts = asyncHandler(async (req, res) => {
     // group also brings existing contacts in.
     let taggedExisting = 0;
     if (groupName && channelId && duplicates.length > 0) {
-        const dupePhones = Array.from(new Set(duplicates.map((d) => d.contact?.phone).filter(Boolean)));
+        const ownerId = await resolveOwnerId({ channelId, user: importSessUser });
+        const group = await ensureGroup(ownerId, groupName, { channelId, createdBy: userId });
+        const dupePhones = Array.from(new Set(duplicates.map((d) => normalizePhone(d.contact?.phone)).filter(Boolean)));
         const CHUNK = 500;
-        for (let i = 0; i < dupePhones.length; i += CHUNK) {
+        for (let i = 0; group && i < dupePhones.length; i += CHUNK) {
             const chunk = dupePhones.slice(i, i + CHUNK);
             const existing = await db
                 .select({ id: contacts.id, groups: contacts.groups })
                 .from(contacts)
                 .where(and(eq(contacts.channelId, channelId), inArray(contacts.phone, chunk)));
-            for (const row of existing) {
-                const current = row.groups || [];
-                if (!current.includes(groupName)) {
-                    await db
-                        .update(contacts)
-                        .set({ groups: [...current, groupName] })
-                        .where(eq(contacts.id, row.id));
-                    taggedExisting++;
-                }
-            }
+            const untagged = existing.filter((row) => !(row.groups || []).includes(group.name));
+            if (!untagged.length)
+                continue;
+            const sharedIds = await sharedIdsForWhatsAppContacts(untagged.map((row) => row.id), { channelId });
+            await addContactsToGroup(group.id, [...sharedIds.values()]);
+            taggedExisting += untagged.length;
         }
     }
     res.json({

@@ -59,6 +59,12 @@ const MIGRATIONS = [
   resolve(rootDir, 'backend', 'migrations', '008_add_ve_session_id_and_voice_engine_tables.sql'),
   resolve(rootDir, 'backend', 'migrations', '009_fix_ve_session_id_and_all_missing_columns.sql'),
   resolve(rootDir, 'backend', 'migrations', '0010_add_yookassa_columns.sql'),
+  resolve(rootDir, 'backend', 'migrations', '0011_shared_contacts_and_groups.sql'),
+  resolve(rootDir, 'backend', 'migrations', '0012_unified_campaigns.sql'),
+  resolve(rootDir, 'backend', 'migrations', '0013_unified_call_history.sql'),
+  resolve(rootDir, 'backend', 'migrations', '0014_unified_billing.sql'),
+  resolve(rootDir, 'backend', 'migrations', '0015_merge_duplicates_and_fks.sql'),
+  resolve(rootDir, 'backend', 'migrations', '0016_contacts_single_source.up.sql'),
 ];
 
 /**

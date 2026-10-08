@@ -31,7 +31,7 @@ const steps = [
     // ────────────────────────────────────────────────────
     // campaigns
     // ────────────────────────────────────────────────────
-    addColumnIfNotExists("campaigns", "population_started_at", "TIMESTAMP"),
+    addColumnIfNotExists("wa_campaigns", "population_started_at", "TIMESTAMP"),
     // ────────────────────────────────────────────────────
     // automation_edges
     // ────────────────────────────────────────────────────
@@ -152,19 +152,19 @@ const steps = [
     // ────────────────────────────────────────────────────
     // campaigns
     // ────────────────────────────────────────────────────
-    addColumnIfNotExists("campaigns", "replied_count", "INTEGER DEFAULT 0"),
+    addColumnIfNotExists("wa_campaigns", "replied_count", "INTEGER DEFAULT 0"),
     // ────────────────────────────────────────────────────
-    // contacts — multi-tenant scoping column + index + backfill
+    // wa_contacts — multi-tenant scoping column + index + backfill
     // ────────────────────────────────────────────────────
-    addColumnIfNotExists("contacts", "tenant_id", "VARCHAR"),
+    addColumnIfNotExists("wa_contacts", "tenant_id", "VARCHAR"),
     {
-        description: "Create contacts_tenant_idx on contacts(tenant_id)",
-        sql: `CREATE INDEX IF NOT EXISTS contacts_tenant_idx ON contacts(tenant_id);`,
+        description: "Create wa_contacts_tenant_idx on wa_contacts(tenant_id)",
+        sql: `CREATE INDEX IF NOT EXISTS wa_contacts_tenant_idx ON wa_contacts(tenant_id);`,
     },
     {
-        description: "Backfill contacts.tenant_id from creator (team users -> their parent, otherwise self)",
+        description: "Backfill wa_contacts.tenant_id from creator (team users -> their parent, otherwise self)",
         sql: `
-      UPDATE contacts c
+      UPDATE wa_contacts c
          SET tenant_id = COALESCE(
            NULLIF(u.created_by, ''),
            u.id

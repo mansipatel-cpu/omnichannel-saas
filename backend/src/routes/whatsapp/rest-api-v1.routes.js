@@ -20,6 +20,11 @@ import * as schema from "@shared/whatsapp-schema";
 import { requireApiKey, requirePermission } from "../../middleware/whatsappApiKey";
 import { WhatsAppApiService } from "../../integrations/whatsapp/api";
 import crypto from "crypto";
+import { addContactsToGroup, createWhatsAppContact, deleteWhatsAppContacts, findGroup, findWhatsAppContactByPhone, listGroupsWithCounts, normalizePhone, removeContactsFromGroup, resolveOwnerId, sharedIdsForWhatsAppContacts, updateWhatsAppContact, } from "../../services/contact-identity.service";
+async function findApiGroup(apiUser, groupId) {
+    const ownerId = await resolveOwnerId({ channelId: apiUser.channelId, createdBy: apiUser.userId });
+    return ownerId ? findGroup({ ownerId, id: groupId }) : null;
+}
 export function registerRestApiV1Routes(app) {
     app.post("/api/whatsapp/v1/messages/template", requireApiKey, requirePermission("messages.send"), async (req, res) => {
         try {
@@ -37,22 +42,17 @@ export function registerRestApiV1Routes(app) {
                 return res.status(404).json({ success: false, error: "Channel not found" });
             }
             // 1. Get/Create Contact & Conversation FIRST so we can log even if send fails
-            let [contact] = await db
-                .select()
-                .from(schema.contacts)
-                .where(and(eq(schema.contacts.channelId, channelId), eq(schema.contacts.phone, phone)))
-                .limit(1);
+            if (!normalizePhone(phone)) {
+                return res.status(400).json({ success: false, error: "Invalid phone number" });
+            }
+            let contact = await findWhatsAppContactByPhone(channelId, phone);
             if (!contact) {
-                [contact] = await db
-                    .insert(schema.contacts)
-                    .values({
+                contact = await createWhatsAppContact({
                     channelId,
                     phone,
-                    name: phone,
                     source: "api",
                     createdBy: userId,
-                })
-                    .returning();
+                });
             }
             let [conversation] = await db
                 .select()
@@ -157,11 +157,7 @@ export function registerRestApiV1Routes(app) {
                 return res.status(404).json({ success: false, error: "Channel not found" });
             }
             const phone = to.replace(/\D/g, "");
-            const [contact] = await db
-                .select()
-                .from(schema.contacts)
-                .where(and(eq(schema.contacts.channelId, channelId), eq(schema.contacts.phone, phone)))
-                .limit(1);
+            const contact = await findWhatsAppContactByPhone(channelId, phone);
             if (!contact) {
                 return res.status(404).json({ success: false, error: "Contact not found. Send a template message first." });
             }
@@ -303,12 +299,7 @@ export function registerRestApiV1Routes(app) {
             if (!channelId) {
                 return res.status(400).json({ success: false, error: "No channel associated with this API key. Pass x-channel-id header or channel_id query param to specify a channel." });
             }
-            const phone = contactPhone.replace(/\D/g, "");
-            const [contact] = await db
-                .select()
-                .from(schema.contacts)
-                .where(and(eq(schema.contacts.channelId, channelId), eq(schema.contacts.phone, phone)))
-                .limit(1);
+            const contact = await findWhatsAppContactByPhone(channelId, contactPhone);
             if (!contact) {
                 return res.status(404).json({ success: false, error: "Contact not found" });
             }
@@ -360,6 +351,13 @@ export function registerRestApiV1Routes(app) {
             if (search) {
                 conditions.push(like(schema.contacts.name, `%${search}%`));
             }
+            if (groupId) {
+                conditions.push(sql `${schema.contacts.contactId} IN (
+                    SELECT m.contact_id FROM contact_group_members m
+                    JOIN contact_groups g ON g.id = m.group_id
+                    WHERE g.id = ${String(groupId)} OR g.name = ${String(groupId)}
+                )`);
+            }
             const contactsList = await db
                 .select()
                 .from(schema.contacts)
@@ -371,17 +369,10 @@ export function registerRestApiV1Routes(app) {
                 .select({ total: sql `count(*)::int` })
                 .from(schema.contacts)
                 .where(and(...conditions));
-            let filtered = contactsList;
-            if (groupId) {
-                filtered = contactsList.filter((c) => {
-                    const groups = c.groups || [];
-                    return Array.isArray(groups) && groups.includes(groupId);
-                });
-            }
             return res.json({
                 success: true,
                 data: {
-                    contacts: filtered,
+                    contacts: contactsList,
                     total: countResult?.total || 0,
                     limit,
                     offset,
@@ -403,26 +394,21 @@ export function registerRestApiV1Routes(app) {
             if (!channelId) {
                 return res.status(400).json({ success: false, error: "No channel associated with this API key. Pass x-channel-id header or channel_id query param to specify a channel." });
             }
-            const cleanPhone = phone.replace(/\D/g, "");
-            const [existing] = await db
-                .select()
-                .from(schema.contacts)
-                .where(and(eq(schema.contacts.channelId, channelId), eq(schema.contacts.phone, cleanPhone)))
-                .limit(1);
+            if (!normalizePhone(phone)) {
+                return res.status(400).json({ success: false, error: "Invalid phone number" });
+            }
+            const existing = await findWhatsAppContactByPhone(channelId, phone);
             if (existing) {
                 return res.status(409).json({ success: false, error: "Contact already exists", data: existing });
             }
-            const [contact] = await db
-                .insert(schema.contacts)
-                .values({
+            const contact = await createWhatsAppContact({
                 channelId,
-                phone: cleanPhone,
-                name: name || cleanPhone,
+                phone,
+                name,
                 email: email || null,
                 source: "api",
                 createdBy: userId,
-            })
-                .returning();
+            });
             return res.status(201).json({ success: true, data: contact });
         }
         catch (error) {
@@ -446,16 +432,12 @@ export function registerRestApiV1Routes(app) {
             if (!existing) {
                 return res.status(404).json({ success: false, error: "Contact not found" });
             }
-            const updateData = { updatedAt: new Date() };
+            const updateData = {};
             if (name !== undefined)
                 updateData.name = name;
             if (email !== undefined)
                 updateData.email = email;
-            const [updated] = await db
-                .update(schema.contacts)
-                .set(updateData)
-                .where(eq(schema.contacts.id, id))
-                .returning();
+            const updated = await updateWhatsAppContact(id, updateData);
             return res.json({ success: true, data: updated });
         }
         catch (error) {
@@ -478,7 +460,7 @@ export function registerRestApiV1Routes(app) {
             if (!existing) {
                 return res.status(404).json({ success: false, error: "Contact not found" });
             }
-            await db.delete(schema.contacts).where(eq(schema.contacts.id, id));
+            await deleteWhatsAppContacts([id], { channelId });
             return res.json({ success: true, data: { message: "Contact deleted successfully" } });
         }
         catch (error) {
@@ -488,12 +470,9 @@ export function registerRestApiV1Routes(app) {
     });
     app.get("/api/whatsapp/v1/contacts/groups", requireApiKey, requirePermission("contacts.read"), async (req, res) => {
         try {
-            const { userId } = req.apiUser;
-            const groupsList = await db
-                .select()
-                .from(schema.groups)
-                .where(eq(schema.groups.createdBy, userId))
-                .orderBy(desc(schema.groups.createdAt));
+            const { userId, channelId } = req.apiUser;
+            const ownerId = await resolveOwnerId({ channelId, createdBy: userId });
+            const groupsList = ownerId ? await listGroupsWithCounts(ownerId) : [];
             return res.json({ success: true, data: groupsList });
         }
         catch (error) {
@@ -520,15 +499,15 @@ export function registerRestApiV1Routes(app) {
             if (!contact) {
                 return res.status(404).json({ success: false, error: "Contact not found" });
             }
-            const currentGroups = contact.groups || [];
-            if (currentGroups.includes(groupId)) {
+            const group = await findApiGroup(req.apiUser, groupId);
+            if (!group) {
+                return res.status(404).json({ success: false, error: "Group not found" });
+            }
+            const sharedIds = await sharedIdsForWhatsAppContacts([contact.id], { channelId });
+            const added = await addContactsToGroup(group.id, [...sharedIds.values()]);
+            if (!added) {
                 return res.json({ success: true, data: { message: "Contact already in group" } });
             }
-            const updatedGroups = [...currentGroups, groupId];
-            await db
-                .update(schema.contacts)
-                .set({ groups: updatedGroups })
-                .where(eq(schema.contacts.id, contactId));
             return res.json({ success: true, data: { message: "Contact added to group" } });
         }
         catch (error) {
@@ -555,12 +534,11 @@ export function registerRestApiV1Routes(app) {
             if (!contact) {
                 return res.status(404).json({ success: false, error: "Contact not found" });
             }
-            const currentGroups = contact.groups || [];
-            const updatedGroups = currentGroups.filter((g) => g !== groupId);
-            await db
-                .update(schema.contacts)
-                .set({ groups: updatedGroups })
-                .where(eq(schema.contacts.id, contactId));
+            const group = await findApiGroup(req.apiUser, groupId);
+            if (group) {
+                const sharedIds = await sharedIdsForWhatsAppContacts([contact.id], { channelId });
+                await removeContactsFromGroup(group.id, [...sharedIds.values()]);
+            }
             return res.json({ success: true, data: { message: "Contact removed from group" } });
         }
         catch (error) {

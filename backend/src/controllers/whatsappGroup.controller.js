@@ -14,9 +14,33 @@
  * Respect the author's rights and Envato licensing terms.
  * ============================================================
  */
-import { groups, contacts } from "@shared/whatsapp-schema";
-import { eq, and, sql } from "drizzle-orm";
-import { whatsappDb as db } from "../config/database";
+import { contactGroups } from "@shared/schema";
+import { db } from "../config/database";
+import { addContactsToGroup as addMembers, deleteGroup as removeGroup, findGroup, listGroupsWithCounts, removeContactsFromGroup as removeMembers, renameGroup, resolveOwnerId, sharedIdsForWhatsAppContacts, } from "../services/contact-identity.service";
+
+function isSuperadmin(user) {
+    return user?.role === "superadmin";
+}
+
+async function requestOwnerId(req, channelId) {
+    const user = req.session?.user;
+    if (isSuperadmin(user) && !channelId)
+        return null;
+    return resolveOwnerId({ channelId, user });
+}
+
+async function findOwnedGroup(req, { id, name, channelId }) {
+    const user = req.session?.user;
+    const ownerId = await requestOwnerId(req, channelId);
+    if (!ownerId && !isSuperadmin(user))
+        return null;
+    return findGroup({ ownerId, id, name });
+}
+
+function errorMessage(e) {
+    return e instanceof Error ? e.message : "Something went wrong";
+}
+
 export const createGroup = async (req, res) => {
     try {
         const user = req.session?.user;
@@ -24,43 +48,40 @@ export const createGroup = async (req, res) => {
         if (!channelId) {
             return res.status(400).json({ error: "channelId is required" });
         }
+        if (!name?.trim()) {
+            return res.status(400).json({ error: "name is required" });
+        }
+        const ownerId = await requestOwnerId(req, channelId);
+        if (!ownerId) {
+            return res.status(404).json({ error: "Channel not found" });
+        }
         const [group] = await db
-            .insert(groups)
-            .values({ name, description, createdBy: user?.id, channelId })
+            .insert(contactGroups)
+            .values({ userId: ownerId, channelId, name: name.trim(), description, createdBy: user?.id })
+            .onConflictDoNothing({ target: [contactGroups.userId, contactGroups.name] })
             .returning();
+        if (!group) {
+            return res.status(409).json({ error: "A group with this name already exists" });
+        }
         res.json({ success: true, group });
     }
     catch (e) {
-        const errorMsg = e instanceof Error ? e.message : "Something went wrong";
-        res.status(500).json({ error: errorMsg });
+        res.status(500).json({ error: errorMessage(e) });
     }
 };
 export const getGroups = async (req, res) => {
     try {
         const user = req.session?.user;
         const { channelId } = req.query;
-        if (!channelId) {
-            if (user?.role === "superadmin") {
-                const allData = await db.select().from(groups);
-                return res.json({ success: true, groups: allData });
-            }
+        if (!channelId && !isSuperadmin(user)) {
             return res.status(400).json({ success: false, error: "channelId is required" });
         }
-        const channelGroups = await db
-            .select()
-            .from(groups)
-            .where(eq(groups.channelId, String(channelId)));
-        const groupsWithCounts = await Promise.all(channelGroups.map(async (group) => {
-            const result = await db
-                .select({ count: sql `count(*)` })
-                .from(contacts)
-                .where(and(eq(contacts.channelId, String(channelId)), sql `${contacts.groups}::jsonb @> ${JSON.stringify([group.name])}::jsonb`));
-            return {
-                ...group,
-                contact_count: Number(result[0]?.count || 0),
-            };
-        }));
-        return res.json({ success: true, groups: groupsWithCounts });
+        const ownerId = await requestOwnerId(req, channelId ? String(channelId) : undefined);
+        if (!ownerId && !isSuperadmin(user)) {
+            return res.json({ success: true, groups: [] });
+        }
+        const groups = await listGroupsWithCounts(ownerId);
+        return res.json({ success: true, groups });
     }
     catch (e) {
         res.status(500).json({ success: false, error: e.message });
@@ -68,61 +89,43 @@ export const getGroups = async (req, res) => {
 };
 export const getGroupById = async (req, res) => {
     try {
-        const { id } = req.params;
-        const [group] = await db
-            .select()
-            .from(groups)
-            .where(eq(groups.id, id));
+        const group = await findOwnedGroup(req, { id: req.params.id });
         if (!group)
             return res.status(404).json({ error: "Group not found" });
         res.json({ success: true, group });
     }
     catch (e) {
-        const errorMsg = e instanceof Error ? e.message : "Something went wrong";
-        res.status(500).json({ error: errorMsg });
+        res.status(500).json({ error: errorMessage(e) });
     }
 };
 export const updateGroup = async (req, res) => {
     try {
-        const { id } = req.params;
         const { name, description } = req.body;
-        const [updated] = await db
-            .update(groups)
-            .set({ name, description })
-            .where(eq(groups.id, id))
-            .returning();
+        const group = await findOwnedGroup(req, { id: req.params.id });
+        if (!group)
+            return res.status(404).json({ error: "Group not found" });
+        if (name !== undefined && name.trim() !== group.name) {
+            const clash = await findGroup({ ownerId: group.userId, name: name.trim() });
+            if (clash)
+                return res.status(409).json({ error: "A group with this name already exists" });
+        }
+        const updated = await renameGroup(group.id, { name, description });
         res.json({ success: true, updated });
     }
     catch (e) {
-        const errorMsg = e instanceof Error ? e.message : "Something went wrong";
-        res.status(500).json({ error: errorMsg });
+        res.status(500).json({ error: errorMessage(e) });
     }
 };
 export const deleteGroup = async (req, res) => {
     try {
-        const { id } = req.params;
-        const [deleted] = await db
-            .delete(groups)
-            .where(eq(groups.id, id))
-            .returning();
-        if (deleted) {
-            const allContacts = await db
-                .select()
-                .from(contacts)
-                .where(sql `${contacts.groups}::jsonb @> ${JSON.stringify([deleted.name])}::jsonb`);
-            for (const contact of allContacts) {
-                const updatedGroups = (contact.groups || []).filter((g) => g !== deleted.name);
-                await db
-                    .update(contacts)
-                    .set({ groups: updatedGroups })
-                    .where(eq(contacts.id, contact.id));
-            }
-        }
+        const group = await findOwnedGroup(req, { id: req.params.id });
+        if (!group)
+            return res.json({ success: true, deleted: undefined });
+        const deleted = await removeGroup(group.id);
         res.json({ success: true, deleted });
     }
     catch (e) {
-        const errorMsg = e instanceof Error ? e.message : "Something went wrong";
-        res.status(500).json({ error: errorMsg });
+        res.status(500).json({ error: errorMessage(e) });
     }
 };
 export const addContactsToGroup = async (req, res) => {
@@ -131,35 +134,16 @@ export const addContactsToGroup = async (req, res) => {
         if (!contactIds?.length || !groupName || !channelId) {
             return res.status(400).json({ error: "contactIds, groupName, and channelId are required" });
         }
-        const [group] = await db
-            .select()
-            .from(groups)
-            .where(and(eq(groups.name, groupName), eq(groups.channelId, channelId)));
+        const group = await findOwnedGroup(req, { name: groupName, channelId });
         if (!group) {
             return res.status(404).json({ error: "Group not found in this channel" });
         }
-        let updatedCount = 0;
-        for (const contactId of contactIds) {
-            const [contact] = await db
-                .select()
-                .from(contacts)
-                .where(and(eq(contacts.id, contactId), eq(contacts.channelId, channelId)));
-            if (contact) {
-                const currentGroups = contact.groups || [];
-                if (!currentGroups.includes(groupName)) {
-                    await db
-                        .update(contacts)
-                        .set({ groups: [...currentGroups, groupName] })
-                        .where(eq(contacts.id, contactId));
-                    updatedCount++;
-                }
-            }
-        }
+        const sharedIds = await sharedIdsForWhatsAppContacts(contactIds, { user: req.session?.user, channelId });
+        const updatedCount = await addMembers(group.id, [...sharedIds.values()]);
         res.json({ success: true, updatedCount });
     }
     catch (e) {
-        const errorMsg = e instanceof Error ? e.message : "Something went wrong";
-        res.status(500).json({ error: errorMsg });
+        res.status(500).json({ error: errorMessage(e) });
     }
 };
 export const removeContactsFromGroup = async (req, res) => {
@@ -168,28 +152,16 @@ export const removeContactsFromGroup = async (req, res) => {
         if (!contactIds?.length || !groupName || !channelId) {
             return res.status(400).json({ error: "contactIds, groupName, and channelId are required" });
         }
-        let updatedCount = 0;
-        for (const contactId of contactIds) {
-            const [contact] = await db
-                .select()
-                .from(contacts)
-                .where(and(eq(contacts.id, contactId), eq(contacts.channelId, channelId)));
-            if (contact) {
-                const currentGroups = contact.groups || [];
-                if (currentGroups.includes(groupName)) {
-                    await db
-                        .update(contacts)
-                        .set({ groups: currentGroups.filter((g) => g !== groupName) })
-                        .where(eq(contacts.id, contactId));
-                    updatedCount++;
-                }
-            }
+        const group = await findOwnedGroup(req, { name: groupName, channelId });
+        if (!group) {
+            return res.json({ success: true, updatedCount: 0 });
         }
+        const sharedIds = await sharedIdsForWhatsAppContacts(contactIds, { user: req.session?.user, channelId });
+        const updatedCount = await removeMembers(group.id, [...sharedIds.values()]);
         res.json({ success: true, updatedCount });
     }
     catch (e) {
-        const errorMsg = e instanceof Error ? e.message : "Something went wrong";
-        res.status(500).json({ error: errorMsg });
+        res.status(500).json({ error: errorMessage(e) });
     }
 };
 export const moveContactsBetweenGroups = async (req, res) => {
@@ -205,43 +177,22 @@ export const moveContactsBetweenGroups = async (req, res) => {
                 .status(400)
                 .json({ error: "Source and destination groups must be different" });
         }
-        const [destination] = await db
-            .select()
-            .from(groups)
-            .where(and(eq(groups.name, toGroup), eq(groups.channelId, channelId)));
+        const destination = await findOwnedGroup(req, { name: toGroup, channelId });
         if (!destination) {
             return res.status(404).json({ error: "Destination group not found in this channel" });
         }
+        const source = await findOwnedGroup(req, { name: fromGroup, channelId });
+        const sharedIds = [...(await sharedIdsForWhatsAppContacts(contactIds, { user: req.session?.user, channelId })).values()];
         let movedCount = 0;
         await db.transaction(async (tx) => {
-            for (const contactId of contactIds) {
-                const [contact] = await tx
-                    .select()
-                    .from(contacts)
-                    .where(and(eq(contacts.id, contactId), eq(contacts.channelId, channelId)));
-                if (!contact)
-                    continue;
-                const current = contact.groups || [];
-                const withoutSource = current.filter((g) => g !== fromGroup);
-                const next = withoutSource.includes(toGroup)
-                    ? withoutSource
-                    : [...withoutSource, toGroup];
-                const changed = next.length !== current.length ||
-                    next.some((g, i) => g !== current[i]);
-                if (changed) {
-                    await tx
-                        .update(contacts)
-                        .set({ groups: next })
-                        .where(eq(contacts.id, contactId));
-                    movedCount++;
-                }
-            }
+            const removed = source ? await removeMembers(source.id, sharedIds, tx) : 0;
+            const added = await addMembers(destination.id, sharedIds, tx);
+            movedCount = Math.max(removed, added);
         });
         res.json({ success: true, movedCount, fromGroup, toGroup });
     }
     catch (e) {
-        const errorMsg = e instanceof Error ? e.message : "Something went wrong";
-        res.status(500).json({ error: errorMsg });
+        res.status(500).json({ error: errorMessage(e) });
     }
 };
 export const getGroupContactCount = async (req, res) => {
@@ -250,22 +201,15 @@ export const getGroupContactCount = async (req, res) => {
         if (!channelId) {
             return res.status(400).json({ error: "channelId is required" });
         }
-        const channelGroups = await db
-            .select()
-            .from(groups)
-            .where(eq(groups.channelId, String(channelId)));
+        const ownerId = await requestOwnerId(req, String(channelId));
+        const groups = ownerId ? await listGroupsWithCounts(ownerId) : [];
         const counts = {};
-        for (const group of channelGroups) {
-            const result = await db
-                .select({ count: sql `count(*)` })
-                .from(contacts)
-                .where(and(eq(contacts.channelId, String(channelId)), sql `${contacts.groups}::jsonb @> ${JSON.stringify([group.name])}::jsonb`));
-            counts[group.name] = Number(result[0]?.count || 0);
+        for (const group of groups) {
+            counts[group.name] = Number(group.contact_count || 0);
         }
         res.json({ success: true, counts });
     }
     catch (e) {
-        const errorMsg = e instanceof Error ? e.message : "Something went wrong";
-        res.status(500).json({ error: errorMsg });
+        res.status(500).json({ error: errorMessage(e) });
     }
 };

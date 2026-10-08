@@ -3,6 +3,7 @@ import { AppError } from "../middleware/whatsappError";
 import { whatsappDb as db } from "../config/database";
 import { contacts as contactsTable, conversations as conversationsTable, messages as messagesTable } from "@shared/whatsapp-schema";
 import { eq } from "drizzle-orm";
+import { createWhatsAppContact, normalizePhone } from "./contact-identity.service";
 const WHATSAPP_API_VERSION = process.env.WHATSAPP_API_VERSION || "v25.0";
 export async function sendBusinessMessage({ to, message, templateName, parameters, buttonParameters, quickReplyPayloads, mediaId, channelId, conversationId, }) {
     /* ───── Resolve channel ───── */
@@ -134,19 +135,19 @@ export async function sendBusinessMessage({ to, message, templateName, parameter
             conv = row || null;
         }
         if (!conv) {
-            let [contact] = await tx.select().from(contactsTable).where(eq(contactsTable.phone, to)).limit(1);
+            let [contact] = await tx.select().from(contactsTable).where(eq(contactsTable.phone, normalizePhone(to) || to)).limit(1);
             if (!contact) {
                 // Tenant-scope the new contact to the channel owner so it shows up in
                 // tenant-aware queries like getContactsByTenant. createdBy is set to
                 // the same id so audit/ownership matches the tenant.
-                const ownerId = channel?.createdBy || "";
-                [contact] = await tx.insert(contactsTable).values({
+                const ownerId = channel?.createdBy || undefined;
+                contact = await createWhatsAppContact({
                     name: to,
                     phone: to,
                     channelId: channelId,
-                    tenantId: ownerId || null,
-                    createdBy: ownerId || "",
-                }).returning();
+                    tenantId: ownerId,
+                    createdBy: ownerId,
+                }, { executor: tx });
             }
             [conv] = await tx.insert(conversationsTable).values({
                 contactId: contact.id,

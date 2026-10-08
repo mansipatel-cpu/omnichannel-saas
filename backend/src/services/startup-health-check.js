@@ -123,7 +123,8 @@ async function validateSchemaColumns() {
             'credits'
         ],
         agents: ['id', 'user_id', 'name', 'type', 'system_prompt', 'eleven_labs_agent_id'],
-        campaigns: ['id', 'user_id', 'name', 'status', 'agent_id'],
+        campaigns: ['id', 'user_id', 'channel', 'name', 'status'],
+        calling_campaigns: ['id', 'user_id', 'name', 'status', 'agent_id'],
         plans: ['id', 'name', 'monthly_price', 'yearly_price'],
     };
     for (const [table, columns] of Object.entries(expectedColumns)) {
