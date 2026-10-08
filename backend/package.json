@@ -12,6 +12,7 @@
     "db:migrate": "node ../scripts/run-safe-migration.mjs",
     "db:generate": "drizzle-kit generate --config drizzle.config.js",
     "db:seed": "node --import ../scripts/register-esm-paths.mjs src/database/seeders/seed-all.js",
+    "db:reset": "node scripts/clean-and-reset-db.mjs && node --import ../scripts/register-esm-paths.mjs src/database/seeders/seed-all.js",
     "db:studio": "drizzle-kit studio --config drizzle.config.js",
     "test": "vitest run"
   },

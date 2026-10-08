@@ -402,6 +402,8 @@ export const campaignRecipients = pgTable("campaign_recipients", {
     errorMessage: text("error_message"),
     variables: jsonb("variables").notNull().default({}),
     result: jsonb("result").notNull().default({}),
+    lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }),
+    nextRetryAt: timestamp("next_retry_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
