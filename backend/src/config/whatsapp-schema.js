@@ -21,7 +21,14 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { ROLE_VALUES, USER_STATUS_VALUES, CAMPAIGN_STATUS_VALUES, MESSAGE_STATUS_VALUES, } from "@shared/whatsapp-roles";
 export { Role, ROLE_VALUES, UserStatus, CampaignStatus, MessageStatus } from "@shared/whatsapp-roles";
-import { users as platformUsers, sharedContacts, otpVerifications as platformOtpVerifications } from "./schema";
+import {
+    users as platformUsers,
+    sharedContacts,
+    otpVerifications as platformOtpVerifications,
+    campaigns as unifiedCampaigns,
+    campaignRecipients as unifiedCampaignRecipients,
+    templates as unifiedTemplates,
+} from "./schema";
 export const users = platformUsers;
 export const shopifyStores = pgTable("shopify_stores", {
     id: varchar("id")
@@ -367,81 +374,8 @@ export const abandonedCartReminders = pgTable("abandoned_cart_reminders", {
     statusIdx: index("abandoned_cart_reminders_status_idx").on(table.status),
     uniqueReminder: unique("abandoned_cart_reminders_unique").on(table.cartId, table.reminderId),
 }));
-export const campaigns = pgTable("wa_campaigns", {
-    id: varchar("id")
-        .primaryKey()
-        .default(sql `gen_random_uuid()`),
-    channelId: varchar("channel_id").references(() => channels.id, {
-        onDelete: "cascade",
-    }),
-    createdBy: varchar("created_by")
-        .notNull()
-        .references(() => users.id, { onDelete: "cascade" }),
-    name: text("name").notNull(),
-    description: text("description"),
-    campaignType: text("campaign_type").notNull(), // contacts, csv, api
-    type: text("type").notNull(), // marketing, transactional
-    apiType: text("api_type").notNull(), // cloud_api, mm_lite
-    templateId: varchar("template_id").references(() => templates.id),
-    templateName: text("template_name"),
-    templateLanguage: text("template_language"),
-    variableMapping: jsonb("variable_mapping")
-        .$type()
-        .default({}), // Maps template variables to contact/csv fields
-    contactGroups: jsonb("contact_groups").$type().default([]), // For contacts campaign
-    audienceType: text("audience_type").default("all"),
-    platform: text("platform"),
-    csvData: jsonb("csv_data").default([]), // For CSV campaign
-    apiKey: varchar("api_key"), // For API campaign
-    apiEndpoint: text("api_endpoint"), // For API campaign
-    status: text("status").default("draft"), // draft, scheduled, active, paused, completed
-    scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
-    recipientCount: integer("recipient_count").default(0),
-    sentCount: integer("sent_count").default(0),
-    deliveredCount: integer("delivered_count").default(0),
-    readCount: integer("read_count").default(0),
-    repliedCount: integer("replied_count").default(0),
-    failedCount: integer("failed_count").default(0),
-    completedAt: timestamp("completed_at", { withTimezone: true }),
-    populationStartedAt: timestamp("population_started_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
-}, (table) => ({
-    campaignChannelIdx: index("wa_campaigns_channel_idx").on(table.channelId),
-    campaignStatusIdx: index("wa_campaigns_status_idx").on(table.status),
-    campaignCreatedIdx: index("wa_campaigns_created_idx").on(table.createdAt),
-}));
-// WhatsApp delivery details per recipient. Every row has a base row in the unified
-// campaign_recipients table with the same id, kept in sync by triggers (migration 0012).
-export const campaignRecipients = pgTable("wa_campaign_recipients", {
-    id: varchar("id")
-        .primaryKey()
-        .default(sql `gen_random_uuid()`),
-    campaignId: varchar("campaign_id")
-        .notNull()
-        .references(() => campaigns.id, { onDelete: "cascade" }),
-    contactId: varchar("contact_id").references(() => whatsappContactChannels.id, {
-        onDelete: "cascade",
-    }),
-    phone: text("phone").notNull(),
-    name: text("name"),
-    status: text("status").default("pending"), // pending, sent, delivered, read, failed
-    whatsappMessageId: varchar("whatsapp_message_id"),
-    templateParams: jsonb("template_params").default({}),
-    sentAt: timestamp("sent_at", { withTimezone: true }),
-    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
-    readAt: timestamp("read_at", { withTimezone: true }),
-    errorCode: varchar("error_code"),
-    errorMessage: text("error_message"),
-    retryCount: integer("retry_count").default(0),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
-}, (table) => ({
-    recipientCampaignIdx: index("recipients_campaign_idx").on(table.campaignId),
-    recipientStatusIdx: index("recipients_status_idx").on(table.status),
-    recipientPhoneIdx: index("recipients_phone_idx").on(table.phone),
-    campaignPhoneUnique: unique("campaign_phone_unique").on(table.campaignId, table.phone),
-}));
+export const campaigns = unifiedCampaigns;
+export const campaignRecipients = unifiedCampaignRecipients;
 // WhatsApp Business Channels for multi-account support
 export const channels = pgTable("channels", {
     id: varchar("id")
@@ -464,40 +398,7 @@ export const channels = pgTable("channels", {
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
     createdBy: varchar("created_by").references(() => users.id, { onDelete: "set null" }),
 });
-export const templates = pgTable("templates", {
-    id: varchar("id")
-        .primaryKey()
-        .default(sql `gen_random_uuid()`),
-    channelId: varchar("channel_id")
-        .notNull()
-        .references(() => channels.id, { onDelete: "cascade" }),
-    createdBy: varchar("created_by").references(() => users.id, {
-        onDelete: "set null",
-    }),
-    name: text("name").notNull(),
-    category: text("category").notNull(), // marketing, transactional, authentication, utility
-    language: text("language").default("en_US"),
-    header: text("header"),
-    body: text("body").notNull(),
-    footer: text("footer"),
-    buttons: jsonb("buttons").default([]),
-    variables: jsonb("variables").default([]),
-    status: text("status").default("draft"), // draft, pending, approved, rejected
-    rejectionReason: text("rejection_reason"), // Reason for template rejection from WhatsApp
-    mediaType: text("media_type").default("text"), // text, image, video, document, carousel
-    mediaUrl: text("media_url"), // URL of uploaded media
-    mediaHandle: text("media_handle"), // WhatsApp media handle after upload
-    carouselCards: jsonb("carousel_cards").default([]), // For carousel templates
-    whatsappTemplateId: text("whatsapp_template_id"), // ID from WhatsApp after creation
-    usage_count: integer("usage_count").default(0),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
-    headerType: text("header_type"),
-    bodyVariables: integer("body_variables"),
-}, (table) => ({
-    templateChannelWaIdUnique: unique("template_channel_wa_id_unique").on(table.whatsappTemplateId, table.channelId),
-    templateChannelIdx: index("templates_channel_idx").on(table.channelId),
-}));
+export const templates = unifiedTemplates;
 export const whatsappBusinessAccountsConfig = pgTable("whatsapp_business_accounts_config", {
     id: varchar("id")
         .primaryKey()
@@ -1407,8 +1308,6 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
 // Drizzle Relations for proper joins and queries
 export const channelsRelations = relations(channels, ({ many }) => ({
     contacts: many(whatsappContactChannels),
-    campaigns: many(campaigns),
-    templates: many(templates),
     conversations: many(conversations),
 }));
 export const contactsRelations = relations(whatsappContactChannels, ({ one, many }) => ({
@@ -1420,10 +1319,6 @@ export const contactsRelations = relations(whatsappContactChannels, ({ one, many
     campaignRecipients: many(campaignRecipients),
 }));
 export const campaignsRelations = relations(campaigns, ({ one, many }) => ({
-    channel: one(channels, {
-        fields: [campaigns.channelId],
-        references: [channels.id],
-    }),
     template: one(templates, {
         fields: [campaigns.templateId],
         references: [templates.id],
@@ -1435,16 +1330,12 @@ export const campaignRecipientsRelations = relations(campaignRecipients, ({ one 
         fields: [campaignRecipients.campaignId],
         references: [campaigns.id],
     }),
-    contact: one(whatsappContactChannels, {
+    contact: one(sharedContacts, {
         fields: [campaignRecipients.contactId],
-        references: [whatsappContactChannels.id],
+        references: [sharedContacts.id],
     }),
 }));
-export const templatesRelations = relations(templates, ({ one, many }) => ({
-    channel: one(channels, {
-        fields: [templates.channelId],
-        references: [channels.id],
-    }),
+export const templatesRelations = relations(templates, ({ many }) => ({
     campaigns: many(campaigns),
 }));
 export const conversationsRelations = relations(conversations, ({ one, many }) => ({

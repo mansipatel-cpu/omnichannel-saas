@@ -14,224 +14,169 @@
  * Respect the author's rights and Envato licensing terms.
  * ============================================================
  */
-import { whatsappDb as db } from "../config/database";
-import { eq, and, desc, sql } from "drizzle-orm";
-import { templates, users, channels } from "@shared/whatsapp-schema";
+import { db } from "../config/database";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { templates, users } from "@shared/schema";
+import { channels } from "@shared/whatsapp-schema";
+import { toWhatsAppTemplate } from "../modules/campaigns/campaign.mapper";
+import { ownerIdForUser } from "../services/contact-identity.service";
+
+async function ownerIdForUserId(userId) {
+    if (!userId)
+        return null;
+    const [user] = await db.select({
+        id: users.id,
+        role: users.role,
+        createdBy: users.createdBy,
+    }).from(users).where(eq(users.id, userId)).limit(1);
+    return ownerIdForUser(user);
+}
+
+function contentFromLegacy(input, previous = {}) {
+    return {
+        ...previous,
+        channelId: input.channelId ?? previous.channelId,
+        header: input.header ?? previous.header,
+        body: input.body ?? previous.body ?? "",
+        footer: input.footer ?? previous.footer,
+        buttons: input.buttons ?? previous.buttons ?? [],
+        variables: input.variables ?? previous.variables ?? [],
+        rejectionReason: input.rejectionReason ?? previous.rejectionReason,
+        mediaType: input.mediaType ?? previous.mediaType ?? "text",
+        mediaUrl: input.mediaUrl ?? previous.mediaUrl,
+        mediaHandle: input.mediaHandle ?? previous.mediaHandle,
+        carouselCards: input.carouselCards ?? previous.carouselCards ?? [],
+        usageCount: input.usage_count ?? previous.usageCount ?? 0,
+        headerType: input.headerType ?? previous.headerType,
+        bodyVariables: input.bodyVariables ?? previous.bodyVariables,
+    };
+}
+
+function activeTemplateConditions(ownerId) {
+    return and(
+        eq(templates.userId, ownerId),
+        eq(templates.channelType, "whatsapp"),
+        isNull(templates.deletedAt),
+    );
+}
+
 export class TemplateRepository {
-    async getAllold() {
-        return await db.select().from(templates).orderBy(desc(templates.createdAt));
-    }
-    async getAllOLD() {
-        return await db
-            .select({
-            id: templates.id,
-            channelId: templates.channelId,
-            name: templates.name,
-            category: templates.category,
-            language: templates.language,
-            header: templates.header,
-            body: templates.body,
-            footer: templates.footer,
-            buttons: templates.buttons,
-            variables: templates.variables,
-            status: templates.status,
-            rejectionReason: templates.rejectionReason,
-            mediaType: templates.mediaType,
-            mediaUrl: templates.mediaUrl,
-            mediaHandle: templates.mediaHandle,
-            carouselCards: templates.carouselCards,
-            whatsappTemplateId: templates.whatsappTemplateId,
-            usage_count: templates.usage_count,
-            createdAt: templates.createdAt,
-            updatedAt: templates.updatedAt,
-            createdBy: templates.createdBy,
-            // 👇 FULL NAME (with safe fallback)
-            createdByName: sql `
-        CONCAT(
-          COALESCE(${users.firstName}, ''), 
-          ' ', 
-          COALESCE(${users.lastName}, '')
-        )
-      `.as("createdByName"),
-        })
-            .from(templates)
-            .leftJoin(users, eq(users.id, templates.createdBy))
-            .orderBy(desc(templates.createdAt));
-    }
-    async getAll(page = 1, limit = 10) {
-        const offset = (page - 1) * limit;
-        // 1️⃣ Get total count
-        const [{ count }] = await db
-            .select({ count: sql `COUNT(*)` })
-            .from(templates);
-        const total = Number(count);
-        const totalPages = Math.ceil(total / limit);
-        // 2️⃣ Fetch paginated templates with channel name + createdByName
-        const rows = await db
-            .select({
-            id: templates.id,
-            channelId: templates.channelId,
-            channelName: channels.name, // 👈 NEW
-            name: templates.name,
-            category: templates.category,
-            language: templates.language,
-            header: templates.header,
-            body: templates.body,
-            footer: templates.footer,
-            buttons: templates.buttons,
-            variables: templates.variables,
-            status: templates.status,
-            rejectionReason: templates.rejectionReason,
-            mediaType: templates.mediaType,
-            mediaUrl: templates.mediaUrl,
-            mediaHandle: templates.mediaHandle,
-            carouselCards: templates.carouselCards,
-            whatsappTemplateId: templates.whatsappTemplateId,
-            usage_count: templates.usage_count,
-            createdAt: templates.createdAt,
-            updatedAt: templates.updatedAt,
-            createdBy: templates.createdBy,
-            createdByName: sql `
-        CONCAT(
-          COALESCE(${users.firstName}, ''), 
-          ' ', 
-          COALESCE(${users.lastName}, '')
-        )
-      `.as("createdByName"),
-        })
-            .from(templates)
-            .leftJoin(users, eq(users.id, templates.createdBy))
-            .leftJoin(channels, eq(channels.id, templates.channelId)) // 👈 JOIN CHANNEL
+    async getAll(page = 1, limit = 10, ownerId) {
+        if (!ownerId)
+            throw new Error("ownerId is required for template queries");
+        const where = activeTemplateConditions(ownerId);
+        const [{ count }] = await db.select({ count: sql `count(*)::int` }).from(templates).where(where);
+        const rows = await db.select().from(templates)
+            .where(where)
             .orderBy(desc(templates.createdAt))
             .limit(limit)
-            .offset(offset);
+            .offset((page - 1) * limit);
         return {
             success: true,
-            data: rows,
-            pagination: {
-                total,
-                totalPages,
-                page,
-                limit,
-            },
+            data: rows.map(toWhatsAppTemplate),
+            pagination: { total: count, totalPages: Math.ceil(count / limit), page, limit },
         };
     }
+
     async getTemplateByUserID(userId, page = 1, limit = 10) {
-        const offset = (page - 1) * limit;
-        // Fetch templates based on channel owner
-        const templatesData = await db
-            .select({
-            template: templates, // return full template object
-        })
-            .from(templates)
-            .leftJoin(channels, eq(templates.channelId, channels.id))
-            .where(eq(channels.createdBy, userId))
-            .orderBy(desc(templates.createdAt))
-            .limit(limit)
-            .offset(offset);
-        // Total count
-        const totalResult = await db
-            .select({
-            total: sql `COUNT(*)`,
-        })
-            .from(templates)
-            .leftJoin(channels, eq(templates.channelId, channels.id))
-            .where(eq(channels.createdBy, userId));
-        const total = Number(totalResult[0]?.total ?? 0);
-        return {
-            data: templatesData.map((t) => t.template), // if you want only template objects
-            total,
-            page,
-            limit,
-        };
-        // return {
-        //   status: "success",
-        //   data: templatesData.map((t) => t.template), // extract inner template object
-        //   pagination: {
-        //     page,
-        //     limit,
-        //     total,
-        //     totalPages: Math.ceil(total / limit),
-        //   },
-        // };
+        const ownerId = await ownerIdForUserId(userId);
+        const result = await this.getAll(page, limit, ownerId);
+        return { data: result.data, total: result.pagination.total, page, limit };
     }
-    async getByChannelOld(channelId) {
-        return await db
-            .select()
-            .from(templates)
-            .where(eq(templates.channelId, channelId))
-            .orderBy(desc(templates.createdAt));
-    }
-    //   async getByChannel(
-    //   channelId: string,
-    //   page: number = 1,
-    //   limit: number = 10
-    // ): Promise<{ data: Template[]; total: number }> {
-    //   const offset = (page - 1) * limit;
-    //   // Get total count
-    //   const total = await db
-    //     .select({ count: templates.id })
-    //     .from(templates)
-    //     .where(eq(templates.channelId, channelId))
-    //     .execute()
-    //     .then((res) => Number(res[0].count));
-    //   // Get paginated data
-    //   const data = await db
-    //     .select()
-    //     .from(templates)
-    //     .where(eq(templates.channelId, channelId))
-    //     .orderBy(desc(templates.createdAt))
-    //     .limit(limit)
-    //     .offset(offset);
-    //   return { data, total };
-    // }
+
     async getByChannel(channelId, page = 1, limit = 10) {
-        const offset = (page - 1) * limit;
-        // 1️⃣ Correct way to count rows
-        const [{ count }] = await db
-            .select({ count: sql `COUNT(*)` })
-            .from(templates)
-            .where(eq(templates.channelId, channelId));
-        const total = Number(count);
-        // 2️⃣ Get paginated data
-        const data = await db
-            .select()
-            .from(templates)
-            .where(eq(templates.channelId, channelId))
+        const [channel] = await db.select({ createdBy: channels.createdBy })
+            .from(channels).where(eq(channels.id, channelId)).limit(1);
+        if (!channel?.createdBy)
+            return { data: [], total: 0 };
+        const ownerId = await ownerIdForUserId(channel.createdBy);
+        const where = and(
+            activeTemplateConditions(ownerId),
+            sql `${templates.content}->>'channelId' = ${channelId}`,
+        );
+        const [{ count }] = await db.select({ count: sql `count(*)::int` }).from(templates).where(where);
+        const rows = await db.select().from(templates).where(where)
             .orderBy(desc(templates.createdAt))
             .limit(limit)
-            .offset(offset);
-        return { data, total };
+            .offset((page - 1) * limit);
+        return { data: rows.map(toWhatsAppTemplate), total: count };
     }
-    async getById(id) {
-        const [template] = await db.select().from(templates).where(eq(templates.id, id));
-        return template || undefined;
+
+    async getByChannelOld(channelId) {
+        const result = await this.getByChannel(channelId, 1, 1000);
+        return result.data;
     }
-    async getByName(name) {
-        const [template] = await db.select().from(templates).where(eq(templates.name, name));
-        return template || undefined;
+
+    async getById(id, ownerId) {
+        if (!ownerId)
+            throw new Error("ownerId is required for template queries");
+        const [template] = await db.select().from(templates).where(and(
+            eq(templates.id, id),
+            activeTemplateConditions(ownerId),
+        )).limit(1);
+        return template ? toWhatsAppTemplate(template) : undefined;
     }
+
+    async getByName(name, ownerId) {
+        if (!ownerId)
+            throw new Error("ownerId is required for template queries");
+        const [template] = await db.select().from(templates).where(and(
+            eq(templates.name, name),
+            activeTemplateConditions(ownerId),
+        )).limit(1);
+        return template ? toWhatsAppTemplate(template) : undefined;
+    }
+
     async getByNameAndChannel(name, channelId) {
-        const [template] = await db.select().from(templates).where(and(eq(templates.name, name), eq(templates.channelId, channelId)));
-        return template || undefined;
+        const result = await this.getByChannel(channelId, 1, 1000);
+        return result.data.find((template) => template.name === name);
     }
+
     async create(insertTemplate) {
-        const [template] = await db
-            .insert(templates)
-            .values(insertTemplate)
-            .returning();
-        return template;
+        const ownerId = await ownerIdForUserId(insertTemplate.createdBy);
+        if (!ownerId)
+            throw new Error("Template owner not found");
+        const [template] = await db.insert(templates).values({
+            userId: ownerId,
+            channelType: "whatsapp",
+            name: insertTemplate.name,
+            category: insertTemplate.category,
+            language: insertTemplate.language || "en_US",
+            status: insertTemplate.status || "draft",
+            providerTemplateId: insertTemplate.whatsappTemplateId || null,
+            providerStatus: insertTemplate.status || "draft",
+            content: contentFromLegacy(insertTemplate),
+            createdBy: insertTemplate.createdBy || null,
+        }).returning();
+        return toWhatsAppTemplate(template);
     }
-    async update(id, template) {
-        const [updated] = await db
-            .update(templates)
-            .set(template)
-            .where(eq(templates.id, id))
-            .returning();
-        return updated || undefined;
+
+    async update(id, input, ownerId) {
+        if (!ownerId)
+            ownerId = await ownerIdForUserId(input.createdBy);
+        const current = await this.getById(id, ownerId);
+        if (!current)
+            return undefined;
+        const [updated] = await db.update(templates).set({
+            name: input.name ?? current.name,
+            category: input.category ?? current.category,
+            language: input.language ?? current.language,
+            status: input.status ?? current.status,
+            providerStatus: input.status ?? current.providerStatus,
+            providerTemplateId: input.whatsappTemplateId ?? current.providerTemplateId,
+            content: contentFromLegacy(input, current.content),
+            updatedAt: new Date(),
+        }).where(and(eq(templates.id, id), eq(templates.userId, ownerId))).returning();
+        return updated ? toWhatsAppTemplate(updated) : undefined;
     }
-    async delete(id) {
-        const result = await db.delete(templates).where(eq(templates.id, id)).returning();
+
+    async delete(id, ownerId) {
+        if (!ownerId)
+            throw new Error("ownerId is required for template deletion");
+        const result = await db.update(templates)
+            .set({ deletedAt: new Date(), updatedAt: new Date() })
+            .where(and(eq(templates.id, id), eq(templates.userId, ownerId)))
+            .returning();
         return result.length > 0;
     }
 }

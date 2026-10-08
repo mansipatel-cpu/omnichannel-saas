@@ -174,7 +174,12 @@ export async function processMessageJobOLLLD(job) {
         if (campaignId) {
             await db
                 .update(campaigns)
-                .set({ sentCount: sql `${campaigns.sentCount} + 1` })
+                .set({
+                statistics: sql `coalesce(${campaigns.statistics}, '{}'::jsonb) || jsonb_build_object(
+                    'sentCount', coalesce((${campaigns.statistics}->>'sentCount')::int, 0) + 1
+                )`,
+                updatedAt: new Date(),
+            })
                 .where(eq(campaigns.id, campaignId));
         }
         console.log(`[BullMQ] Message sent: ${messageId}`);
@@ -201,7 +206,12 @@ export async function processMessageJobOLLLD(job) {
         if (campaignId && isFinalAttempt) {
             await db
                 .update(campaigns)
-                .set({ failedCount: sql `${campaigns.failedCount} + 1` })
+                .set({
+                statistics: sql `coalesce(${campaigns.statistics}, '{}'::jsonb) || jsonb_build_object(
+                    'failedCount', coalesce((${campaigns.statistics}->>'failedCount')::int, 0) + 1
+                )`,
+                updatedAt: new Date(),
+            })
                 .where(eq(campaigns.id, campaignId));
         }
         throw error;
@@ -296,7 +306,12 @@ export async function processMessageJob(job) {
             console.log(`[Campaign] Incrementing sentCount for campaignId=${campaignId}...`);
             const sentCountUpdate = await db
                 .update(campaigns)
-                .set({ sentCount: sql `${campaigns.sentCount} + 1` })
+                .set({
+                statistics: sql `coalesce(${campaigns.statistics}, '{}'::jsonb) || jsonb_build_object(
+                    'sentCount', coalesce((${campaigns.statistics}->>'sentCount')::int, 0) + 1
+                )`,
+                updatedAt: new Date(),
+            })
                 .where(eq(campaigns.id, campaignId));
             console.log(`[Campaign] sentCount increment result:`, JSON.stringify(sentCountUpdate));
         }
@@ -335,7 +350,12 @@ export async function processMessageJob(job) {
             console.log(`[Campaign] Incrementing failedCount for campaignId=${campaignId}...`);
             const failedCountUpdate = await db
                 .update(campaigns)
-                .set({ failedCount: sql `${campaigns.failedCount} + 1` })
+                .set({
+                statistics: sql `coalesce(${campaigns.statistics}, '{}'::jsonb) || jsonb_build_object(
+                    'failedCount', coalesce((${campaigns.statistics}->>'failedCount')::int, 0) + 1
+                )`,
+                updatedAt: new Date(),
+            })
                 .where(eq(campaigns.id, campaignId));
             console.log(`[Campaign] failedCount increment result:`, JSON.stringify(failedCountUpdate));
         }

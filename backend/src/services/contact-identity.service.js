@@ -3,7 +3,7 @@
  * Shared contact identity: one `contacts` row per owner + E.164 phone, holding
  * the person's name, phone, email, tags and source for every channel.
  * WhatsApp presence lives in whatsapp_contact_channels (read via the
- * `wa_contacts` view); campaign_contacts and leads link by contact_id.
+ * `wa_contacts` view); campaign_recipients and leads link by contact_id.
  */
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../config/database";

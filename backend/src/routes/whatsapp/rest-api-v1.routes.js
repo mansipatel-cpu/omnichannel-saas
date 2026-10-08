@@ -553,7 +553,10 @@ export function registerRestApiV1Routes(app) {
             if (!channelId) {
                 return res.status(400).json({ success: false, error: "No channel associated with this API key. Pass x-channel-id header or channel_id query param to specify a channel." });
             }
-            const conditions = [eq(schema.templates.channelId, channelId)];
+            const conditions = [
+                eq(schema.templates.channelType, "whatsapp"),
+                sql `${schema.templates.content}->>'channelId' = ${channelId}`,
+            ];
             if (status) {
                 conditions.push(eq(schema.templates.status, status));
             }
@@ -578,7 +581,10 @@ export function registerRestApiV1Routes(app) {
             if (!channelId) {
                 return res.status(400).json({ success: false, error: "No channel associated with this API key. Pass x-channel-id header or channel_id query param to specify a channel." });
             }
-            const conditions = [eq(schema.campaigns.channelId, channelId)];
+            const conditions = [
+                eq(schema.campaigns.channelType, "whatsapp"),
+                sql `${schema.campaigns.channelConfig}->>'channelId' = ${channelId}`,
+            ];
             if (status) {
                 conditions.push(eq(schema.campaigns.status, status));
             }

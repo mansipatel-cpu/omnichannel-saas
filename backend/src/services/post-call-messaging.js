@@ -79,11 +79,11 @@ async function lookupSipCallData(callId, userId) {
         const result = await db.execute(sql `
       SELECT sc.elevenlabs_conversation_id, sc.from_number, sc.to_number, sc.direction,
              a.name as agent_name,
-             COALESCE(ct.first_name || ' ' || ct.last_name, ct.first_name, '') as contact_name,
+             COALESCE(ct.name, '') as contact_name,
              ct.email as contact_email
       FROM sip_calls sc
       LEFT JOIN agents a ON sc.agent_id = a.id
-      LEFT JOIN campaign_contacts ct ON sc.contact_id = ct.id
+      LEFT JOIN campaign_recipients ct ON sc.contact_id = ct.id
       WHERE sc.id = ${callId} AND sc.user_id = ${userId}
       LIMIT 1
     `);
@@ -116,11 +116,11 @@ async function lookupRegularCallData(callId, userId) {
         const result = await db.execute(sql `
       SELECT c.phone_number, c.from_number, c.to_number, c.call_direction,
              a.name as agent_name,
-             COALESCE(ct.first_name || ' ' || ct.last_name, ct.first_name, '') as contact_name,
+             COALESCE(ct.name, '') as contact_name,
              ct.email as contact_email
       FROM calls c
       LEFT JOIN agents a ON c.agent_id = a.id
-      LEFT JOIN campaign_contacts ct ON c.contact_id = ct.id
+      LEFT JOIN campaign_recipients ct ON c.contact_id = ct.id
       WHERE c.id = ${callId} AND c.user_id = ${userId}
       LIMIT 1
     `);

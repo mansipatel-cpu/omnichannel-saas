@@ -881,14 +881,18 @@ export class MessageQueueService {
                 let tmplRow;
                 if (message.channelId) {
                     [tmplRow] = await db
-                        .select({ body: templates.body })
+                        .select({ body: sql `${templates.content}->>'body'` })
                         .from(templates)
-                        .where(and(eq(templates.name, message.templateName), eq(templates.channelId, message.channelId)))
+                        .where(and(
+                        eq(templates.name, message.templateName),
+                        eq(templates.channelType, "whatsapp"),
+                        sql `${templates.content}->>'channelId' = ${message.channelId}`,
+                    ))
                         .limit(1);
                 }
                 if (!tmplRow) {
                     [tmplRow] = await db
-                        .select({ body: templates.body })
+                        .select({ body: sql `${templates.content}->>'body'` })
                         .from(templates)
                         .where(eq(templates.name, message.templateName))
                         .limit(1);
@@ -952,7 +956,10 @@ export class MessageQueueService {
                 await db
                     .update(campaigns)
                     .set({
-                    sentCount: sql `${campaigns.sentCount} + 1`
+                    statistics: sql `coalesce(${campaigns.statistics}, '{}'::jsonb) || jsonb_build_object(
+                        'sentCount', coalesce((${campaigns.statistics}->>'sentCount')::int, 0) + 1
+                    )`,
+                    updatedAt: new Date(),
                 })
                     .where(eq(campaigns.id, message.campaignId));
             }
@@ -967,15 +974,15 @@ export class MessageQueueService {
                         name: message.recipientPhone,
                         status: "sent",
                         sentAt: new Date(),
-                        whatsappMessageId: waMessageId || null,
-                        templateParams: message.templateParams || [],
+                        providerReference: waMessageId || null,
+                        variables: message.templateParams || {},
                     })
                         .onConflictDoUpdate({
                         target: [campaignRecipients.campaignId, campaignRecipients.phone],
                         set: {
                             status: "sent",
                             sentAt: new Date(),
-                            whatsappMessageId: waMessageId || null,
+                            providerReference: waMessageId || null,
                         },
                     });
                 }
@@ -1051,7 +1058,10 @@ export class MessageQueueService {
                 await db
                     .update(campaigns)
                     .set({
-                    failedCount: sql `${campaigns.failedCount} + 1`
+                    statistics: sql `coalesce(${campaigns.statistics}, '{}'::jsonb) || jsonb_build_object(
+                        'failedCount', coalesce((${campaigns.statistics}->>'failedCount')::int, 0) + 1
+                    )`,
+                    updatedAt: new Date(),
                 })
                     .where(eq(campaigns.id, message.campaignId));
             }

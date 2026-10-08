@@ -19,6 +19,7 @@ import { campaigns, calls, contacts } from "@shared/schema";
 import { db } from '../config/database';
 import { eq, and, or, isNotNull, isNull, sql, lte, inArray } from 'drizzle-orm';
 import { emailService } from './email-service';
+import { toVoiceCampaign } from '../modules/campaigns/campaign.mapper';
 /** Call rows still eligible for ElevenLabs batch recipient sync (final status from poll). */
 const EL_BATCH_SYNCABLE_CALL_STATUSES = [
     'pending',
@@ -100,10 +101,16 @@ export class CampaignScheduler {
                 await this.checkAndStartScheduledCampaigns(campaignExecutor);
             }
             // Find running campaigns that need to be paused (outside time window)
-            const runningCampaigns = await db
+            const runningCampaignRows = await db
                 .select()
                 .from(campaigns)
-                .where(and(eq(campaigns.status, 'running'), eq(campaigns.scheduleEnabled, true), isNotNull(campaigns.batchJobId)));
+                .where(and(
+                eq(campaigns.channelType, 'voice'),
+                eq(campaigns.status, 'running'),
+                sql `${campaigns.channelConfig}->'schedule' IS NOT NULL`,
+                sql `${campaigns.channelConfig}->>'batchJobId' IS NOT NULL`,
+            ));
+            const runningCampaigns = runningCampaignRows.map(toVoiceCampaign);
             for (const campaign of runningCampaigns) {
                 const isWithinWindow = this.isWithinCallWindow(campaign);
                 if (!isWithinWindow) {
@@ -117,10 +124,16 @@ export class CampaignScheduler {
                 }
             }
             // Find paused campaigns that can be resumed (inside time window)
-            const pausedCampaigns = await db
+            const pausedCampaignRows = await db
                 .select()
                 .from(campaigns)
-                .where(and(eq(campaigns.status, 'paused'), eq(campaigns.scheduleEnabled, true), isNotNull(campaigns.batchJobId)));
+                .where(and(
+                eq(campaigns.channelType, 'voice'),
+                eq(campaigns.status, 'paused'),
+                sql `${campaigns.channelConfig}->'schedule' IS NOT NULL`,
+                sql `${campaigns.channelConfig}->>'batchJobId' IS NOT NULL`,
+            ));
+            const pausedCampaigns = pausedCampaignRows.map(toVoiceCampaign);
             for (const campaign of pausedCampaigns) {
                 // Only auto-resume if it was paused by the scheduler (not manually)
                 const config = campaign.config || {};
@@ -152,10 +165,16 @@ export class CampaignScheduler {
      */
     static async checkAndStartScheduledCampaigns(campaignExecutor) {
         const now = new Date();
-        const scheduledCampaigns = await db.select()
+        const scheduledCampaignRows = await db.select()
             .from(campaigns)
-            .where(and(eq(campaigns.status, 'scheduled'), isNotNull(campaigns.scheduledFor), lte(campaigns.scheduledFor, now)))
+            .where(and(
+            eq(campaigns.channelType, 'voice'),
+            eq(campaigns.status, 'scheduled'),
+            isNotNull(campaigns.scheduledAt),
+            lte(campaigns.scheduledAt, now),
+        ))
             .limit(10);
+        const scheduledCampaigns = scheduledCampaignRows.map(toVoiceCampaign);
         if (scheduledCampaigns.length > 0) {
             console.log(`[Campaign Scheduler] Found ${scheduledCampaigns.length} campaigns ready to start`);
         }
@@ -299,10 +318,15 @@ export class CampaignScheduler {
     static async pollRunningBatchJobs() {
         try {
             // Find running campaigns with batch job IDs
-            const runningCampaigns = await db
+            const runningCampaignRows = await db
                 .select()
                 .from(campaigns)
-                .where(and(eq(campaigns.status, 'running'), isNotNull(campaigns.batchJobId)));
+                .where(and(
+                eq(campaigns.channelType, 'voice'),
+                eq(campaigns.status, 'running'),
+                sql `${campaigns.channelConfig}->>'batchJobId' IS NOT NULL`,
+            ));
+            const runningCampaigns = runningCampaignRows.map(toVoiceCampaign);
             if (runningCampaigns.length === 0) {
                 return;
             }

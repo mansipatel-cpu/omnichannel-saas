@@ -289,58 +289,55 @@ export const incomingConnections = pgTable("incoming_connections", {
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
-// Calling details of a campaign. Every row has a base row in `unifiedCampaigns` with the same id,
-// kept in sync by triggers (migration 0012).
-export const campaigns = pgTable("calling_campaigns", {
+// One template table for every delivery channel.
+export const templates = pgTable("templates", {
     id: varchar("id").primaryKey().default(sql `gen_random_uuid()`),
     userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    agentId: varchar("agent_id"),
-    voiceId: text("voice_id"),
-    phoneNumberId: varchar("phone_number_id").references(() => phoneNumbers.id, { onDelete: "set null" }),
-    sipPhoneNumberId: varchar("sip_phone_number_id").references(() => sipPhoneNumbers.id, { onDelete: "set null" }), // SIP-based campaigns (plugin)
-    plivoPhoneNumberId: varchar("plivo_phone_number_id").references(() => plivoPhoneNumbers.id, { onDelete: "set null" }), // Plivo-based campaigns
-    flowId: varchar("flow_id").references(() => flows.id, { onDelete: "set null" }), // Visual conversation flow (mutually exclusive with script)
+    channelType: varchar("channel_type", { length: 20 }).notNull(),
     name: text("name").notNull(),
-    type: text("type").notNull().default("outbound"),
-    goal: text("goal"),
-    script: text("script"),
-    status: text("status").notNull().default("pending"),
-    totalContacts: integer("total_contacts").notNull().default(0),
-    completedCalls: integer("completed_calls").notNull().default(0),
-    successfulCalls: integer("successful_calls").notNull().default(0),
-    failedCalls: integer("failed_calls").notNull().default(0),
-    scheduledFor: timestamp("scheduled_for"),
-    startedAt: timestamp("started_at"),
-    completedAt: timestamp("completed_at"),
-    deletedAt: timestamp("deleted_at"),
-    // Campaign Time Scheduling
-    scheduleEnabled: boolean("schedule_enabled").notNull().default(false), // Whether to respect time windows
-    scheduleTimeStart: text("schedule_time_start"), // Start time in HH:MM format (e.g., "09:00")
-    scheduleTimeEnd: text("schedule_time_end"), // End time in HH:MM format (e.g., "17:00")
-    scheduleDays: text("schedule_days").array(), // Array of days: ["monday", "tuesday", "wednesday", etc.]
-    scheduleTimezone: text("schedule_timezone").default("America/New_York"), // Timezone for the schedule
-    // ElevenLabs Batch Calling Integration
-    batchJobId: text("batch_job_id"), // ElevenLabs batch job ID when campaign is running
-    batchJobStatus: text("batch_job_status"), // pending, in_progress, completed, failed, cancelled
-    retryEnabled: boolean("retry_enabled").notNull().default(false), // Whether to auto-retry failed/no-response calls
-    // Contact Retry System - configures automatic re-calling of contacts that didn't answer
-    retryMaxAttempts: integer("retry_max_attempts").default(3), // Max total call attempts per contact (including first)
-    retryIntervalMinutes: integer("retry_interval_minutes").default(60), // Minutes between retry passes
-    retryOnNoAnswer: boolean("retry_on_no_answer").default(true), // Retry contacts that didn't answer
-    retryOnBusy: boolean("retry_on_busy").default(false), // Retry contacts that were busy
-    retryOnFailed: boolean("retry_on_failed").default(false), // Retry contacts that failed (technical error)
-    batchJobHistory: jsonb("batch_job_history").default([]), // Array of {batchJobId, pass, contactCount, createdAt}
-    currentRetryPass: integer("current_retry_pass").default(0), // Which pass we're currently on (0 = initial, 1+ = retries)
-    // Error tracking for failed campaigns
-    errorMessage: text("error_message"), // Detailed error message when campaign fails
-    errorCode: text("error_code"), // Error code for categorization (e.g., AGENT_NOT_SYNCED, NO_CONTACTS)
-    config: jsonb("config"),
-    createdAt: timestamp("created_at").notNull().defaultNow(),
+    category: text("category"),
+    language: text("language").default("en_US"),
+    status: text("status").notNull().default("draft"),
+    content: jsonb("content").notNull().default({}),
+    providerTemplateId: text("provider_template_id"),
+    providerStatus: text("provider_status"),
+    createdBy: varchar("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
 }, (table) => ({
-    campaignsUserIdIdx: index("calling_campaigns_user_id_idx").on(table.userId),
-    campaignsStatusIdx: index("calling_campaigns_status_idx").on(table.status),
-    campaignsDeletedAtIdx: index("calling_campaigns_deleted_at_idx").on(table.deletedAt),
-    campaignsAgentIdIdx: index("calling_campaigns_agent_id_idx").on(table.agentId),
+    templatesUserChannelIdx: index("templates_user_channel_idx").on(table.userId, table.channelType),
+    templatesProviderIdx: index("templates_provider_template_idx").on(table.providerTemplateId),
+}));
+
+// One campaign table for WhatsApp and voice. Channel-only values belong in channelConfig.
+export const campaigns = pgTable("campaigns", {
+    id: varchar("id").primaryKey().default(sql `gen_random_uuid()`),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description"),
+    channelType: varchar("channel_type", { length: 20 }).notNull(),
+    campaignType: text("campaign_type"),
+    status: text("status").notNull().default("draft"),
+    templateId: varchar("template_id").references(() => templates.id, { onDelete: "set null" }),
+    groupId: varchar("group_id"),
+    agentId: varchar("agent_id"),
+    phoneNumberId: varchar("phone_number_id"),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    timezone: text("timezone"),
+    retryEnabled: boolean("retry_enabled").notNull().default(false),
+    channelConfig: jsonb("channel_config").notNull().default({}),
+    statistics: jsonb("statistics").notNull().default({}),
+    createdBy: varchar("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+}, (table) => ({
+    campaignsUserChannelIdx: index("campaigns_user_channel_type_idx").on(table.userId, table.channelType),
+    campaignsStatusIdx: index("campaigns_status_idx").on(table.status),
+    campaignsCreatedAtIdx: index("campaigns_created_at_idx").on(table.createdAt),
 }));
 // One person per owner, shared by WhatsApp, calling campaigns and CRM leads.
 // `phone` is always stored normalized (see services/contact-identity.service.js).
@@ -385,80 +382,44 @@ export const contactGroupMembers = pgTable("contact_group_members", {
     pk: primaryKey({ columns: [table.groupId, table.contactId] }),
     contactGroupMembersContactIdx: index("contact_group_members_contact_idx").on(table.contactId),
 }));
-// Per-campaign calling recipients (one row per phone per calling campaign).
-export const campaignContacts = pgTable("campaign_contacts", {
+// One recipient table for every campaign channel.
+export const campaignRecipients = pgTable("campaign_recipients", {
     id: varchar("id").primaryKey().default(sql `gen_random_uuid()`),
     campaignId: varchar("campaign_id").notNull().references(() => campaigns.id, { onDelete: "cascade" }),
     contactId: varchar("contact_id").references(() => sharedContacts.id, { onDelete: "set null" }),
-    firstName: text("first_name").notNull(),
-    lastName: text("last_name"),
-    phone: text("phone").notNull(),
-    email: text("email"),
-    customFields: jsonb("custom_fields"),
-    status: text("status").notNull().default("pending"),
-    // Retry attempt tracking
-    attemptCount: integer("attempt_count").default(1), // How many call attempts have been made (1 = first call in progress)
-    lastAttemptAt: timestamp("last_attempt_at"), // When the last call was attempted
-    nextRetryAt: timestamp("next_retry_at"), // When the next retry is scheduled (null if not queued)
-    createdAt: timestamp("created_at").notNull().defaultNow(),
-}, (table) => ({
-    campaignContactsCampaignIdIdx: index("campaign_contacts_campaign_id_idx").on(table.campaignId),
-    campaignContactsStatusIdx: index("campaign_contacts_status_idx").on(table.status),
-    campaignContactsContactIdx: index("campaign_contacts_contact_id_idx").on(table.contactId),
-    // Note: campaign_contacts has no userId column — ownership is via campaignId → campaigns.userId.
-}));
-// Legacy export name used throughout the calling code.
-export const contacts = campaignContacts;
-// One row per campaign on every channel. Written only by the sync triggers on
-// calling_campaigns / wa_campaigns (migration 0012); read it, don't write it.
-export const unifiedCampaigns = pgTable("campaigns", {
-    id: varchar("id").primaryKey(),
-    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    channel: varchar("channel", { length: 20 }).notNull(), // 'calling' | 'whatsapp'
-    name: text("name").notNull(),
-    status: text("status"),
-    scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
-    startedAt: timestamp("started_at", { withTimezone: true }),
-    completedAt: timestamp("completed_at", { withTimezone: true }),
-    recipientCount: integer("recipient_count").notNull().default(0),
-    createdBy: varchar("created_by").references(() => users.id, { onDelete: "set null" }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-    deletedAt: timestamp("deleted_at", { withTimezone: true }),
-}, (table) => ({
-    campaignsUserChannelIdx: index("campaigns_user_channel_idx").on(table.userId, table.channel),
-    campaignsStatusIdx: index("campaigns_status_idx").on(table.status),
-    campaignsCreatedAtIdx: index("campaigns_created_at_idx").on(table.createdAt),
-}));
-// One row per recipient per campaign on every channel, linked to the shared contact.
-// Written only by the sync triggers on campaign_contacts / wa_campaign_recipients (migration 0012).
-export const unifiedCampaignRecipients = pgTable("campaign_recipients", {
-    id: varchar("id").primaryKey(),
-    campaignId: varchar("campaign_id").notNull().references(() => unifiedCampaigns.id, { onDelete: "cascade" }),
-    contactId: varchar("contact_id").references(() => sharedContacts.id, { onDelete: "set null" }),
-    channel: varchar("channel", { length: 20 }).notNull(),
     phone: text("phone").notNull(),
     name: text("name"),
-    status: text("status"),
+    email: text("email"),
+    status: text("status").notNull().default("pending"),
     attemptCount: integer("attempt_count").notNull().default(0),
-    lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }),
-    nextRetryAt: timestamp("next_retry_at", { withTimezone: true }),
+    providerReference: text("provider_reference"),
     sentAt: timestamp("sent_at", { withTimezone: true }),
     deliveredAt: timestamp("delivered_at", { withTimezone: true }),
     readAt: timestamp("read_at", { withTimezone: true }),
-    error: text("error"),
+    answeredAt: timestamp("answered_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    errorCode: text("error_code"),
+    errorMessage: text("error_message"),
+    variables: jsonb("variables").notNull().default({}),
+    result: jsonb("result").notNull().default({}),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
     campaignRecipientsCampaignIdx: index("campaign_recipients_campaign_idx").on(table.campaignId),
     campaignRecipientsContactIdx: index("campaign_recipients_contact_idx").on(table.contactId),
     campaignRecipientsCampaignStatusIdx: index("campaign_recipients_campaign_status_idx").on(table.campaignId, table.status),
+    campaignRecipientsCampaignPhoneUnique: unique("campaign_recipients_campaign_phone_unique").on(table.campaignId, table.phone),
 }));
+export const unifiedCampaigns = campaigns;
+export const unifiedCampaignRecipients = campaignRecipients;
+// Import compatibility only; both names resolve to the unified physical table.
+export const campaignContacts = campaignRecipients;
+export const contacts = campaignRecipients;
 export const calls = pgTable("calls", {
     id: varchar("id").primaryKey().default(sql `gen_random_uuid()`),
     userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }), // Direct user ownership for guaranteed isolation
     campaignId: varchar("campaign_id").references(() => campaigns.id, { onDelete: "cascade" }), // Nullable for test/manual/incoming calls
-    contactId: varchar("contact_id").references(() => contacts.id, { onDelete: "cascade" }), // Nullable for test/incoming calls
+    contactId: varchar("contact_id").references(() => campaignRecipients.id, { onDelete: "set null" }), // Campaign recipient, nullable for test/incoming calls
     // Agent references - either from campaign (agentId via campaigns table) or incoming call (via connection)
     incomingConnectionId: varchar("incoming_connection_id").references(() => incomingConnections.id, { onDelete: "set null" }), // For incoming calls
     // Website Widget reference - for calls initiated through embeddable widgets
@@ -981,13 +942,12 @@ export const insertIncomingConnectionSchema = createInsertSchema(incomingConnect
 export const insertCampaignSchema = createInsertSchema(campaigns).omit({
     id: true,
     createdAt: true,
-    completedCalls: true,
-    successfulCalls: true,
-    failedCalls: true,
+    updatedAt: true,
 });
-export const insertContactSchema = createInsertSchema(contacts).omit({
+export const insertContactSchema = createInsertSchema(campaignRecipients).omit({
     id: true,
     createdAt: true,
+    updatedAt: true,
 });
 export const insertCallSchema = createInsertSchema(calls).omit({
     id: true,
@@ -1734,7 +1694,7 @@ export const plivoCalls = pgTable("plivo_calls", {
     id: varchar("id").primaryKey().default(sql `gen_random_uuid()`),
     userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }),
     campaignId: varchar("campaign_id").references(() => campaigns.id, { onDelete: "cascade" }),
-    contactId: varchar("contact_id").references(() => contacts.id, { onDelete: "cascade" }),
+    contactId: varchar("contact_id").references(() => campaignRecipients.id, { onDelete: "set null" }),
     agentId: varchar("agent_id").references(() => agents.id, { onDelete: "set null" }),
     plivoPhoneNumberId: varchar("plivo_phone_number_id").references(() => plivoPhoneNumbers.id, { onDelete: "set null" }),
     openaiCredentialId: varchar("openai_credential_id").references(() => openaiCredentials.id, { onDelete: "set null" }),
@@ -1846,7 +1806,7 @@ export const twilioOpenaiCalls = pgTable("twilio_openai_calls", {
     id: varchar("id").primaryKey().default(sql `gen_random_uuid()`),
     userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }),
     campaignId: varchar("campaign_id").references(() => campaigns.id, { onDelete: "cascade" }),
-    contactId: varchar("contact_id").references(() => contacts.id, { onDelete: "cascade" }),
+    contactId: varchar("contact_id").references(() => campaignRecipients.id, { onDelete: "set null" }),
     agentId: varchar("agent_id").references(() => agents.id, { onDelete: "set null" }),
     twilioPhoneNumberId: varchar("twilio_phone_number_id").references(() => phoneNumbers.id, { onDelete: "set null" }),
     openaiCredentialId: varchar("openai_credential_id").references(() => openaiCredentials.id, { onDelete: "set null" }),
@@ -2390,7 +2350,7 @@ export const sipCalls = pgTable("sip_calls", {
     userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     agentId: varchar("agent_id").references(() => agents.id, { onDelete: "set null" }),
     campaignId: varchar("campaign_id").references(() => campaigns.id),
-    contactId: varchar("contact_id").references(() => contacts.id),
+    contactId: varchar("contact_id").references(() => campaignRecipients.id, { onDelete: "set null" }),
     sipTrunkId: varchar("sip_trunk_id").references(() => sipTrunks.id),
     sipPhoneNumberId: varchar("sip_phone_number_id").references(() => sipPhoneNumbers.id, { onDelete: "set null" }),
     engine: varchar("engine", { length: 50 }).notNull(), // 'elevenlabs-sip' | 'openai-sip'

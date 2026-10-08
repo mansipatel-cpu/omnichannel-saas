@@ -816,14 +816,18 @@ ${unansweredCount >= maxAttempts - 1 ? `- The user has had ${unansweredCount} un
     // Update campaign statistics
     static async updateCampaignStats(campaignId, status) {
         const incrementField = {
-            delivered: "delivered_count",
-            read: "read_count",
-            failed: "failed_count",
+            delivered: "deliveredCount",
+            read: "readCount",
+            failed: "failedCount",
         }[status];
         if (incrementField) {
-            await db.execute(sql `UPDATE wa_campaigns 
-            SET ${sql.identifier(incrementField)} = coalesce(${sql.identifier(incrementField)}, 0) + 1 
-            WHERE id = ${campaignId}`);
+            await db.execute(sql `UPDATE campaigns
+            SET statistics = coalesce(statistics, '{}'::jsonb) || jsonb_build_object(
+                ${incrementField},
+                coalesce((statistics->>${incrementField})::int, 0) + 1
+            ),
+            updated_at = now()
+            WHERE id = ${campaignId} AND channel_type = 'whatsapp'`);
         }
     }
     // Handle template status updates
@@ -855,31 +859,25 @@ ${unansweredCount >= maxAttempts - 1 ? `- The user has had ${unansweredCount} un
                 .update(templates)
                 .set({
                 status,
+                providerStatus: status,
                 updatedAt: new Date()
             })
-                .where(eq(templates.whatsappTemplateId, message_template_id))
+                .where(and(
+                eq(templates.channelType, "whatsapp"),
+                eq(templates.providerTemplateId, message_template_id),
+            ))
                 .returning();
             const updatedTemplate = updatedTemplates[0];
             let templateRecord = updatedTemplate;
             if (!templateRecord) {
-                const updatedByName = await db
-                    .update(templates)
-                    .set({
-                    status,
-                    updatedAt: new Date()
-                })
-                    .where(eq(templates.name, message_template_name))
-                    .returning();
-                if (updatedByName.length === 0) {
-                    console.warn(`Template not found for update: ${message_template_name} (${message_template_id})`);
-                }
-                else {
-                    templateRecord = updatedByName[0];
-                }
+                console.warn(`Template not found for provider id: ${message_template_name} (${message_template_id})`);
             }
             if (templateRecord && (event === "APPROVED" || event === "REJECTED")) {
                 try {
-                    const channel = await db.select().from(channels).where(eq(channels.id, templateRecord.channelId)).limit(1);
+                    const channelId = templateRecord.content?.channelId;
+                    const channel = channelId
+                        ? await db.select().from(channels).where(eq(channels.id, channelId)).limit(1)
+                        : [];
                     const channelName = channel[0]?.name || "Unknown";
                     const eventType = event === "APPROVED" ? NOTIFICATION_EVENTS.TEMPLATE_APPROVED : NOTIFICATION_EVENTS.TEMPLATE_REJECTED;
                     const ownerId = channel[0]?.createdBy;
@@ -897,7 +895,7 @@ ${unansweredCount >= maxAttempts - 1 ? `- The user has had ${unansweredCount} un
                             templateLanguage: templateRecord.language || "en",
                             rejectionReason: reason || "No reason provided",
                             channelName,
-                        }, targetUserIds, templateRecord.channelId || undefined);
+                        }, targetUserIds, channelId || undefined);
                     }
                 }
                 catch (notifError) {

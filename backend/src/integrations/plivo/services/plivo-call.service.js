@@ -453,8 +453,11 @@ export class PlivoCallService {
                     await db
                         .update(campaigns)
                         .set({
-                        completedCalls: sql `${campaigns.completedCalls} + 1`,
-                        successfulCalls: sql `${campaigns.successfulCalls} + 1`,
+                        statistics: sql `coalesce(${campaigns.statistics}, '{}'::jsonb) || jsonb_build_object(
+                            'completedCount', coalesce((${campaigns.statistics}->>'completedCount')::int, 0) + 1,
+                            'successfulCount', coalesce((${campaigns.statistics}->>'successfulCount')::int, 0) + 1
+                        )`,
+                        updatedAt: new Date(),
                     })
                         .where(eq(campaigns.id, call.campaignId));
                 }
@@ -462,8 +465,11 @@ export class PlivoCallService {
                     await db
                         .update(campaigns)
                         .set({
-                        completedCalls: sql `${campaigns.completedCalls} + 1`,
-                        failedCalls: sql `${campaigns.failedCalls} + 1`,
+                        statistics: sql `coalesce(${campaigns.statistics}, '{}'::jsonb) || jsonb_build_object(
+                            'completedCount', coalesce((${campaigns.statistics}->>'completedCount')::int, 0) + 1,
+                            'failedCount', coalesce((${campaigns.statistics}->>'failedCount')::int, 0) + 1
+                        )`,
+                        updatedAt: new Date(),
                     })
                         .where(eq(campaigns.id, call.campaignId));
                 }

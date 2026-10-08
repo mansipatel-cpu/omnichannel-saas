@@ -65,6 +65,7 @@ const MIGRATIONS = [
   resolve(rootDir, 'backend', 'migrations', '0014_unified_billing.sql'),
   resolve(rootDir, 'backend', 'migrations', '0015_merge_duplicates_and_fks.sql'),
   resolve(rootDir, 'backend', 'migrations', '0016_contacts_single_source.up.sql'),
+  resolve(rootDir, 'backend', 'migrations', '0017_campaigns_single_source.up.sql'),
 ];
 
 /**

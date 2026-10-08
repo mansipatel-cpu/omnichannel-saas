@@ -2035,7 +2035,10 @@ When using a tool:
             const [campaign] = await db
                 .select()
                 .from(campaigns)
-                .where(or(eq(campaigns.batchJobId, batchId), eq(campaigns.id, batchId)))
+                .where(or(
+                sql `${campaigns.channelConfig}->>'batchJobId' = ${batchId}`,
+                eq(campaigns.id, batchId),
+            ))
                 .limit(1);
             if (!campaign) {
                 return res.status(404).json({ error: "Batch job not found" });

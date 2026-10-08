@@ -1558,28 +1558,18 @@ async function handleMessageStatuses(statuses, metadata) {
             // CAMPAIGN COUNTERS (100% DEDUP SAFE)
             // =================================================
             if (campaignId) {
-                const counterUpdate = {};
-                if (shouldIncDelivered) {
-                    counterUpdate.deliveredCount =
-                        sql `COALESCE(${campaigns.deliveredCount}, 0) + 1`;
-                }
-                if (shouldIncRead) {
-                    counterUpdate.readCount =
-                        sql `COALESCE(${campaigns.readCount}, 0) + 1`;
-                }
-                if (shouldIncFailed) {
-                    counterUpdate.failedCount =
-                        sql `COALESCE(${campaigns.failedCount}, 0) + 1`;
-                }
-                if (shouldDecSent) {
-                    counterUpdate.sentCount =
-                        sql `GREATEST(COALESCE(${campaigns.sentCount}, 0) - 1, 0)`;
-                }
-                // 🔥 EXTRA SAFETY: only update if something changed
-                if (Object.keys(counterUpdate).length > 0) {
+                if (shouldIncDelivered || shouldIncRead || shouldIncFailed || shouldDecSent) {
                     await db
                         .update(campaigns)
-                        .set(counterUpdate)
+                        .set({
+                        statistics: sql `coalesce(${campaigns.statistics}, '{}'::jsonb) || jsonb_build_object(
+                            'deliveredCount', coalesce((${campaigns.statistics}->>'deliveredCount')::int, 0) + ${shouldIncDelivered ? 1 : 0},
+                            'readCount', coalesce((${campaigns.statistics}->>'readCount')::int, 0) + ${shouldIncRead ? 1 : 0},
+                            'failedCount', coalesce((${campaigns.statistics}->>'failedCount')::int, 0) + ${shouldIncFailed ? 1 : 0},
+                            'sentCount', greatest(coalesce((${campaigns.statistics}->>'sentCount')::int, 0) - ${shouldDecSent ? 1 : 0}, 0)
+                        )`,
+                        updatedAt: new Date(),
+                    })
                         .where(eq(campaigns.id, campaignId));
                 }
             }
@@ -1608,7 +1598,7 @@ async function handleMessageStatuses(statuses, metadata) {
                         await db
                             .update(campaignRecipients)
                             .set(recipientUpdate)
-                            .where(eq(campaignRecipients.whatsappMessageId, whatsappMessageId));
+                            .where(eq(campaignRecipients.providerReference, whatsappMessageId));
                     }
                 }
                 catch (err) {

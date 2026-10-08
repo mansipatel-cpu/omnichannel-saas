@@ -110,8 +110,9 @@ export class DatabaseService {
             results.push({ table: 'analytics', deleted: analyticsResult.rowCount });
             // Clean up completed campaigns older than 6 months
             const campaignsResult = await db.execute(sql `
-        DELETE FROM wa_campaigns 
-        WHERE status = 'completed' 
+        DELETE FROM campaigns
+        WHERE channel_type = 'whatsapp'
+        AND status = 'completed'
         AND completed_at < NOW() - INTERVAL '6 months'
       `);
             results.push({ table: 'campaigns', deleted: campaignsResult.rowCount });
@@ -185,15 +186,15 @@ export class DatabaseService {
                 `CREATE INDEX CONCURRENTLY IF NOT EXISTS messages_timestamp_desc_idx 
          ON messages (timestamp DESC)`,
                 // Campaigns performance indexes  
-                `CREATE INDEX CONCURRENTLY IF NOT EXISTS wa_campaigns_name_trgm_idx 
-         ON wa_campaigns USING gin(name gin_trgm_ops)`,
+                `CREATE INDEX CONCURRENTLY IF NOT EXISTS campaigns_name_trgm_idx
+         ON campaigns USING gin(name gin_trgm_ops)`,
                 // Composite indexes for common queries
                 `CREATE INDEX CONCURRENTLY IF NOT EXISTS conversations_channel_status_idx 
          ON conversations (channel_id, status)`,
                 `CREATE INDEX CONCURRENTLY IF NOT EXISTS messages_conversation_timestamp_idx 
          ON messages (conversation_id, timestamp DESC)`,
-                `CREATE INDEX CONCURRENTLY IF NOT EXISTS wa_campaign_recipients_campaign_status_idx 
-         ON wa_campaign_recipients (campaign_id, status)`,
+                `CREATE INDEX CONCURRENTLY IF NOT EXISTS campaign_recipients_campaign_status_idx
+         ON campaign_recipients (campaign_id, status)`,
             ];
             const results = [];
             for (const indexQuery of indexes) {

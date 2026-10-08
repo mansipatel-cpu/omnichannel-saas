@@ -3,7 +3,7 @@ import { db } from "../config/database";
 import { users, sharedContacts, unifiedCampaigns, unifiedCampaignRecipients, callHistory } from "@shared/schema";
 import { ownerIdForUser } from "./contact-identity.service";
 
-const CHANNELS = new Set(["calling", "whatsapp"]);
+const CHANNELS = new Set(["voice", "whatsapp"]);
 
 export async function accountOwnerIdForUserId(userId) {
     if (!userId)
@@ -40,8 +40,9 @@ async function recipientStatusCounts(campaignIds) {
 /** Every campaign of an account, calling and WhatsApp, newest first. */
 export async function listCampaigns(ownerId, { channel, includeDeleted = false, limit = 50, offset = 0 } = {}) {
     const conditions = [eq(unifiedCampaigns.userId, ownerId)];
-    if (channel && CHANNELS.has(channel))
-        conditions.push(eq(unifiedCampaigns.channel, channel));
+    const normalizedChannel = channel === "calling" ? "voice" : channel;
+    if (normalizedChannel && CHANNELS.has(normalizedChannel))
+        conditions.push(eq(unifiedCampaigns.channelType, normalizedChannel));
     if (!includeDeleted)
         conditions.push(isNull(unifiedCampaigns.deletedAt));
     const where = and(...conditions);
@@ -73,21 +74,21 @@ export async function getContactCampaignHistory(ownerId, contactId) {
             recipientId: unifiedCampaignRecipients.id,
             campaignId: unifiedCampaigns.id,
             campaignName: unifiedCampaigns.name,
-            channel: unifiedCampaigns.channel,
+            channel: unifiedCampaigns.channelType,
             campaignStatus: unifiedCampaigns.status,
             status: unifiedCampaignRecipients.status,
             attemptCount: unifiedCampaignRecipients.attemptCount,
-            lastAttemptAt: unifiedCampaignRecipients.lastAttemptAt,
+            lastAttemptAt: sql `${unifiedCampaignRecipients.result}->>'lastAttemptAt'`,
             sentAt: unifiedCampaignRecipients.sentAt,
             deliveredAt: unifiedCampaignRecipients.deliveredAt,
             readAt: unifiedCampaignRecipients.readAt,
-            error: unifiedCampaignRecipients.error,
+            error: unifiedCampaignRecipients.errorMessage,
             addedAt: unifiedCampaignRecipients.createdAt,
         })
         .from(unifiedCampaignRecipients)
         .innerJoin(unifiedCampaigns, eq(unifiedCampaigns.id, unifiedCampaignRecipients.campaignId))
         .where(and(eq(unifiedCampaignRecipients.contactId, contactId), eq(unifiedCampaigns.userId, ownerId)))
-        .orderBy(desc(sql `coalesce(${unifiedCampaignRecipients.lastAttemptAt}, ${unifiedCampaignRecipients.sentAt}, ${unifiedCampaignRecipients.createdAt})`));
+        .orderBy(desc(sql `coalesce(${unifiedCampaignRecipients.sentAt}, ${unifiedCampaignRecipients.createdAt})`));
     return { contact, history };
 }
 

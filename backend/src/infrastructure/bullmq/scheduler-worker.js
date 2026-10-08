@@ -44,7 +44,12 @@ async function checkScheduledCampaigns() {
         const now = new Date();
         const scheduledCampaigns = await db.select()
             .from(campaigns)
-            .where(and(eq(campaigns.status, 'scheduled'), isNotNull(campaigns.scheduledFor), lte(campaigns.scheduledFor, now)))
+            .where(and(
+            eq(campaigns.channelType, 'voice'),
+            eq(campaigns.status, 'scheduled'),
+            isNotNull(campaigns.scheduledAt),
+            lte(campaigns.scheduledAt, now),
+        ))
             .limit(10);
         console.log(`[SchedulerWorker] Found ${scheduledCampaigns.length} campaigns ready to start`);
         for (const campaign of scheduledCampaigns) {

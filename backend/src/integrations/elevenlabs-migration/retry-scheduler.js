@@ -8,7 +8,7 @@
  */
 import { db } from '../../config/database';
 import { campaigns, agents } from '@shared/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { hasAnyAvailableCapacity, autoMigrateUser } from './migration-service';
 import { formatErrorForLog } from './error-detector';
 import { logger } from '../../utils/logger';
@@ -37,7 +37,7 @@ export async function markCampaignForRetry(campaignId, error) {
             logger.error(`Campaign not found: ${campaignId}`, undefined, 'RetryScheduler');
             return false;
         }
-        const currentConfig = campaign.config || {};
+        const currentConfig = campaign.channelConfig || {};
         const currentRetryCount = currentConfig.migrationRetryCount || 0;
         if (currentRetryCount >= MAX_RETRY_COUNT) {
             logger.info(`Campaign ${campaignId} exceeded max retries (${MAX_RETRY_COUNT})`, undefined, 'RetryScheduler');
@@ -45,7 +45,7 @@ export async function markCampaignForRetry(campaignId, error) {
                 .update(campaigns)
                 .set({
                 status: 'failed',
-                config: {
+                channelConfig: {
                     ...currentConfig,
                     migrationRetryExhausted: true,
                     migrationLastError: error,
@@ -59,8 +59,8 @@ export async function markCampaignForRetry(campaignId, error) {
         await db
             .update(campaigns)
             .set({
-            status: 'processing',
-            config: {
+            status: 'queued',
+            channelConfig: {
                 ...currentConfig,
                 migrationRetryCount: currentRetryCount + 1,
                 migrationLastError: error,
@@ -90,10 +90,13 @@ async function getCampaignsReadyForRetry() {
         userId: campaigns.userId,
         agentId: campaigns.agentId,
         phoneNumberId: campaigns.phoneNumberId,
-        config: campaigns.config,
+        config: campaigns.channelConfig,
     })
         .from(campaigns)
-        .where(eq(campaigns.status, 'processing'));
+        .where(and(
+        eq(campaigns.channelType, 'voice'),
+        eq(campaigns.status, 'queued'),
+    ));
     return allProcessing.filter(campaign => {
         const campaignConfig = campaign.config || {};
         const nextRetryAt = campaignConfig.migrationNextRetryAt;
@@ -143,8 +146,8 @@ async function processCampaignRetry(campaign) {
     await db
         .update(campaigns)
         .set({
-        status: 'pending',
-        config: {
+        status: 'draft',
+        channelConfig: {
             ...currentConfig,
             migrationLastRetrySuccessAt: new Date().toISOString(),
             migrationReadyForExecution: true,
@@ -238,10 +241,13 @@ export async function getRetryQueueStatus() {
         .select({
         id: campaigns.id,
         name: campaigns.name,
-        config: campaigns.config,
+        config: campaigns.channelConfig,
     })
         .from(campaigns)
-        .where(eq(campaigns.status, 'processing'));
+        .where(and(
+        eq(campaigns.channelType, 'voice'),
+        eq(campaigns.status, 'queued'),
+    ));
     return {
         pendingRetries: processingCampaigns.length,
         campaigns: processingCampaigns.map(c => {

@@ -24,6 +24,8 @@ import { ElevenLabsPoolService } from "../services/elevenlabs-pool";
 import { BatchCallingService } from "../services/batch-calling";
 import { PlanLimitExceededError } from "../services/contact-upload-service";
 import { getPluginStatus } from "../plugins/loader";
+import { registerCampaignModuleRoutes } from "../modules/campaigns/campaign.routes";
+import { voiceCampaignCompatibilityController } from "../modules/campaigns/campaign.compatibility.controller";
 /** Large CSV campaigns (100k rows); separate from global 20MB upload limit. */
 const CAMPAIGN_CSV_MAX_BYTES = 80 * 1024 * 1024;
 const CAMPAIGN_CSV_MIME = new Set([
@@ -47,6 +49,51 @@ const campaignCsvUpload = multer({
 export function createCampaignRoutes(ctx) {
     const router = Router();
     const { db, storage, authenticateToken, authenticateHybrid, upload, escapeCSV, campaignExecutor, webhookDeliveryService, contactUploadService } = ctx;
+    registerCampaignModuleRoutes(router, { authenticateHybrid, authenticateToken });
+    router.post("/api/campaigns/:campaignId/contacts/upload", authenticateToken, campaignCsvUpload.single("file"), async (req, res) => {
+        try {
+            if (!req.file)
+                return res.status(400).json({ error: "No file uploaded" });
+            const campaign = await storage.getCampaign(req.params.campaignId);
+            if (!campaign || campaign.userId !== req.userId)
+                return res.status(404).json({ error: "Campaign not found" });
+            const user = await storage.getUser(req.userId);
+            const plan = user ? await storage.getPlanByName(user.planType || "free") : null;
+            if (!user || !plan)
+                return res.status(user ? 500 : 404).json({ error: user ? "Plan configuration not found" : "User not found" });
+            const content = await contactUploadService.readFileContent(req.file);
+            const parsed = contactUploadService.parseContactsFromCSV(content, req.params.campaignId);
+            const existing = Number(campaign.statistics?.recipientCount || campaign.totalContacts || 0);
+            contactUploadService.validateContactsAgainstPlanLimit(
+                parsed.length,
+                existing,
+                plan.maxContactsPerCampaign,
+                plan.displayName,
+            );
+            req.body = {
+                recipients: parsed.map((row) => ({
+                    phone: row.phone,
+                    firstName: row.firstName,
+                    lastName: row.lastName,
+                    email: row.email,
+                    customFields: row.customFields,
+                })),
+            };
+            return voiceCampaignCompatibilityController.addRecipients(req, res);
+        }
+        catch (error) {
+            if (error instanceof PlanLimitExceededError) {
+                return res.status(403).json({
+                    error: error.message,
+                    upgradeRequired: true,
+                    currentContacts: error.currentContacts,
+                    maxContacts: error.maxContacts,
+                });
+            }
+            console.error("Upload contacts error:", error);
+            return res.status(500).json({ error: "Failed to upload contacts" });
+        }
+    });
     function canAccessCampaign(campaign, req) {
         if (!campaign)
             return false;

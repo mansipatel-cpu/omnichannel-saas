@@ -1582,9 +1582,14 @@ export class AutomationExecutionService {
         // if (!template) throw new Error("Template not found");
         // console.log(`📄 Sending template ${template.name} to ${contact.phone}`);
         // 🧩 Fetch WhatsApp template
-        const template = await db.query.templates.findFirst({
-            where: and(eq(templates.id, templateId), eq(templates.channelId, contact.channelId)),
+        const templateRow = await db.query.templates.findFirst({
+            where: and(
+                eq(templates.id, templateId),
+                eq(templates.channelType, "whatsapp"),
+                sql `${templates.content}->>'channelId' = ${contact.channelId}`,
+            ),
         });
+        const template = templateRow ? { ...templateRow, ...(templateRow.content || {}) } : null;
         if (!template) {
             // 🔎 DEBUG: find out WHY it didn't match — wrong channel? deleted template?
             const anyTemplateWithId = await db.query.templates.findFirst({

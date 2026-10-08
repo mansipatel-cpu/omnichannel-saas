@@ -15,31 +15,33 @@
  * ============================================================
  */
 import { campaignsController } from "../../controllers/whatsappCampaigns.controller";
+import { whatsappCampaignCompatibilityController as compatibilityController } from "../../modules/campaigns/campaign.compatibility.controller";
 import { extractChannelId } from "../../middleware/whatsappChannel";
 import { requireAuth, requirePermission } from "../../middleware/whatsappAuth";
 import { PERMISSIONS } from "@shared/whatsapp-schema";
 export function registerCampaignRoutes(app) {
     // Get all campaigns
-    app.get("/api/whatsapp/campaigns", extractChannelId, requireAuth, requirePermission(PERMISSIONS.CAMPAIGNS_VIEW), campaignsController.getCampaigns);
+    app.get("/api/whatsapp/campaigns", extractChannelId, requireAuth, requirePermission(PERMISSIONS.CAMPAIGNS_VIEW), compatibilityController.list);
     // Soft-deleted campaigns (must be before /:id)
-    app.get("/api/whatsapp/campaigns/deleted", extractChannelId, requireAuth, requirePermission(PERMISSIONS.CAMPAIGNS_VIEW), campaignsController.getDeletedCampaigns);
+    app.get("/api/whatsapp/campaigns/deleted", extractChannelId, requireAuth, requirePermission(PERMISSIONS.CAMPAIGNS_VIEW), compatibilityController.list);
     // Get campaign by ID
-    app.get("/api/whatsapp/campaigns/:id", requireAuth, requirePermission(PERMISSIONS.CAMPAIGNS_VIEW), campaignsController.getCampaign);
+    app.get("/api/whatsapp/campaigns/:id", requireAuth, requirePermission(PERMISSIONS.CAMPAIGNS_VIEW), compatibilityController.get);
     // Create new campaign
     // app.post("/api/whatsapp/campaigns",   requireAuth,
     // requirePermission(PERMISSIONS.CAMPAIGNS_CREATE), requireSubscription("campaign"), 
     //   campaignsController.createCampaign
     // );
-    app.post("/api/whatsapp/campaigns", requireAuth, requirePermission(PERMISSIONS.CAMPAIGNS_CREATE), campaignsController.createCampaign);
+    app.post("/api/whatsapp/campaigns", requireAuth, requirePermission(PERMISSIONS.CAMPAIGNS_CREATE), compatibilityController.create);
     app.post("/api/whatsapp/getCampaignsByUserId", requireAuth, campaignsController.getCampaignByUserID);
     // Update campaign status
-    app.patch("/api/whatsapp/campaigns/:id/status", requireAuth, requirePermission(PERMISSIONS.CAMPAIGNS_EDIT), campaignsController.updateCampaignStatus);
+    app.patch("/api/whatsapp/campaigns/:id/status", requireAuth, requirePermission(PERMISSIONS.CAMPAIGNS_EDIT), compatibilityController.updateStatus);
+    app.put("/api/whatsapp/campaigns/:id", requireAuth, requirePermission(PERMISSIONS.CAMPAIGNS_EDIT), compatibilityController.update);
     // Restore soft-deleted campaign
-    app.patch("/api/whatsapp/campaigns/:id/restore", requireAuth, requirePermission(PERMISSIONS.CAMPAIGNS_EDIT), campaignsController.restoreCampaign);
+    app.patch("/api/whatsapp/campaigns/:id/restore", requireAuth, requirePermission(PERMISSIONS.CAMPAIGNS_EDIT), compatibilityController.restore);
     // Delete campaign (soft-delete)
-    app.delete("/api/whatsapp/campaigns/:id", requireAuth, requirePermission(PERMISSIONS.CAMPAIGNS_DELETE), campaignsController.deleteCampaign);
+    app.delete("/api/whatsapp/campaigns/:id", requireAuth, requirePermission(PERMISSIONS.CAMPAIGNS_DELETE), compatibilityController.remove);
     // Start campaign execution
-    app.post("/api/whatsapp/campaigns/:id/start", requireAuth, campaignsController.startCampaign);
+    app.post("/api/whatsapp/campaigns/:id/start", requireAuth, requirePermission(PERMISSIONS.CAMPAIGNS_SEND), compatibilityController.start);
     // Get campaign analytics
     app.get("/api/whatsapp/campaigns/:id/analytics", requireAuth, campaignsController.getCampaignAnalytics);
     // API campaign endpoint

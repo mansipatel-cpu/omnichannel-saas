@@ -204,9 +204,11 @@ async function disablePhoneNumber(phoneNumber, user, monthlyCredits) {
                 .where(eq(phoneNumbers.id, phoneNumber.id));
             // Pause all campaigns using this phone number
             await tx.execute(sql `
-        UPDATE calling_campaigns 
+        UPDATE campaigns
         SET status = 'paused'
-        WHERE phone_number_id = ${phoneNumber.id} AND status = 'active'
+        WHERE channel_type = 'voice'
+          AND phone_number_id = ${phoneNumber.id}
+          AND status IN ('queued', 'running')
       `);
         });
         // Release phone number from Twilio (outside transaction).

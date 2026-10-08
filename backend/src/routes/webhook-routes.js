@@ -2116,7 +2116,7 @@ export async function handleElevenLabsWebhook(req, res) {
                                 const webhookPhoneNoPlus = webhookPhoneNumber.replace(/^\+/, '');
                                 const rawResult = await db.execute(sql `
                   SELECT c.* FROM calls c
-                  LEFT JOIN calling_campaigns camp ON c.campaign_id::text = camp.id::text
+                  LEFT JOIN campaigns camp ON c.campaign_id::text = camp.id::text
                   WHERE (c.phone_number = ${webhookPhoneNumber} OR c.phone_number = ${webhookPhoneNoPlus})
                     AND c.status IN ('pending', 'failed', 'in_progress', 'in-progress', 'answered', 'ringing', 'initiated', 'queued')
                     AND c.call_direction = 'outgoing'
@@ -3258,7 +3258,8 @@ export async function handleElevenLabsWebhook(req, res) {
                                 if (isTypeMismatchError(campaignLookupErr)) {
                                     console.warn(`[ElevenLabs Webhook] Type mismatch on campaign lookup, retrying with raw SQL`);
                                     const cmResult = await db.execute(sql `
-                    SELECT * FROM calling_campaigns WHERE agent_id::text = ${agent.id}::text
+                    SELECT * FROM campaigns
+                    WHERE channel_type = 'voice' AND agent_id::text = ${agent.id}::text
                     ORDER BY started_at DESC NULLS LAST LIMIT 1
                   `);
                                     campaignMatch = cmResult.rows[0];

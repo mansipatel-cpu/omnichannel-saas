@@ -16,6 +16,8 @@ import { getRedisConnection, closeRedisConnection, isRedisAvailable, getRedisHea
 import { closeAllQueues, addCampaignCallJobs, getQueueStats, QUEUE_NAMES } from './queues';
 import { startCallWorker, stopCallWorker, getCallWorker } from './call-worker';
 import { startSchedulerWorker, startRecoveryWorker, setupRecurringJobs, stopSchedulerWorkers } from './scheduler-worker';
+import { startCampaignDispatchWorker, stopCampaignDispatchWorker } from '../../modules/campaigns/campaign-dispatch.worker';
+import { closeCampaignDispatchQueue } from '../../modules/campaigns/campaign-dispatch.queue';
 let isInitialized = false;
 export function isBullMQEnabled() {
     return process.env.ENABLE_BULLMQ === 'true' && !!process.env.REDIS_URL;
@@ -38,6 +40,7 @@ export async function initializeBullMQ() {
             return false;
         }
         startCallWorker();
+        startCampaignDispatchWorker();
         startSchedulerWorker();
         startRecoveryWorker();
         await setupRecurringJobs();
@@ -57,7 +60,9 @@ export async function shutdownBullMQ() {
     console.log('[BullMQ] Shutting down...');
     try {
         await stopCallWorker();
+        await stopCampaignDispatchWorker();
         await stopSchedulerWorkers();
+        await closeCampaignDispatchQueue();
         await closeAllQueues();
         await closeRedisConnection();
         isInitialized = false;

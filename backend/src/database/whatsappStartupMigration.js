@@ -29,10 +29,6 @@ const steps = [
     // ────────────────────────────────────────────────────
     ...precheckCleanupSteps,
     // ────────────────────────────────────────────────────
-    // campaigns
-    // ────────────────────────────────────────────────────
-    addColumnIfNotExists("wa_campaigns", "population_started_at", "TIMESTAMP"),
-    // ────────────────────────────────────────────────────
     // automation_edges
     // ────────────────────────────────────────────────────
     addColumnIfNotExists("automation_edges", "source_handle", "VARCHAR"),
@@ -137,22 +133,6 @@ const steps = [
     // replying?" from the diagnostics endpoint without DB access.
     addColumnIfNotExists("ai_settings", "last_skip_reason", "TEXT"),
     addColumnIfNotExists("ai_settings", "last_skip_at", "TIMESTAMP WITH TIME ZONE"),
-    // ────────────────────────────────────────────────────
-    // templates
-    // ────────────────────────────────────────────────────
-    addColumnIfNotExists("templates", "rejection_reason", "TEXT"),
-    addColumnIfNotExists("templates", "media_type", "TEXT DEFAULT 'text'"),
-    addColumnIfNotExists("templates", "media_url", "TEXT"),
-    addColumnIfNotExists("templates", "media_handle", "TEXT"),
-    addColumnIfNotExists("templates", "carousel_cards", "JSONB DEFAULT '[]'"),
-    addColumnIfNotExists("templates", "whatsapp_template_id", "TEXT"),
-    addColumnIfNotExists("templates", "usage_count", "INTEGER DEFAULT 0"),
-    addColumnIfNotExists("templates", "header_type", "TEXT"),
-    addColumnIfNotExists("templates", "body_variables", "INTEGER"),
-    // ────────────────────────────────────────────────────
-    // campaigns
-    // ────────────────────────────────────────────────────
-    addColumnIfNotExists("wa_campaigns", "replied_count", "INTEGER DEFAULT 0"),
     // ────────────────────────────────────────────────────
     // wa_contacts — multi-tenant scoping column + index + backfill
     // ────────────────────────────────────────────────────

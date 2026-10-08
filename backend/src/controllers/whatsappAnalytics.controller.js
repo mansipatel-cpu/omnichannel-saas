@@ -22,6 +22,8 @@ import PDFDocument from 'pdfkit';
 import ExcelJS from "exceljs";
 import archiver from 'archiver';
 import { storage } from '../storage/whatsappStorage';
+import { campaignService } from '../modules/campaigns/campaign.service';
+import { toWhatsAppCampaign } from '../modules/campaigns/campaign.mapper';
 // Get message analytics with real-time data
 export const getMessageAnalytics = asyncHandler(async (req, res) => {
     const { channelId, days = '30', startDate, endDate } = req.query;
@@ -236,15 +238,20 @@ export const getMessageAnalytics = asyncHandler(async (req, res) => {
 // });
 export const getCampaignAnalytics = asyncHandler(async (req, res) => {
     const { channelId } = req.query;
-    const conditions = [];
+    const ownerId = await campaignService.resolveOwnerId(req.user?.id || req.session?.user?.id);
+    const conditions = [
+        eq(campaigns.userId, ownerId),
+        eq(campaigns.channelType, "whatsapp"),
+    ];
     if (channelId) {
-        conditions.push(eq(campaigns.channelId, channelId));
+        conditions.push(sql `${campaigns.channelConfig}->>'channelId' = ${channelId}`);
     }
-    const campaignStats = await dbRead
+    const campaignRows = await dbRead
         .select()
         .from(campaigns)
-        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .where(and(...conditions))
         .orderBy(desc(campaigns.createdAt));
+    const campaignStats = campaignRows.map(toWhatsAppCampaign);
     const campaignsWithRates = campaignStats.map((campaign) => {
         const recipient = Number(campaign.recipientCount || 0);
         const sent = Number(campaign.sentCount || 0);
@@ -294,7 +301,11 @@ export const getCampaignAnalytics = asyncHandler(async (req, res) => {
 export const getCampaignAnalyticsById = asyncHandler(async (req, res) => {
     const { campaignId } = req.params;
     // Get campaign details
-    const campaign = await storage.getCampaign(campaignId);
+    const ownerId = await campaignService.resolveOwnerId(req.user?.id || req.session?.user?.id);
+    const campaignRow = await campaignService.get(ownerId, campaignId);
+    const campaign = campaignRow.channelType === "whatsapp"
+        ? toWhatsAppCampaign(campaignRow)
+        : null;
     if (!campaign) {
         return res.status(404).json({ error: "Campaign not found" });
     }
@@ -868,14 +879,14 @@ async function fetchAnalyticsExportSections(opts) {
     // Per-campaign rows for the time window (overlap = createdAt in range OR scheduledAt in range OR completedAt in range)
     const campaignConditions = [];
     if (channelId) {
-        campaignConditions.push(eq(campaigns.channelId, channelId));
+        campaignConditions.push(sql `${campaigns.channelConfig}->>'channelId' = ${channelId}`);
     }
     else if (allowedChannelIds) {
         if (allowedChannelIds.length === 0) {
             campaignConditions.push(sql `FALSE`);
         }
         else {
-            campaignConditions.push(inArray(campaigns.channelId, allowedChannelIds));
+            campaignConditions.push(sql `${campaigns.channelConfig}->>'channelId' = ANY(${allowedChannelIds})`);
         }
     }
     campaignConditions.push(sql `(
